@@ -1,7 +1,7 @@
 "use client"
 import { toDateStr } from "@/lib/format"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Save } from "lucide-react"
@@ -47,6 +47,16 @@ export function ReportForm({
   )
   const [remarks, setRemarks] = useState(report?.remarks ?? "")
   const [saving, setSaving] = useState(false)
+
+  // When task changes, update percentage to the task's current progress
+  useEffect(() => {
+    if (!isEdit && taskId) {
+      const task = tasks.find((t) => t.id === taskId)
+      if (task && task.task_latest_percentage) {
+        setPercentage(task.task_latest_percentage)
+      }
+    }
+  }, [taskId, tasks, isEdit])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

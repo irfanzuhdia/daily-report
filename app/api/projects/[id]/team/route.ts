@@ -1,0 +1,67 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { getSession } from '@/lib/session';
+import { ProjectTeamRepository } from '@/lib/repositories';
+
+export async function POST(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id: projectId } = await params;
+  const body = await request.json();
+  const { user_id } = body;
+
+  if (!user_id) {
+    return NextResponse.json({ error: 'Missing user_id' }, { status: 400 });
+  }
+
+  try {
+    // Check if already exists
+    const existing = await ProjectTeamRepository.findByProjectId(projectId);
+    if (existing.some((pt) => pt.user_id === user_id)) {
+      return NextResponse.json({ error: 'User already in team' }, { status: 409 });
+    }
+
+    const result = await ProjectTeamRepository.create(projectId, user_id, session.user_id);
+    return NextResponse.json(result, { status: 201 });
+  } catch (error) {
+    console.error('Failed to add team member:', error);
+    return NextResponse.json({ error: 'Failed to add team member' }, { status: 500 });
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const session = await getSession();
+  if (!session) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const { id: projectId } = await params;
+  const body = await request.json();
+  const { user_id } = body;
+
+  if (!user_id) {
+    return NextResponse.json({ error: 'Missing user_id' }, { status: 400 });
+  }
+
+  try {
+    const existing = await ProjectTeamRepository.findByProjectId(projectId);
+    const membership = existing.find((pt) => pt.user_id === user_id);
+    if (!membership) {
+      return NextResponse.json({ error: 'User not in team' }, { status: 404 });
+    }
+
+    await ProjectTeamRepository.softDelete(membership.id, session.user_id);
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error('Failed to remove team member:', error);
+    return NextResponse.json({ error: 'Failed to remove team member' }, { status: 500 });
+  }
+}

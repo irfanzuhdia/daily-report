@@ -11,6 +11,7 @@ import type { Task, Project, DailyReport, Status, EnrichedTaskLog } from "@/lib/
 import { formatDate, formatDateTime } from "@/lib/format"
 import { revalidatePathsAndTags } from "@/app/actions"
 import { Input } from "@/components/ui/input"
+import { FileSection } from "@/components/file-section"
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
   NS: "secondary",
@@ -375,6 +376,9 @@ export function TaskDetailClient({
           ))}
         </div>
       )}
+
+      {/* Files Attachments */}
+      <FileSection taskId={task.id} />
 
       {/* Task Activity Log */}
       <Card>

@@ -17,6 +17,7 @@ import type {
   Status,
   ProjectLog,
   TaskLog,
+  FileRecord,
 } from './types';
 import { unstable_cache, revalidateTag } from 'next/cache';
 
@@ -1555,3 +1556,130 @@ export async function restoreReport(reportId: string): Promise<boolean> {
   revalidateTag('projects', 'max');
   return true
 }
+
+// ============ FILE REPOSITORY ============
+
+function rowToFileRecord(row: Record<string, string>): FileRecord {
+  return {
+    id: row.id ?? '',
+    project_id: row.project_id || null,
+    task_id: row.task_id || null,
+    report_id: row.report_id || null,
+    file_url: row.file_url ?? '',
+    file_description: row.file_description || null,
+    created_by: row.created_by ?? null,
+    created_at: row.created_at ?? null,
+    updated_by: row.updated_by ?? null,
+    updated_at: row.updated_at ?? null,
+    deleted_by: row.deleted_by ?? null,
+    deleted_at: row.deleted_at ?? null,
+  };
+}
+
+const getCachedFiles = unstable_cache(
+  async (): Promise<FileRecord[]> => {
+    const rows = await readSheet('files');
+    return rows.map(rowToFileRecord).filter((f) => !f.deleted_at);
+  },
+  ['files-all'],
+  { tags: ['files'] }
+);
+
+const getCachedFilesByProjectId = unstable_cache(
+  async (projectId: string): Promise<FileRecord[]> => {
+    const rows = await getRowsByColumn('files', 'project_id', projectId);
+    return rows.map(rowToFileRecord).filter((f) => !f.deleted_at);
+  },
+  ['files-by-project-id'],
+  { tags: ['files'] }
+);
+
+const getCachedFilesByTaskId = unstable_cache(
+  async (taskId: string): Promise<FileRecord[]> => {
+    const rows = await getRowsByColumn('files', 'task_id', taskId);
+    return rows.map(rowToFileRecord).filter((f) => !f.deleted_at);
+  },
+  ['files-by-task-id'],
+  { tags: ['files'] }
+);
+
+const getCachedFilesByReportId = unstable_cache(
+  async (reportId: string): Promise<FileRecord[]> => {
+    const rows = await getRowsByColumn('files', 'report_id', reportId);
+    return rows.map(rowToFileRecord).filter((f) => !f.deleted_at);
+  },
+  ['files-by-report-id'],
+  { tags: ['files'] }
+);
+
+export const FileRepository = {
+  async findAll(): Promise<FileRecord[]> {
+    return getCachedFiles();
+  },
+
+  async findByProjectId(projectId: string): Promise<FileRecord[]> {
+    return getCachedFilesByProjectId(projectId);
+  },
+
+  async findByTaskId(taskId: string): Promise<FileRecord[]> {
+    return getCachedFilesByTaskId(taskId);
+  },
+
+  async findByReportId(reportId: string): Promise<FileRecord[]> {
+    return getCachedFilesByReportId(reportId);
+  },
+
+  async create(
+    fileData: {
+      project_id: string | null;
+      task_id: string | null;
+      report_id: string | null;
+      file_url: string;
+      file_description: string | null;
+    },
+    createdBy: string
+  ): Promise<FileRecord> {
+    const headers = await getHeaders('files');
+    const now = new Date().toISOString();
+    const existing = await readSheet('files');
+    const id = `f-${String(existing.length + 1).padStart(3, '0')}`;
+
+    const newFile: FileRecord = {
+      id,
+      project_id: fileData.project_id || null,
+      task_id: fileData.task_id || null,
+      report_id: fileData.report_id || null,
+      file_url: fileData.file_url,
+      file_description: fileData.file_description || null,
+      created_by: createdBy,
+      created_at: now,
+      updated_by: null,
+      updated_at: null,
+      deleted_by: null,
+      deleted_at: null,
+    };
+
+    await appendRow('files', toValues(newFile as unknown as Record<string, unknown>, headers));
+    revalidateTag('files', 'max');
+    return newFile;
+  },
+
+  async softDelete(fileId: string, deletedBy: string): Promise<boolean> {
+    const rowNum = await findRowByColumn('files', 'id', fileId);
+    if (rowNum === -1) return false;
+
+    const headers = await getHeaders('files');
+    const existing = await getRowByColumn('files', 'id', fileId);
+    if (!existing) return false;
+
+    const now = new Date().toISOString();
+    const updated: Record<string, unknown> = {
+      ...existing,
+      deleted_by: deletedBy,
+      deleted_at: now,
+    };
+    await updateRow('files', rowNum, toValues(updated, headers));
+    revalidateTag('files', 'max');
+    return true;
+  }
+};

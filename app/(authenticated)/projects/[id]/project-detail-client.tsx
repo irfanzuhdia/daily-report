@@ -18,6 +18,7 @@ import type { Project, Task, Status, EnrichedProjectLog } from "@/lib/types"
 import { formatDate, formatDateTime } from "@/lib/format"
 import { revalidatePathsAndTags } from "@/app/actions"
 import { Input } from "@/components/ui/input"
+import { FileSection } from "@/components/file-section"
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
   NS: "secondary",
@@ -452,6 +453,9 @@ export function ProjectDetailClient({
           ))}
         </div>
       )}
+
+      {/* Files Attachments */}
+      <FileSection projectId={project.project_id} />
 
       {/* Project Activity Log */}
       <Card>

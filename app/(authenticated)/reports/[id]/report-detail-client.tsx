@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { DailyReport, Task, Project } from "@/lib/types"
 import { formatDate, formatDateTime } from "@/lib/format"
+import { FileSection } from "@/components/file-section"
 
 export function ReportDetailClient({
   report,
@@ -96,6 +97,8 @@ export function ReportDetailClient({
           </div>
         </CardContent>
       </Card>
+
+      <FileSection reportId={report.report_id} />
     </div>
   )
 }

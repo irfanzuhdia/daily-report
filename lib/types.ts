@@ -148,3 +148,18 @@ export interface EnrichedTaskLog extends TaskLog {
   targetUserName?: string;
 }
 
+export interface FileRecord {
+  id: string;
+  project_id: string | null;
+  task_id: string | null;
+  report_id: string | null;
+  file_url: string;
+  file_description: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
+  deleted_by: string | null;
+  deleted_at: string | null;
+}
+

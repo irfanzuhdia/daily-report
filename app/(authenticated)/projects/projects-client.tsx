@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useId, useEffect } from "react"
+import { useState, useCallback, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin } from "lucide-react"
@@ -283,23 +283,31 @@ function DroppableColumn({
 export function ProjectsClient({
   projects,
   statuses,
+  users = [],
   currentStatus,
   currentSearch,
+  currentCreatedBy,
+  currentMemberId,
   projectHoursMap,
   projectProgressMap,
   viewMode,
 }: {
   projects: Project[]
   statuses: Status[]
+  users?: { user_id: string; user_name: string | null; user_email: string }[]
   projectHoursMap: Record<string, number>
   projectProgressMap: Record<string, number>
   currentStatus?: string
   currentSearch?: string
+  currentCreatedBy?: string
+  currentMemberId?: string
   viewMode: "my" | "team"
 }) {
   const router = useRouter()
   const [search, setSearch] = useState(currentSearch ?? "")
   const [statusFilter, setStatusFilter] = useState(currentStatus ?? "")
+  const [createdByFilter, setCreatedByFilter] = useState(currentCreatedBy ?? "")
+  const [memberFilter, setMemberFilter] = useState(currentMemberId ?? "")
   const [deleteId, setDeleteId] = useState<string | null>(null)
   
   const [layout, setLayout] = useState<"kanban" | "list">("kanban")
@@ -310,6 +318,19 @@ export function ProjectsClient({
   const [dragOverStatuses, setDragOverStatuses] = useState<Record<string, string>>({})
   const [dragStartColumn, setDragStartColumn] = useState<string | null>(null)
 
+  const [localProjects, setLocalProjects] = useState(projects)
+  const [prevProjects, setPrevProjects] = useState(projects)
+  if (projects !== prevProjects) {
+    setPrevProjects(projects)
+    setLocalProjects(projects.map(p => {
+      const optStatus = optimisticStatuses[p.project_id]
+      if (optStatus) {
+        return { ...p, project_status: optStatus }
+      }
+      return p
+    }))
+  }
+
   const dndId = useId()
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -317,12 +338,31 @@ export function ProjectsClient({
     })
   )
 
-  const handleFilter = () => {
+  const isFirstMount = useRef(true)
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false
+      return
+    }
     const params = new URLSearchParams()
-    if (search) params.set("search", search)
+    if (debouncedSearch) params.set("search", debouncedSearch)
     if (statusFilter) params.set("status", statusFilter)
-    router.push(`/projects${params.toString() ? "?" + params.toString() : ""}`)
-  }
+    if (viewMode === "team") {
+      if (createdByFilter) params.set("created_by", createdByFilter)
+      if (memberFilter) params.set("member_id", memberFilter)
+    }
+    const query = params.toString()
+    router.push(`/projects${query ? "?" + query : ""}`)
+  }, [debouncedSearch, statusFilter, createdByFilter, memberFilter, viewMode, router])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -337,6 +377,8 @@ export function ProjectsClient({
 
   const handleStatusChange = useCallback(async (projectId: string, newStatus: string) => {
     setUpdatingId(projectId)
+    const existingStatus = localProjects.find(p => p.project_id === projectId)?.project_status ?? "NS"
+    setLocalProjects(prev => prev.map(p => p.project_id === projectId ? { ...p, project_status: newStatus } : p))
     setOptimisticStatuses(prev => ({ ...prev, [projectId]: newStatus }))
     try {
       const res = await fetch(`/api/projects/${projectId}`, {
@@ -351,6 +393,7 @@ export function ProjectsClient({
         )
         router.refresh()
       } else {
+        setLocalProjects(prev => prev.map(p => p.project_id === projectId ? { ...p, project_status: existingStatus } : p))
         setOptimisticStatuses(prev => {
           const next = { ...prev }
           delete next[projectId]
@@ -359,6 +402,7 @@ export function ProjectsClient({
       }
     } catch (error) {
       console.error("Failed to update project status:", error)
+      setLocalProjects(prev => prev.map(p => p.project_id === projectId ? { ...p, project_status: existingStatus } : p))
       setOptimisticStatuses(prev => {
         const next = { ...prev }
         delete next[projectId]
@@ -367,7 +411,7 @@ export function ProjectsClient({
     } finally {
       setUpdatingId(null)
     }
-  }, [router])
+  }, [localProjects, router])
 
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
   const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>({})
@@ -425,11 +469,11 @@ export function ProjectsClient({
     { id: "D", title: "Done" },
   ]
 
-  const activeProjects = projects.filter(p => {
+  const activeProjects = localProjects.filter(p => {
     const status = dragOverStatuses[p.project_id] ?? optimisticStatuses[p.project_id] ?? p.project_status ?? "NS"
     return status !== "CC" && status !== "C"
   })
-  const cancelledProjects = projects.filter(p => {
+  const cancelledProjects = localProjects.filter(p => {
     const status = dragOverStatuses[p.project_id] ?? optimisticStatuses[p.project_id] ?? p.project_status ?? "NS"
     return status === "CC" || status === "C"
   })
@@ -540,7 +584,20 @@ export function ProjectsClient({
     }
 
     const originalColumn = dragStartColumn ?? activeProjectObj.project_status ?? "NS"
-    const finalColumn = dragOverStatuses[activeProjectId] ?? originalColumn
+    let finalColumn = dragOverStatuses[activeProjectId] ?? originalColumn
+
+    // Fallback in case dragOverStatuses is missing/stale on fast drag end
+    if (finalColumn === originalColumn) {
+      const targetCol = columns.find(c => c.id === overId)
+      if (targetCol) {
+        finalColumn = targetCol.id
+      } else {
+        const overProject = activeProjects.find(p => p.project_id === overId)
+        if (overProject) {
+          finalColumn = dragOverStatuses[overProject.project_id] ?? optimisticStatuses[overProject.project_id] ?? overProject.project_status ?? "NS"
+        }
+      }
+    }
 
     // Reset dragOverStatuses
     setDragOverStatuses({})
@@ -637,15 +694,14 @@ export function ProjectsClient({
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="relative flex-1">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search projects..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
-                onKeyDown={(e) => e.key === "Enter" && handleFilter()}
               />
             </div>
             {layout === "list" && (
@@ -664,9 +720,39 @@ export function ProjectsClient({
                 </SelectContent>
               </Select>
             )}
-            <Button onClick={handleFilter} variant="secondary">
-              Filter
-            </Button>
+            {viewMode === "team" && (
+              <>
+                <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Created by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All creators</SelectItem>
+                    {users.map((u) => (
+                      <SelectItem key={u.user_id} value={u.user_id}>
+                        {u.user_name || u.user_email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={memberFilter} onValueChange={setMemberFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Project team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All members</SelectItem>
+                    {users.map((u) => (
+                      <SelectItem key={u.user_id} value={u.user_id}>
+                        {u.user_name || u.user_email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -718,7 +804,7 @@ export function ProjectsClient({
         </DndContext>
       ) : (
         /* Traditional List (Card Grid) View */
-        projects.length === 0 ? (
+        localProjects.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <FolderIcon className="mb-4 h-12 w-12 text-muted-foreground/50" />
@@ -737,7 +823,7 @@ export function ProjectsClient({
           </Card>
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {projects.map((project) => (
+            {localProjects.map((project) => (
               <Card key={project.project_id} className="transition-shadow hover:shadow-md">
                 <CardContent className="p-4">
                   <div className="mb-3 flex items-start justify-between gap-2">

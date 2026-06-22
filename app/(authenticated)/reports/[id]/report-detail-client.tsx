@@ -36,13 +36,18 @@ export function ReportDetailClient({
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="mb-2 flex items-center gap-2 flex-wrap">
-                <h1 className="text-2xl font-bold">Report {report.report_id}</h1>
+                <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
+                  {report.report_id}
+                </span>
+                <h1 className="text-2xl font-bold">{report.remarks || "No remarks"}</h1>
                 <Badge variant="outline">{report.progress_percentage ?? 0}%</Badge>
                 {report.total_hours && (
                   <Badge variant="secondary">{report.total_hours}h</Badge>
                 )}
               </div>
-              <p className="text-muted-foreground">{formatDate(report.date)}</p>
+              <p className="text-sm text-muted-foreground">
+                {formatDate(report.date)} • Created by {createdByName}
+              </p>
             </div>
             <Link href={`/reports/${report.report_id}/edit`}>
               <Button variant="outline" size="sm">
@@ -69,12 +74,6 @@ export function ReportDetailClient({
               </Link>
             </div>
           )}
-          <div>
-            <p className="text-xs font-medium text-muted-foreground">Remarks</p>
-            <p className="whitespace-pre-wrap text-sm">
-              {report.remarks || "No remarks"}
-            </p>
-          </div>
 
           {/* Progress & Hours */}
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Save, X, UserPlus } from "lucide-react"
+import { ArrowLeft, Save } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -16,9 +16,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { Badge } from "@/components/ui/badge"
 import type { Task, Project, Status } from "@/lib/types"
 import { revalidatePathsAndTags } from "@/app/actions"
+import { SearchableUserSelect } from "@/components/ui/searchable-user-select"
 
 export function TaskForm({
   task,
@@ -48,15 +48,11 @@ export function TaskForm({
   )
   const [saving, setSaving] = useState(false)
   const [teamUserIds, setTeamUserIds] = useState<string[]>(defaultTeamUserIds ?? [])
-  const [showAddMember, setShowAddMember] = useState(false)
-
-  const availableUsers = allUsers.filter((u) => !teamUserIds.includes(u.user_id))
 
   const addTeamMember = (userId: string) => {
     if (!teamUserIds.includes(userId)) {
       setTeamUserIds([...teamUserIds, userId])
     }
-    setShowAddMember(false)
   }
 
   const removeTeamMember = (userId: string) => {
@@ -77,13 +73,17 @@ export function TaskForm({
       }
 
       if (isEdit && task) {
-        await fetch(`/api/tasks/${task.id}`, {
+        const res = await fetch(`/api/tasks/${task.id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(err.error || `Update failed (${res.status})`)
+        }
         await revalidatePathsAndTags(
-          ['/tasks', `/tasks/${task.id}`, `/projects/${task.project_id}`, '/dashboard'],
+          ['/tasks', `/tasks/${task.id}`, `/projects/${task.project_id}`, '/projects', '/dashboard'],
           ['tasks', 'task_log', 'projects', 'project_log']
         )
         router.push(`/tasks/${task.id}`)
@@ -93,9 +93,13 @@ export function TaskForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(err.error || `Create failed (${res.status})`)
+        }
         const data = await res.json()
         await revalidatePathsAndTags(
-          ['/tasks', `/tasks/${data.id}`, `/projects/${projectId}`, '/dashboard'],
+          ['/tasks', `/tasks/${data.id}`, `/projects/${projectId}`, '/projects', '/dashboard'],
           ['tasks', 'task_log', 'projects', 'project_log']
         )
         router.push(`/tasks/${data.id}`)
@@ -195,65 +199,13 @@ export function TaskForm({
                 {isEdit && " Inherited from the project team."}
               </p>
 
-              {teamUserIds.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {teamUserIds.map((uid) => {
-                    const user = allUsers.find((u) => u.user_id === uid)
-                    return (
-                      <Badge key={uid} variant="secondary" className="gap-1 pl-2 pr-1">
-                        <span className="text-xs">{user?.user_name || user?.user_email || uid}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeTeamMember(uid)}
-                          className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    )
-                  })}
-                </div>
-              )}
-
-              {showAddMember && availableUsers.length > 0 ? (
-                <div className="flex flex-wrap gap-2 p-3 rounded-xl border bg-muted/30">
-                  <p className="text-xs text-muted-foreground w-full mb-1">Select a user to add:</p>
-                  {availableUsers.map((u) => (
-                    <Button
-                      key={u.user_id}
-                      type="button"
-                      variant="outline"
-                      size="xs"
-                      onClick={() => addTeamMember(u.user_id)}
-                    >
-                      {u.user_name || u.user_email}
-                      {u.user_occupation ? ` (${u.user_occupation})` : ""}
-                    </Button>
-                  ))}
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="xs"
-                    onClick={() => setShowAddMember(false)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowAddMember(true)}
-                  disabled={availableUsers.length === 0}
-                >
-                  <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                  Add Team Member
-                </Button>
-              )}
-              {availableUsers.length === 0 && teamUserIds.length > 0 && (
-                <p className="text-xs text-muted-foreground">All users are already assigned.</p>
-              )}
+              <SearchableUserSelect
+                allUsers={allUsers}
+                selectedUserIds={teamUserIds}
+                onAddUser={addTeamMember}
+                onRemoveUser={removeTeamMember}
+                placeholder="Add Team Member"
+              />
             </div>
           </CardContent>
         </Card>

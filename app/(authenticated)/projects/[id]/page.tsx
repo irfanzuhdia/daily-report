@@ -8,20 +8,10 @@ import {
   ProjectTeamRepository,
   UserRepository,
   ProjectLogRepository,
+  calcProjectStatus,
 } from "@/lib/repositories"
 import { ProjectDetailClient } from "./project-detail-client"
 
-function calcProjectStatusLocal(projectId: string, tasks: { project_id: string; task_status: string | null }[]): string {
-  const projectTasks = tasks.filter((t) => t.project_id === projectId)
-  if (projectTasks.length === 0) return 'NS'
-  const statuses = projectTasks.map((t) => t.task_status ?? 'NS')
-  if (statuses.some((s) => s === 'OP')) return 'OP'
-  if (statuses.every((s) => s === 'D' || s === 'CC') && statuses.some((s) => s === 'D')) return 'D'
-  if (statuses.every((s) => s === 'CC')) return 'CC'
-  if (statuses.every((s) => s === 'H')) return 'H'
-  if (statuses.every((s) => s === 'NS')) return 'NS'
-  return 'OP'
-}
 
 export default async function ProjectDetailPage({
   params,
@@ -88,7 +78,7 @@ export default async function ProjectDetailPage({
     ? Math.round(Object.values(taskProgress).reduce((a, b) => a + b, 0) / tasks.length)
     : 0
 
-  const autoProjectStatus = calcProjectStatusLocal(id, tasks)
+  const autoProjectStatus = calcProjectStatus(id, tasks)
 
   const userMapLower = Object.fromEntries(allUsers.map((u) => [u.user_id.toLowerCase(), u.user_name || u.user_email]))
   const resolveUser = (userId: string | null | undefined) => {

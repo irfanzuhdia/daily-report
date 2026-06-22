@@ -11,7 +11,30 @@ import type {
   TaskLog,
   FileRecord,
 } from './types';
-import { unstable_cache, revalidateTag } from 'next/cache';
+import { unstable_cache as nextUnstableCache, revalidateTag as nextRevalidateTag } from 'next/cache';
+
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Custom wrapper to selectively disable caching for projects, tasks, reports, etc.
+function unstable_cache<T extends (...args: any[]) => Promise<any>>(
+  fn: T,
+  keyParts?: string[],
+  options?: {
+    revalidate?: number | false;
+    tags?: string[];
+  }
+): T {
+  // Only cache users-related data
+  if (options?.tags?.includes('users') || keyParts?.some(k => k.includes('user'))) {
+    return nextUnstableCache(fn, keyParts, options);
+  }
+  // Otherwise, return a pass-through function (completely bypass cache)
+  return (async (...args: any[]) => fn(...args)) as unknown as T;
+}
+/* eslint-enable @typescript-eslint/no-explicit-any */
+
+function revalidateTag(tag: string) {
+  nextRevalidateTag(tag, 'max');
+}
 
 // ============ STATUS & PROGRESS CALCULATION HELPERS ============
 
@@ -26,7 +49,7 @@ const STATUS = {
 /**
  * Auto-calculate project status from its tasks' statuses.
  */
-function calcProjectStatus(
+export function calcProjectStatus(
   projectId: string,
   tasks: Task[]
 ): string {
@@ -58,7 +81,7 @@ const getCachedUsers = unstable_cache(
     return rows as unknown as User[];
   },
   ['users-all'],
-  { tags: ['users'] }
+  { tags: ['users'], revalidate: 60 }
 );
 
 const getCachedUserByEmail = unstable_cache(
@@ -67,7 +90,7 @@ const getCachedUserByEmail = unstable_cache(
     return (rows[0] as unknown as User) || null;
   },
   ['user-by-email'],
-  { tags: ['users'] }
+  { tags: ['users'], revalidate: 60 }
 );
 
 const getCachedUserById = unstable_cache(
@@ -76,7 +99,7 @@ const getCachedUserById = unstable_cache(
     return (rows[0] as unknown as User) || null;
   },
   ['user-by-id'],
-  { tags: ['users'] }
+  { tags: ['users'], revalidate: 60 }
 );
 
 export const UserRepository = {
@@ -132,7 +155,7 @@ export const UserRepository = {
       )
     `;
 
-    revalidateTag('users', 'max');
+    revalidateTag('users');
     return newUser;
   },
 };
@@ -145,7 +168,7 @@ const getCachedProjects = unstable_cache(
     return rows as unknown as Project[];
   },
   ['projects-all'],
-  { tags: ['projects'] }
+  { tags: ['projects'], revalidate: 60 }
 );
 
 const getCachedProjectById = unstable_cache(
@@ -154,7 +177,7 @@ const getCachedProjectById = unstable_cache(
     return (rows[0] as unknown as Project) || null;
   },
   ['project-by-id'],
-  { tags: ['projects'] }
+  { tags: ['projects'], revalidate: 60 }
 );
 
 export const ProjectRepository = {
@@ -218,8 +241,8 @@ export const ProjectRepository = {
       createdBy
     );
 
-    revalidateTag('projects', 'max');
-    revalidateTag('project_log', 'max');
+    revalidateTag('projects');
+    revalidateTag('project_log');
     return newProject;
   },
 
@@ -314,8 +337,8 @@ export const ProjectRepository = {
       );
     }
 
-    revalidateTag('projects', 'max');
-    revalidateTag('project_log', 'max');
+    revalidateTag('projects');
+    revalidateTag('project_log');
     return updated;
   },
 
@@ -332,7 +355,7 @@ export const ProjectRepository = {
       WHERE project_id = ${projectId}
     `;
 
-    revalidateTag('projects', 'max');
+    revalidateTag('projects');
     return true;
   },
 };
@@ -345,7 +368,7 @@ const getCachedProjectTeamByProjectId = unstable_cache(
     return rows as unknown as ProjectTeam[];
   },
   ['project-team-by-project-id'],
-  { tags: ['project_team'] }
+  { tags: ['project_team'], revalidate: 60 }
 );
 
 const getCachedProjectTeamByUserId = unstable_cache(
@@ -354,10 +377,23 @@ const getCachedProjectTeamByUserId = unstable_cache(
     return rows as unknown as ProjectTeam[];
   },
   ['project-team-by-user-id'],
-  { tags: ['project_team'] }
+  { tags: ['project_team'], revalidate: 60 }
+);
+
+const getCachedProjectTeamAll = unstable_cache(
+  async (): Promise<ProjectTeam[]> => {
+    const rows = await sql`SELECT * FROM project_teams WHERE deleted_at IS NULL`;
+    return rows as unknown as ProjectTeam[];
+  },
+  ['project-team-all'],
+  { tags: ['project_team'], revalidate: 60 }
 );
 
 export const ProjectTeamRepository = {
+  async findAll(): Promise<ProjectTeam[]> {
+    return getCachedProjectTeamAll();
+  },
+
   async findByProjectId(projectId: string): Promise<ProjectTeam[]> {
     return getCachedProjectTeamByProjectId(projectId);
   },
@@ -406,8 +442,8 @@ export const ProjectTeamRepository = {
       createdBy
     );
 
-    revalidateTag('project_team', 'max');
-    revalidateTag('project_log', 'max');
+    revalidateTag('project_team');
+    revalidateTag('project_log');
     return newPT;
   },
 
@@ -435,8 +471,8 @@ export const ProjectTeamRepository = {
       deletedBy
     );
 
-    revalidateTag('project_team', 'max');
-    revalidateTag('project_log', 'max');
+    revalidateTag('project_team');
+    revalidateTag('project_log');
     return true;
   },
 };
@@ -449,7 +485,7 @@ const getCachedTasks = unstable_cache(
     return rows as unknown as Task[];
   },
   ['tasks-all'],
-  { tags: ['tasks'] }
+  { tags: ['tasks'], revalidate: 60 }
 );
 
 const getCachedTasksByProjectId = unstable_cache(
@@ -458,7 +494,7 @@ const getCachedTasksByProjectId = unstable_cache(
     return rows as unknown as Task[];
   },
   ['tasks-by-project-id'],
-  { tags: ['tasks'] }
+  { tags: ['tasks'], revalidate: 60 }
 );
 
 const getCachedTaskById = unstable_cache(
@@ -467,7 +503,7 @@ const getCachedTaskById = unstable_cache(
     return (rows[0] as unknown as Task) || null;
   },
   ['task-by-id'],
-  { tags: ['tasks'] }
+  { tags: ['tasks'], revalidate: 60 }
 );
 
 export const TaskRepository = {
@@ -536,10 +572,10 @@ export const TaskRepository = {
       await TaskRepository._syncProjectStatus(task.project_id, createdBy);
     }
 
-    revalidateTag('tasks', 'max');
-    revalidateTag('task_log', 'max');
-    revalidateTag('projects', 'max');
-    revalidateTag('project_log', 'max');
+    revalidateTag('tasks');
+    revalidateTag('task_log');
+    revalidateTag('projects');
+    revalidateTag('project_log');
     return newTask;
   },
 
@@ -600,10 +636,10 @@ export const TaskRepository = {
       await TaskRepository._syncProjectStatus(projectId, updatedBy);
     }
 
-    revalidateTag('tasks', 'max');
-    revalidateTag('task_log', 'max');
-    revalidateTag('projects', 'max');
-    revalidateTag('project_log', 'max');
+    revalidateTag('tasks');
+    revalidateTag('task_log');
+    revalidateTag('projects');
+    revalidateTag('project_log');
     return updated;
   },
 
@@ -626,9 +662,9 @@ export const TaskRepository = {
       await TaskRepository._syncProjectStatus(projectId, deletedBy);
     }
 
-    revalidateTag('tasks', 'max');
-    revalidateTag('projects', 'max');
-    revalidateTag('project_log', 'max');
+    revalidateTag('tasks');
+    revalidateTag('projects');
+    revalidateTag('project_log');
     return true;
   },
 
@@ -674,7 +710,7 @@ const getCachedTaskTeamByTaskId = unstable_cache(
     return rows as unknown as TaskTeam[];
   },
   ['task-team-by-task-id'],
-  { tags: ['task_team'] }
+  { tags: ['task_team'], revalidate: 60 }
 );
 
 const getCachedTaskTeamByUserId = unstable_cache(
@@ -683,10 +719,23 @@ const getCachedTaskTeamByUserId = unstable_cache(
     return rows as unknown as TaskTeam[];
   },
   ['task-team-by-user-id'],
-  { tags: ['task_team'] }
+  { tags: ['task_team'], revalidate: 60 }
+);
+
+const getCachedTaskTeamAll = unstable_cache(
+  async (): Promise<TaskTeam[]> => {
+    const rows = await sql`SELECT * FROM task_teams WHERE deleted_at IS NULL`;
+    return rows as unknown as TaskTeam[];
+  },
+  ['task-team-all'],
+  { tags: ['task_team'], revalidate: 60 }
 );
 
 export const TaskTeamRepository = {
+  async findAll(): Promise<TaskTeam[]> {
+    return getCachedTaskTeamAll();
+  },
+
   async findByTaskId(taskId: string): Promise<TaskTeam[]> {
     return getCachedTaskTeamByTaskId(taskId);
   },
@@ -731,8 +780,8 @@ export const TaskTeamRepository = {
       createdBy
     );
 
-    revalidateTag('task_team', 'max');
-    revalidateTag('task_log', 'max');
+    revalidateTag('task_team');
+    revalidateTag('task_log');
     return newTT;
   },
 
@@ -760,8 +809,8 @@ export const TaskTeamRepository = {
       deletedBy
     );
 
-    revalidateTag('task_team', 'max');
-    revalidateTag('task_log', 'max');
+    revalidateTag('task_team');
+    revalidateTag('task_log');
     return true;
   },
 };
@@ -774,7 +823,7 @@ const getCachedReports = unstable_cache(
     return rows as unknown as DailyReport[];
   },
   ['reports-all'],
-  { tags: ['reports'] }
+  { tags: ['reports'], revalidate: 60 }
 );
 
 const getCachedReportById = unstable_cache(
@@ -783,7 +832,7 @@ const getCachedReportById = unstable_cache(
     return (rows[0] as unknown as DailyReport) || null;
   },
   ['report-by-id'],
-  { tags: ['reports'] }
+  { tags: ['reports'], revalidate: 60 }
 );
 
 const getCachedReportsByTaskId = unstable_cache(
@@ -792,7 +841,7 @@ const getCachedReportsByTaskId = unstable_cache(
     return rows as unknown as DailyReport[];
   },
   ['reports-by-task-id'],
-  { tags: ['reports'] }
+  { tags: ['reports'], revalidate: 60 }
 );
 
 const getCachedReportsByUserId = unstable_cache(
@@ -801,7 +850,7 @@ const getCachedReportsByUserId = unstable_cache(
     return rows as unknown as DailyReport[];
   },
   ['reports-by-user-id'],
-  { tags: ['reports'] }
+  { tags: ['reports'], revalidate: 60 }
 );
 
 export const DailyReportRepository = {
@@ -874,9 +923,9 @@ export const DailyReportRepository = {
     // Auto-update task progress and status from latest report
     await DailyReportRepository._syncTaskFromLatestReport(report.task_id, createdBy);
 
-    revalidateTag('reports', 'max');
-    revalidateTag('tasks', 'max');
-    revalidateTag('projects', 'max');
+    revalidateTag('reports');
+    revalidateTag('tasks');
+    revalidateTag('projects');
     return newReport;
   },
 
@@ -907,9 +956,9 @@ export const DailyReportRepository = {
       await DailyReportRepository._syncTaskFromLatestReport(existing.task_id, updatedBy);
     }
 
-    revalidateTag('reports', 'max');
-    revalidateTag('tasks', 'max');
-    revalidateTag('projects', 'max');
+    revalidateTag('reports');
+    revalidateTag('tasks');
+    revalidateTag('projects');
     return updated;
   },
 
@@ -931,9 +980,9 @@ export const DailyReportRepository = {
       await DailyReportRepository._syncTaskFromLatestReport(existing.task_id, deletedBy);
     }
 
-    revalidateTag('reports', 'max');
-    revalidateTag('tasks', 'max');
-    revalidateTag('projects', 'max');
+    revalidateTag('reports');
+    revalidateTag('tasks');
+    revalidateTag('projects');
     return true;
   },
 
@@ -1026,7 +1075,7 @@ export const ProjectLogRepository = {
     },
     createdBy: string
   ): Promise<ProjectLog> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM project_logs`;
+    const res = await sql`SELECT COALESCE(MAX(NULLIF(split_part(id, '-', 2), '')::int), 0) as max_val FROM project_logs`;
     const nextId = 'pl-' + String((res[0].max_val || 0) + 1).padStart(3, '0') + '-' + Math.random().toString(36).substring(2, 7);
     const now = new Date().toISOString();
 
@@ -1048,7 +1097,7 @@ export const ProjectLogRepository = {
       )
     `;
 
-    revalidateTag('project_log', 'max');
+    revalidateTag('project_log');
     return newLog;
   },
 
@@ -1077,7 +1126,7 @@ export const TaskLogRepository = {
     },
     createdBy: string
   ): Promise<TaskLog> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM task_logs`;
+    const res = await sql`SELECT COALESCE(MAX(NULLIF(split_part(id, '-', 2), '')::int), 0) as max_val FROM task_logs`;
     const nextId = 'tl-' + String((res[0].max_val || 0) + 1).padStart(3, '0') + '-' + Math.random().toString(36).substring(2, 7);
     const now = new Date().toISOString();
 
@@ -1099,7 +1148,7 @@ export const TaskLogRepository = {
       )
     `;
 
-    revalidateTag('task_log', 'max');
+    revalidateTag('task_log');
     return newLog;
   },
 
@@ -1119,7 +1168,7 @@ const getCachedTaskTotalHours = unstable_cache(
     }, 0);
   },
   ['task-total-hours'],
-  { tags: ['reports'] }
+  { tags: ['reports'], revalidate: 60 }
 );
 
 export async function getTaskTotalHours(taskId: string): Promise<number> {
@@ -1128,13 +1177,15 @@ export async function getTaskTotalHours(taskId: string): Promise<number> {
 
 const getCachedProjectTotalHours = unstable_cache(
   async (projectId: string): Promise<number> => {
-    const tasks = await TaskRepository.findByProjectId(projectId);
-    let total = 0;
-    for (const task of tasks) {
-      const hours = await getTaskTotalHours(task.id);
-      total += hours;
-    }
-    return total;
+    const rows = await sql`
+      SELECT COALESCE(SUM(r.total_hours::numeric), 0)::float as total
+      FROM daily_reports r
+      JOIN tasks t ON r.task_id = t.id
+      WHERE t.project_id = ${projectId}
+        AND r.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+    `;
+    return rows[0]?.total || 0;
   },
   ['project-total-hours'],
   { tags: ['reports', 'tasks'] }
@@ -1153,31 +1204,31 @@ const getCachedContributionData = unstable_cache(
       startDate?: string;
       endDate?: string;
     };
-    let reports = await DailyReportRepository.findAll();
 
-    if (options?.userId) {
-      reports = reports.filter((r) => r.user_id === options.userId);
-    }
-    if (options?.taskId) {
-      reports = reports.filter((r) => r.task_id === options.taskId);
-    }
-    if (options?.projectId) {
-      const tasks = await TaskRepository.findByProjectId(options.projectId);
-      const taskIds = new Set(tasks.map((t) => t.id));
-      reports = reports.filter((r) => taskIds.has(r.task_id));
-    }
-    if (options?.startDate) {
-      reports = reports.filter((r) => (r.date ?? '') >= (options.startDate ?? ''));
-    }
-    if (options?.endDate) {
-      reports = reports.filter((r) => (r.date ?? '') <= (options.endDate ?? ''));
-    }
+    const userId = options?.userId || null;
+    const projectId = options?.projectId || null;
+    const taskId = options?.taskId || null;
+    const startDate = options?.startDate || null;
+    const endDate = options?.endDate || null;
+
+    const rows = await sql`
+      SELECT r.date, COALESCE(SUM(r.total_hours::numeric), 0)::float as hours
+      FROM daily_reports r
+      LEFT JOIN tasks t ON r.task_id = t.id
+      WHERE r.deleted_at IS NULL
+        AND (${userId}::text IS NULL OR r.user_id = ${userId})
+        AND (${projectId}::text IS NULL OR t.project_id = ${projectId})
+        AND (${taskId}::text IS NULL OR r.task_id = ${taskId})
+        AND (${startDate}::text IS NULL OR r.date >= ${startDate})
+        AND (${endDate}::text IS NULL OR r.date <= ${endDate})
+      GROUP BY r.date
+    `;
 
     const data: Record<string, number> = {};
-    for (const report of reports) {
-      const date = report.date ?? 'unknown';
-      const hours = parseFloat(report.total_hours ?? '0') || 0;
-      data[date] = (data[date] ?? 0) + hours;
+    for (const row of rows) {
+      if (row.date) {
+        data[row.date] = row.hours;
+      }
     }
     return data;
   },
@@ -1210,53 +1261,47 @@ const getCachedContributionSummary = unstable_cache(
     const totalReports = entries.length;
     const avgHoursPerDay = totalReports > 0 ? totalHours / totalReports : 0;
 
-    const allReports = await DailyReportRepository.findAll();
-
-    // Find most active user
     let mostActiveUser = '—';
     let mostActiveUserHours = 0;
     if (!options?.userId) {
-      const userHours: Record<string, number> = {};
-      for (const r of allReports) {
-        const uid = r.user_id ?? 'unknown';
-        const h = parseFloat(r.total_hours ?? '0') || 0;
-        userHours[uid] = (userHours[uid] ?? 0) + h;
+      const activeUserRows = await sql`
+        SELECT user_id, COALESCE(SUM(total_hours::numeric), 0)::float as hours
+        FROM daily_reports
+        WHERE deleted_at IS NULL
+        GROUP BY user_id
+        ORDER BY hours DESC
+        LIMIT 1
+      `;
+      if (activeUserRows.length > 0) {
+        mostActiveUser = activeUserRows[0].user_id;
+        mostActiveUserHours = activeUserRows[0].hours;
       }
-      for (const [uid, hours] of Object.entries(userHours)) {
-        if (hours > mostActiveUserHours) {
-          mostActiveUserHours = hours;
-          mostActiveUser = uid;
-        }
-      }
+    } else {
+      mostActiveUser = options.userId;
+      mostActiveUserHours = totalHours;
     }
 
-    // Find most active project
     let mostActiveProject = '—';
     let mostActiveProjectHours = 0;
     if (!options?.projectId) {
-      const [projects, tasks] = await Promise.all([
-        ProjectRepository.findAll(),
-        TaskRepository.findAll(),
-      ]);
-
-      const taskProjectMap = new Map(tasks.map((t) => [t.id, t.project_id]));
-      const projectHours: Record<string, number> = {};
-
-      for (const r of allReports) {
-        if (!r.task_id) continue;
-        const pid = taskProjectMap.get(r.task_id);
-        if (!pid) continue;
-        const h = parseFloat(r.total_hours ?? '0') || 0;
-        projectHours[pid] = (projectHours[pid] ?? 0) + h;
+      const activeProjRows = await sql`
+        SELECT p.project_name, p.project_id, COALESCE(SUM(r.total_hours::numeric), 0)::float as hours
+        FROM daily_reports r
+        JOIN tasks t ON r.task_id = t.id
+        JOIN projects p ON t.project_id = p.project_id
+        WHERE r.deleted_at IS NULL AND t.deleted_at IS NULL AND p.deleted_at IS NULL
+        GROUP BY p.project_id, p.project_name
+        ORDER BY hours DESC
+        LIMIT 1
+      `;
+      if (activeProjRows.length > 0) {
+        mostActiveProject = activeProjRows[0].project_name || activeProjRows[0].project_id;
+        mostActiveProjectHours = activeProjRows[0].hours;
       }
-
-      for (const p of projects) {
-        const hours = projectHours[p.project_id] ?? 0;
-        if (hours > mostActiveProjectHours) {
-          mostActiveProjectHours = hours;
-          mostActiveProject = p.project_name ?? p.project_id;
-        }
-      }
+    } else {
+      const proj = await ProjectRepository.findById(options.projectId);
+      mostActiveProject = proj?.project_name || options.projectId;
+      mostActiveProjectHours = totalHours;
     }
 
     return {
@@ -1339,7 +1384,7 @@ const getCachedUserMap = unstable_cache(
     return map;
   },
   ['user-map'],
-  { tags: ['users'] }
+  { tags: ['users'], revalidate: 60 }
 );
 
 export async function getUserMap(): Promise<Record<string, string>> {
@@ -1360,7 +1405,7 @@ export async function resolveUserNames(userIds: (string | null | undefined)[]): 
 }
 
 export function invalidateUserMap() {
-  revalidateTag('users', 'max');
+  revalidateTag('users');
 }
 
 // ============ TRASH / SOFT-DELETED RECORDS ============
@@ -1371,7 +1416,7 @@ const getCachedAllProjectsIncludingDeleted = unstable_cache(
     return rows as unknown as Project[];
   },
   ['projects-all-incl-deleted'],
-  { tags: ['projects'] }
+  { tags: ['projects'], revalidate: 60 }
 );
 
 export async function findAllProjectsIncludingDeleted(): Promise<Project[]> {
@@ -1384,7 +1429,7 @@ const getCachedAllTasksIncludingDeleted = unstable_cache(
     return rows as unknown as Task[];
   },
   ['tasks-all-incl-deleted'],
-  { tags: ['tasks'] }
+  { tags: ['tasks'], revalidate: 60 }
 );
 
 export async function findAllTasksIncludingDeleted(): Promise<Task[]> {
@@ -1397,7 +1442,7 @@ const getCachedAllReportsIncludingDeleted = unstable_cache(
     return rows as unknown as DailyReport[];
   },
   ['reports-all-incl-deleted'],
-  { tags: ['reports'] }
+  { tags: ['reports'], revalidate: 60 }
 );
 
 export async function findAllReportsIncludingDeleted(): Promise<DailyReport[]> {
@@ -1422,8 +1467,8 @@ export async function restoreProject(projectId: string, restoredBy: string): Pro
     restoredBy
   );
 
-  revalidateTag('projects', 'max');
-  revalidateTag('project_log', 'max');
+  revalidateTag('projects');
+  revalidateTag('project_log');
   return true;
 }
 
@@ -1445,10 +1490,10 @@ export async function restoreTask(taskId: string, restoredBy: string): Promise<b
     restoredBy
   );
 
-  revalidateTag('tasks', 'max');
-  revalidateTag('task_log', 'max');
-  revalidateTag('projects', 'max');
-  revalidateTag('project_log', 'max');
+  revalidateTag('tasks');
+  revalidateTag('task_log');
+  revalidateTag('projects');
+  revalidateTag('project_log');
   return true;
 }
 
@@ -1461,9 +1506,9 @@ export async function restoreReport(reportId: string): Promise<boolean> {
     WHERE report_id = ${reportId}
   `;
 
-  revalidateTag('reports', 'max');
-  revalidateTag('tasks', 'max');
-  revalidateTag('projects', 'max');
+  revalidateTag('reports');
+  revalidateTag('tasks');
+  revalidateTag('projects');
   return true;
 }
 
@@ -1475,7 +1520,7 @@ const getCachedFiles = unstable_cache(
     return rows as unknown as FileRecord[];
   },
   ['files-all'],
-  { tags: ['files'] }
+  { tags: ['files'], revalidate: 60 }
 );
 
 const getCachedFilesByProjectId = unstable_cache(
@@ -1484,7 +1529,7 @@ const getCachedFilesByProjectId = unstable_cache(
     return rows as unknown as FileRecord[];
   },
   ['files-by-project-id'],
-  { tags: ['files'] }
+  { tags: ['files'], revalidate: 60 }
 );
 
 const getCachedFilesByTaskId = unstable_cache(
@@ -1493,7 +1538,7 @@ const getCachedFilesByTaskId = unstable_cache(
     return rows as unknown as FileRecord[];
   },
   ['files-by-task-id'],
-  { tags: ['files'] }
+  { tags: ['files'], revalidate: 60 }
 );
 
 const getCachedFilesByReportId = unstable_cache(
@@ -1502,7 +1547,7 @@ const getCachedFilesByReportId = unstable_cache(
     return rows as unknown as FileRecord[];
   },
   ['files-by-report-id'],
-  { tags: ['files'] }
+  { tags: ['files'], revalidate: 60 }
 );
 
 export const FileRepository = {
@@ -1562,7 +1607,7 @@ export const FileRepository = {
       )
     `;
 
-    revalidateTag('files', 'max');
+    revalidateTag('files');
     return newFile;
   },
 
@@ -1575,7 +1620,7 @@ export const FileRepository = {
       WHERE id = ${fileId}
     `;
 
-    revalidateTag('files', 'max');
+    revalidateTag('files');
     return true;
   },
 };

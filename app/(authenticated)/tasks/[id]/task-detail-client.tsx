@@ -351,23 +351,27 @@ export function TaskDetailClient({
               <Card className="transition-shadow hover:shadow-md">
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <p className="text-sm font-medium">{formatDate(report.date)}</p>
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <h4 className="text-sm font-semibold text-foreground leading-snug">
+                        {report.remarks || "No remarks"}
+                      </h4>
                       {report.total_hours && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
                           {report.total_hours}h
                         </Badge>
                       )}
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className="text-[10px] py-0 px-1.5">
                         {report.progress_percentage ?? 0}%
                       </Badge>
                     </div>
-                    <p className="line-clamp-2 text-xs text-muted-foreground mt-1">
-                      {report.remarks || "No remarks"}
-                    </p>
-                    <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span>By: {userMap[report.user_id ?? ""] ?? report.user_id ?? "—"}</span>
-                      <span>{formatDateTime(report.created_at)}</span>
+                    <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <span>{formatDate(report.date)}</span>
+                      {report.user_id && (
+                        <>
+                          <span>·</span>
+                          <span>{userMap[report.user_id] ?? report.user_id}</span>
+                        </>
+                      )}
                     </div>
                   </div>
                 </CardContent>

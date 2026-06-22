@@ -17,6 +17,7 @@ export default async function AnalyticsPage({
     project_id?: string
     start_date?: string
     end_date?: string
+    preset?: string
   }>
 }) {
   const session = await getSession()
@@ -53,6 +54,11 @@ export default async function AnalyticsPage({
         user_name: u.user_name,
       }))}
       viewMode={viewMode}
+      currentStartDate={params.start_date}
+      currentEndDate={params.end_date}
+      currentPreset={params.preset}
+      currentProjectId={params.project_id}
+      currentUserId={params.user_id}
     />
   )
 }

@@ -3,7 +3,7 @@
 import { useState, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ArrowLeft, Save, Upload, X, FileText, Loader2, Plus } from "lucide-react"
+import { ArrowLeft, Save, Upload, X, FileText, Loader2 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -19,6 +19,7 @@ import {
 import { Badge } from "@/components/ui/badge"
 import type { Project, Status, User } from "@/lib/types"
 import { revalidatePathsAndTags } from "@/app/actions"
+import { SearchableUserSelect } from "@/components/ui/searchable-user-select"
 
 export function ProjectForm({
   project,
@@ -52,7 +53,6 @@ export function ProjectForm({
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [teamUserIds, setTeamUserIds] = useState<string[]>(initialTeamUserIds)
-  const [showUserSelect, setShowUserSelect] = useState(false)
 
   function extractFileName(url: string): string {
     try {
@@ -99,14 +99,11 @@ export function ProjectForm({
     if (!teamUserIds.includes(userId)) {
       setTeamUserIds([...teamUserIds, userId])
     }
-    setShowUserSelect(false)
   }
 
   const removeTeamMember = (userId: string) => {
     setTeamUserIds(teamUserIds.filter((id) => id !== userId))
   }
-
-  const availableUsers = allUsers.filter((u) => !teamUserIds.includes(u.user_id))
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -123,11 +120,15 @@ export function ProjectForm({
       }
 
       if (isEdit && project) {
-        await fetch(`/api/projects/${project.project_id}`, {
+        const res = await fetch(`/api/projects/${project.project_id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(err.error || `Update failed (${res.status})`)
+        }
         await revalidatePathsAndTags(
           ['/projects', `/projects/${project.project_id}`, '/dashboard'],
           ['projects', 'project_log']
@@ -139,6 +140,10 @@ export function ProjectForm({
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(payload),
         })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(err.error || `Create failed (${res.status})`)
+        }
         const data = await res.json()
         await revalidatePathsAndTags(
           ['/projects', `/projects/${data.project_id}`, '/dashboard'],
@@ -242,55 +247,13 @@ export function ProjectForm({
                 Assign people to this project. They will see it in their &quot;My View&quot;.
               </p>
 
-              {teamUserIds.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-2">
-                  {teamUserIds.map((uid) => {
-                    const user = allUsers.find((u) => u.user_id === uid)
-                    return (
-                      <Badge key={uid} variant="secondary" className="gap-1 pl-2 pr-1">
-                        <span className="text-xs">{user?.user_name || user?.user_email || uid}</span>
-                        <button
-                          type="button"
-                          onClick={() => removeTeamMember(uid)}
-                          className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </Badge>
-                    )
-                  })}
-                </div>
-              )}
-
-              {showUserSelect && availableUsers.length > 0 ? (
-                <Select onValueChange={addTeamMember}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a user to add..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {availableUsers.map((u) => (
-                      <SelectItem key={u.user_id} value={u.user_id}>
-                        {u.user_name || u.user_email}
-                        {u.user_occupation ? ` (${u.user_occupation})` : ""}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              ) : (
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setShowUserSelect(true)}
-                  disabled={availableUsers.length === 0}
-                >
-                  <Plus className="mr-1.5 h-3 w-3" />
-                  Add Team Member
-                </Button>
-              )}
-              {availableUsers.length === 0 && teamUserIds.length > 0 && (
-                <p className="text-xs text-muted-foreground">All users are already assigned.</p>
-              )}
+              <SearchableUserSelect
+                allUsers={allUsers}
+                selectedUserIds={teamUserIds}
+                onAddUser={addTeamMember}
+                onRemoveUser={removeTeamMember}
+                placeholder="Add Team Member"
+              />
             </div>
 
             {/* File Upload Section */}

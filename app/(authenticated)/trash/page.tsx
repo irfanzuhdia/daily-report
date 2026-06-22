@@ -7,7 +7,7 @@ import {
   findAllReportsIncludingDeleted,
   getUserMap,
 } from "@/lib/repositories"
-import { deleteRowDimension } from "@/lib/sheets"
+import { sql } from "@/lib/db"
 import { TrashClient } from "./trash-client"
 
 export default async function TrashPage() {
@@ -37,57 +37,30 @@ export default async function TrashPage() {
   let tasksChanged = false
   let reportsChanged = false
 
-  const projectsToDelete: number[] = []
-  for (let i = 0; i < allProjects.length; i++) {
-    const p = allProjects[i]
-    if (p.deleted_at) {
-      const deletedTime = new Date(p.deleted_at)
-      if (deletedTime < thirtyDaysAgo) {
-        projectsToDelete.push(i + 2)
-      }
-    }
-  }
+  const projectsToDelete = allProjects.filter(
+    (p) => p.deleted_at && new Date(p.deleted_at) < thirtyDaysAgo
+  )
   if (projectsToDelete.length > 0) {
-    projectsToDelete.sort((a, b) => b - a)
-    for (const rowNum of projectsToDelete) {
-      await deleteRowDimension("project", rowNum)
-    }
+    const ids = projectsToDelete.map((p) => p.project_id)
+    await sql`DELETE FROM projects WHERE project_id = ANY(${ids})`
     projectsChanged = true
   }
 
-  const tasksToDelete: number[] = []
-  for (let i = 0; i < allTasks.length; i++) {
-    const t = allTasks[i]
-    if (t.deleted_at) {
-      const deletedTime = new Date(t.deleted_at)
-      if (deletedTime < thirtyDaysAgo) {
-        tasksToDelete.push(i + 2)
-      }
-    }
-  }
+  const tasksToDelete = allTasks.filter(
+    (t) => t.deleted_at && new Date(t.deleted_at) < thirtyDaysAgo
+  )
   if (tasksToDelete.length > 0) {
-    tasksToDelete.sort((a, b) => b - a)
-    for (const rowNum of tasksToDelete) {
-      await deleteRowDimension("task", rowNum)
-    }
+    const ids = tasksToDelete.map((t) => t.id)
+    await sql`DELETE FROM tasks WHERE id = ANY(${ids})`
     tasksChanged = true
   }
 
-  const reportsToDelete: number[] = []
-  for (let i = 0; i < allReports.length; i++) {
-    const r = allReports[i]
-    if (r.deleted_at) {
-      const deletedTime = new Date(r.deleted_at)
-      if (deletedTime < thirtyDaysAgo) {
-        reportsToDelete.push(i + 2)
-      }
-    }
-  }
+  const reportsToDelete = allReports.filter(
+    (r) => r.deleted_at && new Date(r.deleted_at) < thirtyDaysAgo
+  )
   if (reportsToDelete.length > 0) {
-    reportsToDelete.sort((a, b) => b - a)
-    for (const rowNum of reportsToDelete) {
-      await deleteRowDimension("report", rowNum)
-    }
+    const ids = reportsToDelete.map((r) => r.report_id)
+    await sql`DELETE FROM daily_reports WHERE report_id = ANY(${ids})`
     reportsChanged = true
   }
 

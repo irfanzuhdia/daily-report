@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useId, useEffect } from "react"
+import { useState, useCallback, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin } from "lucide-react"
@@ -265,27 +265,35 @@ export function TasksClient({
   tasks,
   statuses,
   projects,
+  users = [],
   projectMap,
   taskHoursMap,
   currentProjectId,
   currentStatus,
   currentSearch,
+  currentCreatedBy,
+  currentMemberId,
   viewMode,
 }: {
   tasks: Task[]
   statuses: Status[]
   projects: Project[]
+  users?: { user_id: string; user_name: string | null; user_email: string }[]
   projectMap: Record<string, string | null>
   taskHoursMap: Record<string, number>
   currentProjectId?: string
   currentStatus?: string
   currentSearch?: string
+  currentCreatedBy?: string
+  currentMemberId?: string
   viewMode: "my" | "team"
 }) {
   const router = useRouter()
   const [search, setSearch] = useState(currentSearch ?? "")
   const [statusFilter, setStatusFilter] = useState(currentStatus ?? "")
   const [projectFilter, setProjectFilter] = useState(currentProjectId ?? "")
+  const [createdByFilter, setCreatedByFilter] = useState(currentCreatedBy ?? "")
+  const [memberFilter, setMemberFilter] = useState(currentMemberId ?? "")
   const [deleteId, setDeleteId] = useState<string | null>(null)
   
   const [layout, setLayout] = useState<"kanban" | "list">("kanban")
@@ -296,6 +304,19 @@ export function TasksClient({
   const [dragOverStatuses, setDragOverStatuses] = useState<Record<string, string>>({})
   const [dragStartColumn, setDragStartColumn] = useState<string | null>(null)
 
+  const [localTasks, setLocalTasks] = useState(tasks)
+  const [prevTasks, setPrevTasks] = useState(tasks)
+  if (tasks !== prevTasks) {
+    setPrevTasks(tasks)
+    setLocalTasks(tasks.map(t => {
+      const optStatus = optimisticStatuses[t.id]
+      if (optStatus) {
+        return { ...t, task_status: optStatus }
+      }
+      return t
+    }))
+  }
+
   const dndId = useId()
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -303,13 +324,32 @@ export function TasksClient({
     })
   )
 
-  const handleFilter = () => {
+  const isFirstMount = useRef(true)
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false
+      return
+    }
     const params = new URLSearchParams()
-    if (search) params.set("search", search)
+    if (debouncedSearch) params.set("search", debouncedSearch)
     if (statusFilter) params.set("status", statusFilter)
     if (projectFilter) params.set("project_id", projectFilter)
-    router.push(`/tasks${params.toString() ? "?" + params.toString() : ""}`)
-  }
+    if (viewMode === "team") {
+      if (createdByFilter) params.set("created_by", createdByFilter)
+      if (memberFilter) params.set("member_id", memberFilter)
+    }
+    const query = params.toString()
+    router.push(`/tasks${query ? "?" + query : ""}`)
+  }, [debouncedSearch, statusFilter, projectFilter, createdByFilter, memberFilter, viewMode, router])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -324,6 +364,8 @@ export function TasksClient({
 
   const handleStatusChange = useCallback(async (taskId: string, newStatus: string) => {
     setUpdatingId(taskId)
+    const existingStatus = localTasks.find(t => t.id === taskId)?.task_status ?? "NS"
+    setLocalTasks(prev => prev.map(t => t.id === taskId ? { ...t, task_status: newStatus } : t))
     setOptimisticStatuses(prev => ({ ...prev, [taskId]: newStatus }))
     try {
       const res = await fetch(`/api/tasks/${taskId}`, {
@@ -338,6 +380,7 @@ export function TasksClient({
         )
         router.refresh()
       } else {
+        setLocalTasks(prev => prev.map(t => t.id === taskId ? { ...t, task_status: existingStatus } : t))
         setOptimisticStatuses(prev => {
           const next = { ...prev }
           delete next[taskId]
@@ -346,6 +389,7 @@ export function TasksClient({
       }
     } catch (error) {
       console.error("Failed to update task status:", error)
+      setLocalTasks(prev => prev.map(t => t.id === taskId ? { ...t, task_status: existingStatus } : t))
       setOptimisticStatuses(prev => {
         const next = { ...prev }
         delete next[taskId]
@@ -354,7 +398,7 @@ export function TasksClient({
     } finally {
       setUpdatingId(null)
     }
-  }, [router])
+  }, [localTasks, router])
 
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
   const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>({})
@@ -412,11 +456,11 @@ export function TasksClient({
     { id: "D", title: "Done" },
   ]
 
-  const activeTasks = tasks.filter(t => {
+  const activeTasks = localTasks.filter(t => {
     const status = dragOverStatuses[t.id] ?? optimisticStatuses[t.id] ?? t.task_status ?? "NS"
     return status !== "CC" && status !== "C"
   })
-  const cancelledTasks = tasks.filter(t => {
+  const cancelledTasks = localTasks.filter(t => {
     const status = dragOverStatuses[t.id] ?? optimisticStatuses[t.id] ?? t.task_status ?? "NS"
     return status === "CC" || status === "C"
   })
@@ -527,7 +571,20 @@ export function TasksClient({
     }
 
     const originalColumn = dragStartColumn ?? activeTaskObj.task_status ?? "NS"
-    const finalColumn = dragOverStatuses[activeTaskId] ?? originalColumn
+    let finalColumn = dragOverStatuses[activeTaskId] ?? originalColumn
+
+    // Fallback in case dragOverStatuses is missing/stale on fast drag end
+    if (finalColumn === originalColumn) {
+      const targetCol = columns.find(c => c.id === overId)
+      if (targetCol) {
+        finalColumn = targetCol.id
+      } else {
+        const overTask = activeTasks.find(t => t.id === overId)
+        if (overTask) {
+          finalColumn = dragOverStatuses[overTask.id] ?? optimisticStatuses[overTask.id] ?? overTask.task_status ?? "NS"
+        }
+      }
+    }
 
     // Reset dragOverStatuses
     setDragOverStatuses({})
@@ -624,15 +681,14 @@ export function TasksClient({
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="relative flex-1">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search tasks..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
-                onKeyDown={(e) => e.key === "Enter" && handleFilter()}
               />
             </div>
             <Select value={projectFilter} onValueChange={setProjectFilter}>
@@ -664,9 +720,39 @@ export function TasksClient({
                 </SelectContent>
               </Select>
             )}
-            <Button onClick={handleFilter} variant="secondary">
-              Filter
-            </Button>
+            {viewMode === "team" && (
+              <>
+                <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Created by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All creators</SelectItem>
+                    {users.map((u) => (
+                      <SelectItem key={u.user_id} value={u.user_id}>
+                        {u.user_name || u.user_email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={memberFilter} onValueChange={setMemberFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Task team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All members</SelectItem>
+                    {users.map((u) => (
+                      <SelectItem key={u.user_id} value={u.user_id}>
+                        {u.user_name || u.user_email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -718,7 +804,7 @@ export function TasksClient({
         </DndContext>
       ) : (
         /* Traditional List View */
-        tasks.length === 0 ? (
+        localTasks.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <ListTodoIcon className="mb-4 h-12 w-12 text-muted-foreground/50" />
@@ -735,7 +821,7 @@ export function TasksClient({
           </Card>
         ) : (
           <div className="space-y-3">
-            {tasks.map((task) => (
+            {localTasks.map((task) => (
               <Card key={task.id} className="transition-shadow hover:shadow-md">
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="min-w-0 flex-1">

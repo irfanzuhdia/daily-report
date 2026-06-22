@@ -6,6 +6,7 @@ import {
   TaskRepository,
   DailyReportRepository,
   StatusRepository,
+  UserRepository,
   getContributionData,
   filterProjectsByUser,
   filterTasksByUser,
@@ -14,7 +15,15 @@ import {
 import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
 import { DashboardClient } from "./dashboard-client"
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{
+    created_by?: string
+    start_date?: string
+    end_date?: string
+  }>
+}) {
   const session = await getSession()
   if (session == null) {
     redirect("/login")
@@ -22,20 +31,43 @@ export default async function DashboardPage() {
 
   const viewMode = await getViewModeFromCookies()
   const userId = session.user_id
+  const params = await searchParams
 
-  const [allProjects, allTasks, allReports, statuses] = await Promise.all([
+  const [allProjects, allTasks, allReports, statuses, allUsers] = await Promise.all([
     ProjectRepository.findAll(),
     TaskRepository.findAll(),
     DailyReportRepository.findAll(),
     StatusRepository.findAll(),
+    UserRepository.findAll(),
   ])
 
   // Filter by user when in "my" view
-  const [projects, tasks, reports] = await Promise.all([
+  let [projects, tasks, reports] = await Promise.all([
     viewMode === "my" ? filterProjectsByUser(allProjects, userId) : allProjects,
     viewMode === "my" ? filterTasksByUser(allTasks, userId) : allTasks,
     viewMode === "my" ? filterReportsByUser(allReports, userId) : allReports,
   ])
+
+  const userMap = new Map(allUsers.map((u) => [u.user_id, u.user_name || u.user_email || u.user_id]))
+
+  // Apply team view filters
+  if (viewMode === "team" && params.created_by) {
+    projects = projects.filter((p) => p.created_by === params.created_by)
+    tasks = tasks.filter((t) => t.created_by === params.created_by)
+    reports = reports.filter((r) => r.user_id === params.created_by || r.created_by === params.created_by)
+  }
+
+  // Apply date range filters
+  if (params.start_date) {
+    projects = projects.filter((p) => p.created_at && p.created_at.split('T')[0] >= params.start_date!)
+    tasks = tasks.filter((t) => t.created_at && t.created_at.split('T')[0] >= params.start_date!)
+    reports = reports.filter((r) => r.date && r.date >= params.start_date!)
+  }
+  if (params.end_date) {
+    projects = projects.filter((p) => p.created_at && p.created_at.split('T')[0] <= params.end_date!)
+    tasks = tasks.filter((t) => t.created_at && t.created_at.split('T')[0] <= params.end_date!)
+    reports = reports.filter((r) => r.date && r.date <= params.end_date!)
+  }
 
   // Build status lookup
   const statusMap = new Map(statuses.map((s) => [s.id, s.name]))
@@ -70,6 +102,7 @@ export default async function DashboardPage() {
         ...r,
         task_description: task?.task_description ?? undefined,
         project_name: project?.project_name ?? undefined,
+        user_name: userMap.get(r.user_id ?? "") ?? undefined,
       }
     })
 
@@ -78,12 +111,13 @@ export default async function DashboardPage() {
     return sum + (isNaN(h) ? 0 : h);
   }, 0);
 
-  // Contribution data for heatmap (last 30 days)
+  // Contribution data for heatmap (selected range or default 30 days)
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
   const contributionData = await getContributionData({
-    startDate: toDateStr(thirtyDaysAgo),
-    ...(viewMode === "my" ? { userId } : {}),
+    startDate: params.start_date ?? toDateStr(thirtyDaysAgo),
+    endDate: params.end_date,
+    userId: viewMode === "my" ? userId : params.created_by,
   })
 
   const stats = {
@@ -98,5 +132,18 @@ export default async function DashboardPage() {
     contributionData,
   }
 
-  return <DashboardClient stats={stats} viewMode={viewMode} />
+  return (
+    <DashboardClient
+      stats={stats}
+      viewMode={viewMode}
+      users={allUsers.map((u) => ({
+        user_id: u.user_id,
+        user_email: u.user_email,
+        user_name: u.user_name,
+      }))}
+      currentCreatedBy={params.created_by}
+      currentStartDate={params.start_date}
+      currentEndDate={params.end_date}
+    />
+  )
 }

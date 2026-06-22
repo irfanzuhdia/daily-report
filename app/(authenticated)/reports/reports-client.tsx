@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useId, useEffect } from "react"
+import { useState, useCallback, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, GripVertical, Pin, Loader2 } from "lucide-react"
@@ -59,6 +59,7 @@ interface EnrichedReport {
   task_status?: string
   project_id?: string
   project_name?: string
+  created_by_name?: string
 }
 
 /* ─────────────────────── Sortable Report Card ─────────────────────── */
@@ -100,69 +101,79 @@ function SortableReportCard({
           </div>
         )}
         <CardContent className="p-4 space-y-3">
-          <div className="flex items-start gap-2">
-            <button
-              {...listeners}
-              className="mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
-              tabIndex={-1}
-            >
-              <GripVertical className="h-4 w-4" />
-            </button>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <span className="text-xs font-semibold text-foreground">{report.date}</span>
-                <div className="flex items-center gap-1.5">
-                  <Badge variant="outline" className="text-[10px] py-0 px-1.5">
-                    {report.progress_percentage ?? 0}%
+          <div className="flex items-start justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <button
+                {...listeners}
+                className="cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
+                tabIndex={-1}
+              >
+                <GripVertical className="h-4 w-4" />
+              </button>
+              <div className="flex items-center gap-1.5">
+                <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+                  {report.progress_percentage ?? 0}%
+                </Badge>
+                {report.total_hours && (
+                  <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+                    {report.total_hours}h
                   </Badge>
-                  {report.total_hours && (
-                    <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
-                      {report.total_hours}h
-                    </Badge>
-                  )}
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className={`h-6 w-6 shrink-0 ${isPinned ? "text-primary" : "text-muted-foreground opacity-30 hover:opacity-100"}`}
-                    onClick={() => onTogglePin(report.report_id)}
-                  >
-                    <Pin className="h-3.5 w-3.5" style={isPinned ? { fill: "currentColor" } : {}} />
-                  </Button>
-                </div>
+                )}
               </div>
+            </div>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className={`h-6 w-6 shrink-0 ${isPinned ? "text-primary" : "text-muted-foreground opacity-30 hover:opacity-100"}`}
+                onClick={() => onTogglePin(report.report_id)}
+              >
+                <Pin className="h-3.5 w-3.5" style={isPinned ? { fill: "currentColor" } : {}} />
+              </Button>
             </div>
           </div>
 
-          <div className="space-y-1">
-            <p className="text-xs text-muted-foreground line-clamp-3 leading-relaxed">
+          <div className="space-y-1.5">
+            <h4 className="text-sm font-semibold text-foreground leading-snug line-clamp-3">
               {report.remarks || "No remarks"}
-            </p>
+            </h4>
+            <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+              <span>{report.date}</span>
+              {report.created_by_name && (
+                <>
+                  <span>·</span>
+                  <span>{report.created_by_name}</span>
+                </>
+              )}
+            </div>
             {report.task_description && (
-              <p className="text-[10px] text-muted-foreground pt-1 border-t truncate">
+              <p className="text-[10px] text-muted-foreground truncate pt-0.5">
                 📁 {report.project_name ?? "Unknown"} → {report.task_description}
               </p>
             )}
           </div>
 
-          <div className="flex items-center justify-end gap-1 pt-1">
-            <Link href={`/reports/${report.report_id}`}>
-              <Button variant="ghost" size="icon-sm" className="h-7 w-7">
-                <Eye className="h-3 w-3" />
+          <div className="flex items-center justify-end pt-2 border-t border-muted/50">
+            <div className="flex items-center gap-1">
+              <Link href={`/reports/${report.report_id}`}>
+                <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                  <Eye className="h-3 w-3" />
+                </Button>
+              </Link>
+              <Link href={`/reports/${report.report_id}/edit`}>
+                <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                  <Pencil className="h-3 w-3" />
+                </Button>
+              </Link>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                className="h-6 w-6"
+                onClick={() => onDelete(report.report_id)}
+              >
+                <Trash2 className="h-3 w-3 text-destructive" />
               </Button>
-            </Link>
-            <Link href={`/reports/${report.report_id}/edit`}>
-              <Button variant="ghost" size="icon-sm" className="h-7 w-7">
-                <Pencil className="h-3 w-3" />
-              </Button>
-            </Link>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="h-7 w-7"
-              onClick={() => onDelete(report.report_id)}
-            >
-              <Trash2 className="h-3 w-3 text-destructive" />
-            </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
@@ -175,21 +186,33 @@ function SortableReportCard({
 function ReportDragOverlay({ report }: { report: EnrichedReport }) {
   return (
     <Card className="shadow-xl ring-2 ring-primary/50 rotate-2 w-[280px]">
-      <CardContent className="p-4 space-y-2">
+      <CardContent className="p-4 space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-xs font-semibold">{report.date}</span>
-          <Badge variant="outline" className="text-[10px] py-0 px-1.5">
-            {report.progress_percentage ?? 0}%
-          </Badge>
+          <div className="flex items-center gap-1.5">
+            <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+              {report.progress_percentage ?? 0}%
+            </Badge>
+          </div>
         </div>
-        <p className="text-xs text-muted-foreground line-clamp-2">
-          {report.remarks || "No remarks"}
-        </p>
-        {report.task_description && (
-          <p className="text-[10px] text-muted-foreground truncate">
-            📁 {report.project_name ?? "Unknown"} → {report.task_description}
-          </p>
-        )}
+        <div className="space-y-1.5">
+          <h4 className="text-xs font-semibold text-foreground line-clamp-2">
+            {report.remarks || "No remarks"}
+          </h4>
+          <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span>{report.date}</span>
+            {report.created_by_name && (
+              <>
+                <span className="mx-1">·</span>
+                <span>{report.created_by_name}</span>
+              </>
+            )}
+          </div>
+          {report.task_description && (
+            <p className="text-[10px] text-muted-foreground truncate pt-0.5">
+              📁 {report.project_name ?? "Unknown"} → {report.task_description}
+            </p>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
@@ -246,28 +269,46 @@ function DroppableColumn({
 export function ReportsClient({
   reports,
   tasks,
+  users = [],
   currentTaskId,
   currentSearch,
+  currentCreatedBy,
   viewMode,
 }: {
   reports: EnrichedReport[]
   tasks: Task[]
+  users?: { user_id: string; user_name: string | null; user_email: string }[]
   currentTaskId?: string
   currentSearch?: string
+  currentCreatedBy?: string
   viewMode: "my" | "team"
 }) {
   const router = useRouter()
   const [search, setSearch] = useState(currentSearch ?? "")
   const [taskFilter, setTaskFilter] = useState(currentTaskId ?? "")
+  const [createdByFilter, setCreatedByFilter] = useState(currentCreatedBy ?? "")
   const [deleteId, setDeleteId] = useState<string | null>(null)
   
-  const [layout, setLayout] = useState<"kanban" | "list">("kanban")
+  const [layout, setLayout] = useState<"kanban" | "list">("list")
   const [showArchive, setShowArchive] = useState(false)
   const [activeId, setActiveId] = useState<string | null>(null)
   const [updatingTaskId, setUpdatingTaskId] = useState<string | null>(null)
   const [optimisticTaskStatuses, setOptimisticTaskStatuses] = useState<Record<string, string>>({})
   const [dragOverTaskStatuses, setDragOverTaskStatuses] = useState<Record<string, string>>({})
   const [dragStartColumn, setDragStartColumn] = useState<string | null>(null)
+
+  const [localReports, setLocalReports] = useState(reports)
+  const [prevReports, setPrevReports] = useState(reports)
+  if (reports !== prevReports) {
+    setPrevReports(reports)
+    setLocalReports(reports.map(r => {
+      const optStatus = optimisticTaskStatuses[r.task_id]
+      if (optStatus) {
+        return { ...r, task_status: optStatus }
+      }
+      return r
+    }))
+  }
 
   const dndId = useId()
   const sensors = useSensors(
@@ -276,12 +317,30 @@ export function ReportsClient({
     })
   )
 
-  const handleFilter = () => {
+  const isFirstMount = useRef(true)
+  const [debouncedSearch, setDebouncedSearch] = useState(search)
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search)
+    }, 500)
+    return () => clearTimeout(timer)
+  }, [search])
+
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false
+      return
+    }
     const params = new URLSearchParams()
-    if (search) params.set("search", search)
+    if (debouncedSearch) params.set("search", debouncedSearch)
     if (taskFilter) params.set("task_id", taskFilter)
-    router.push(`/reports${params.toString() ? "?" + params.toString() : ""}`)
-  }
+    if (viewMode === "team" && createdByFilter) {
+      params.set("created_by", createdByFilter)
+    }
+    const query = params.toString()
+    router.push(`/reports${query ? "?" + query : ""}`)
+  }, [debouncedSearch, taskFilter, createdByFilter, viewMode, router])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -296,6 +355,8 @@ export function ReportsClient({
 
   const handleTaskStatusChange = useCallback(async (taskId: string, newStatus: string) => {
     setUpdatingTaskId(taskId)
+    const existingStatus = localReports.find(r => r.task_id === taskId)?.task_status ?? "NS"
+    setLocalReports(prev => prev.map(r => r.task_id === taskId ? { ...r, task_status: newStatus } : r))
     setOptimisticTaskStatuses(prev => ({ ...prev, [taskId]: newStatus }))
     try {
       const res = await fetch(`/api/tasks/${taskId}`, {
@@ -310,6 +371,7 @@ export function ReportsClient({
         )
         router.refresh()
       } else {
+        setLocalReports(prev => prev.map(r => r.task_id === taskId ? { ...r, task_status: existingStatus } : r))
         setOptimisticTaskStatuses(prev => {
           const next = { ...prev }
           delete next[taskId]
@@ -318,6 +380,7 @@ export function ReportsClient({
       }
     } catch (error) {
       console.error("Failed to update task status:", error)
+      setLocalReports(prev => prev.map(r => r.task_id === taskId ? { ...r, task_status: existingStatus } : r))
       setOptimisticTaskStatuses(prev => {
         const next = { ...prev }
         delete next[taskId]
@@ -326,7 +389,7 @@ export function ReportsClient({
     } finally {
       setUpdatingTaskId(null)
     }
-  }, [router])
+  }, [localReports, router])
 
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
   const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>({})
@@ -384,11 +447,11 @@ export function ReportsClient({
     { id: "D", title: "Done Tasks" },
   ]
 
-  const activeReports = reports.filter(r => {
+  const activeReports = localReports.filter(r => {
     const status = dragOverTaskStatuses[r.task_id] ?? optimisticTaskStatuses[r.task_id] ?? r.task_status ?? "NS"
     return status !== "CC" && status !== "C"
   })
-  const cancelledReports = reports.filter(r => {
+  const cancelledReports = localReports.filter(r => {
     const status = dragOverTaskStatuses[r.task_id] ?? optimisticTaskStatuses[r.task_id] ?? r.task_status ?? "NS"
     return status === "CC" || status === "C"
   })
@@ -499,7 +562,20 @@ export function ReportsClient({
     }
 
     const originalColumn = dragStartColumn ?? activeReportObj.task_status ?? "NS"
-    const finalColumn = dragOverTaskStatuses[activeReportObj.task_id] ?? originalColumn
+    let finalColumn = dragOverTaskStatuses[activeReportObj.task_id] ?? originalColumn
+
+    // Fallback in case dragOverTaskStatuses is missing/stale on fast drag end
+    if (finalColumn === originalColumn) {
+      const targetCol = columns.find(c => c.id === overId)
+      if (targetCol) {
+        finalColumn = targetCol.id
+      } else {
+        const overReport = activeReports.find(r => r.report_id === overId)
+        if (overReport) {
+          finalColumn = dragOverTaskStatuses[overReport.task_id] ?? optimisticTaskStatuses[overReport.task_id] ?? overReport.task_status ?? "NS"
+        }
+      }
+    }
 
     // Reset dragOverTaskStatuses
     setDragOverTaskStatuses({})
@@ -596,15 +672,14 @@ export function ReportsClient({
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="flex flex-col gap-3 sm:flex-row">
-            <div className="relative flex-1">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center flex-wrap">
+            <div className="relative flex-1 min-w-[200px]">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search reports..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 className="pl-9"
-                onKeyDown={(e) => e.key === "Enter" && handleFilter()}
               />
             </div>
             <Select value={taskFilter} onValueChange={setTaskFilter}>
@@ -622,9 +697,22 @@ export function ReportsClient({
                 ))}
               </SelectContent>
             </Select>
-            <Button onClick={handleFilter} variant="secondary">
-              Filter
-            </Button>
+            {viewMode === "team" && (
+              <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
+                <SelectTrigger className="w-full sm:w-[180px]">
+                  <Filter className="mr-2 h-4 w-4" />
+                  <SelectValue placeholder="Created by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All reporters</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.user_id} value={u.user_id}>
+                      {u.user_name || u.user_email}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -668,7 +756,7 @@ export function ReportsClient({
         </DndContext>
       ) : (
         /* Traditional List View */
-        reports.length === 0 ? (
+        localReports.length === 0 ? (
           <Card>
             <CardContent className="flex flex-col items-center justify-center py-12">
               <FileTextIcon className="mb-4 h-12 w-12 text-muted-foreground/50" />
@@ -685,31 +773,39 @@ export function ReportsClient({
           </Card>
         ) : (
           <div className="space-y-3">
-            {reports.map((report) => (
+            {localReports.map((report) => (
               <Card key={report.report_id} className="transition-shadow hover:shadow-md">
-                <CardContent className="flex items-center justify-between p-4">
+                <CardContent className="flex items-center justify-between p-4 gap-4">
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-medium">{report.date}</p>
-                      <Badge variant="outline">
+                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
+                      <Badge variant="outline" className="text-[10px] py-0 px-1.5">
                         {report.progress_percentage ?? 0}%
                       </Badge>
                       {report.total_hours && (
-                        <Badge variant="secondary" className="text-xs">
+                        <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
                           {report.total_hours}h
                         </Badge>
                       )}
                     </div>
-                    <p className="mt-1 line-clamp-2 text-xs text-muted-foreground">
+                    <h4 className="text-sm font-semibold text-foreground line-clamp-2 leading-snug">
                       {report.remarks || "No remarks"}
-                    </p>
+                    </h4>
+                    <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                      <span>{report.date}</span>
+                      {report.created_by_name && (
+                        <>
+                          <span>·</span>
+                          <span>{report.created_by_name}</span>
+                        </>
+                      )}
+                    </div>
                     {report.task_description && (
-                      <p className="mt-1 text-xs text-muted-foreground">
+                      <p className="mt-1 text-xs text-muted-foreground pt-0.5">
                         📁 {report.project_name ?? "Unknown"} → {report.task_description}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
+                  <div className="flex items-center gap-1 shrink-0">
                     <Link href={`/reports/${report.report_id}`}>
                       <Button variant="ghost" size="icon-sm">
                         <Eye className="h-3 w-3" />
@@ -755,8 +851,7 @@ export function ReportsClient({
                   <Card key={report.report_id} className="border bg-muted/10">
                     <CardContent className="flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 gap-3">
                       <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-sm">{report.date}</span>
+                        <div className="flex items-center gap-2 flex-wrap mb-1.5">
                           <Badge variant="outline" className="text-[10px] py-0">
                             {report.progress_percentage ?? 0}%
                           </Badge>
@@ -769,11 +864,20 @@ export function ReportsClient({
                             {report.task_status === "C" ? "Completed Task" : "Cancelled Task"}
                           </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1.5 line-clamp-2">
+                        <h4 className="text-sm font-semibold text-foreground line-clamp-2 leading-snug">
                           {report.remarks || "No remarks"}
-                        </p>
+                        </h4>
+                        <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
+                          <span>{report.date}</span>
+                          {report.created_by_name && (
+                            <>
+                              <span>·</span>
+                              <span>{report.created_by_name}</span>
+                            </>
+                          )}
+                        </div>
                         {report.task_description && (
-                          <p className="text-[10px] text-muted-foreground mt-1 truncate">
+                          <p className="text-[10px] text-muted-foreground mt-1 truncate pt-0.5">
                             📁 {report.project_name ?? "Unknown"} → {report.task_description}
                           </p>
                         )}

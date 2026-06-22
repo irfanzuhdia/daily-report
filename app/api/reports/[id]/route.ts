@@ -6,50 +6,65 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  try {
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const { id } = await params
-  const report = await DailyReportRepository.findById(id)
-  if (!report) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const { id } = await params
+    const report = await DailyReportRepository.findById(id)
+    if (!report) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    return NextResponse.json(report)
+  } catch (error) {
+    console.error('GET /api/reports/[id] error:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
-  return NextResponse.json(report)
 }
 
 export async function PUT(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  try {
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const { id } = await params
-  const body = await request.json()
-  const report = await DailyReportRepository.update(id, body, session.user_id)
-  if (!report) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const { id } = await params
+    const body = await request.json()
+    const report = await DailyReportRepository.update(id, body, session.user_id)
+    if (!report) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    return NextResponse.json(report)
+  } catch (error) {
+    console.error('PUT /api/reports/[id] error:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
-  return NextResponse.json(report)
 }
 
 export async function DELETE(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  try {
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const { id } = await params
-  const success = await DailyReportRepository.softDelete(id, session.user_id)
-  if (!success) {
-    return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const { id } = await params
+    const success = await DailyReportRepository.softDelete(id, session.user_id)
+    if (!success) {
+      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    }
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error('DELETE /api/reports/[id] error:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
-  return NextResponse.json({ success: true })
 }

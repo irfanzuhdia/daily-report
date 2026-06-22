@@ -1,5 +1,7 @@
 "use client"
 import { toDateStr } from "@/lib/format"
+import { useState, useEffect, useRef, useCallback } from "react"
+import { useRouter, useSearchParams, usePathname } from "next/navigation"
 
 import Link from "next/link"
 import {
@@ -10,10 +12,20 @@ import {
   ArrowRight,
   Clock,
   BarChart3,
+  Filter,
 } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import type { DashboardStats } from "@/lib/types"
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -27,10 +39,63 @@ const statusVariant: Record<string, "default" | "success" | "warning" | "destruc
 export function DashboardClient({
   stats,
   viewMode,
+  users = [],
+  currentCreatedBy = "",
+  currentStartDate = "",
+  currentEndDate = "",
 }: {
   stats: DashboardStats
   viewMode: "my" | "team"
+  users?: { user_id: string; user_email: string; user_name: string | null }[]
+  currentCreatedBy?: string
+  currentStartDate?: string
+  currentEndDate?: string
 }) {
+  const router = useRouter()
+  const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const [createdBy, setCreatedBy] = useState(currentCreatedBy)
+  const [startDate, setStartDate] = useState(currentStartDate)
+  const [endDate, setEndDate] = useState(currentEndDate)
+
+  const [inputStart, setInputStart] = useState(currentStartDate)
+  const [inputEnd, setInputEnd] = useState(currentEndDate)
+
+  const isFirstMount = useRef(true)
+
+  // Push URL search parameters on filter changes
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false
+      return
+    }
+    const params = new URLSearchParams(searchParams.toString())
+    if (viewMode === "team") {
+      if (createdBy) params.set("created_by", createdBy)
+      else params.delete("created_by")
+    }
+    if (startDate) params.set("start_date", startDate)
+    else params.delete("start_date")
+    if (endDate) params.set("end_date", endDate)
+    else params.delete("end_date")
+
+    router.push(`${pathname}?${params.toString()}`)
+  }, [createdBy, startDate, endDate, viewMode, pathname, router, searchParams])
+
+  const handleApplyDates = useCallback(() => {
+    setStartDate(inputStart)
+    setEndDate(inputEnd)
+  }, [inputStart, inputEnd])
+
+  const handleReset = useCallback(() => {
+    setCreatedBy("")
+    setStartDate("")
+    setEndDate("")
+    setInputStart("")
+    setInputEnd("")
+  }, [])
+
   return (
     <div className="space-y-8">
       <div className="flex items-center justify-between">
@@ -43,6 +108,64 @@ export function DashboardClient({
           </p>
         </div>
       </div>
+
+      {/* Filters (Team view only) */}
+      {viewMode === "team" && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-wrap">
+              <div className="w-full sm:w-[220px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Created by</Label>
+                <Select value={createdBy} onValueChange={setCreatedBy}>
+                  <SelectTrigger className="w-full">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                    <SelectValue placeholder="All team members" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All team members</SelectItem>
+                    {users.map((u) => (
+                      <SelectItem key={u.user_id} value={u.user_id}>
+                        {u.user_name || u.user_email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="w-full sm:w-auto">
+                <Label className="text-xs text-muted-foreground mb-1 block">Start Date</Label>
+                <Input
+                  type="date"
+                  value={inputStart}
+                  onChange={(e) => setInputStart(e.target.value)}
+                  className="w-full sm:w-[160px]"
+                />
+              </div>
+
+              <div className="w-full sm:w-auto">
+                <Label className="text-xs text-muted-foreground mb-1 block">End Date</Label>
+                <Input
+                  type="date"
+                  value={inputEnd}
+                  onChange={(e) => setInputEnd(e.target.value)}
+                  className="w-full sm:w-[160px]"
+                />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
+                <Button type="button" onClick={handleApplyDates} className="w-full sm:w-auto">
+                  Apply Date
+                </Button>
+                {(createdBy || startDate || endDate) && (
+                  <Button type="button" variant="ghost" onClick={handleReset} className="w-full sm:w-auto text-destructive hover:text-destructive">
+                    Reset
+                  </Button>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Stats Grid */}
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
@@ -177,6 +300,7 @@ export function DashboardClient({
                       <p className="text-xs text-muted-foreground">
                         {report.project_name ?? "Unknown project"} •{" "}
                         {report.date ?? "No date"}
+                        {report.user_name && ` • ${report.user_name}`}
                       </p>
                     </div>
                     <Badge variant="outline" className="ml-2 shrink-0">
@@ -219,7 +343,11 @@ export function DashboardClient({
       </div>
 
       {/* Contribution Heatmap Preview */}
-      <ContributionHeatmapPreview data={stats.contributionData} />
+      <ContributionHeatmapPreview
+        data={stats.contributionData}
+        startDate={startDate}
+        endDate={endDate}
+      />
     </div>
   )
 }
@@ -242,15 +370,42 @@ function getHeatmapColor(hours: number): string {
   return HEATMAP_COLORS[5]
 }
 
-function ContributionHeatmapPreview({ data }: { data: Record<string, number> }) {
-  const today = new Date()
+function ContributionHeatmapPreview({
+  data,
+  startDate,
+  endDate,
+}: {
+  data: Record<string, number>
+  startDate?: string
+  endDate?: string
+}) {
   const days: { date: string; hours: number }[] = []
 
-  for (let i = 29; i >= 0; i--) {
-    const d = new Date(today)
-    d.setDate(d.getDate() - i)
-    const key = toDateStr(d)
-    days.push({ date: key, hours: data[key] ?? 0 })
+  if (startDate && endDate) {
+    const start = new Date(startDate + "T00:00:00")
+    const end = new Date(endDate + "T00:00:00")
+    if (!isNaN(start.getTime()) && !isNaN(end.getTime()) && start <= end) {
+      const diff = Math.round((end.getTime() - start.getTime()) / 86400000) + 1
+      // Cap at 60 days to prevent rendering too many blocks on the dashboard
+      const count = Math.min(diff, 60)
+      for (let i = 0; i < count; i++) {
+        const d = new Date(start)
+        d.setDate(d.getDate() + i)
+        const key = toDateStr(d)
+        days.push({ date: key, hours: data[key] ?? 0 })
+      }
+    }
+  }
+
+  // Fallback to last 30 days
+  if (days.length === 0) {
+    const today = new Date()
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(today)
+      d.setDate(d.getDate() - i)
+      const key = toDateStr(d)
+      days.push({ date: key, hours: data[key] ?? 0 })
+    }
   }
 
   const totalHours = days.reduce((s, d) => s + d.hours, 0)
@@ -262,7 +417,9 @@ function ContributionHeatmapPreview({ data }: { data: Record<string, number> }) 
         <div className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
           <CardTitle>Contribution Activity</CardTitle>
-          <span className="text-xs text-muted-foreground">Last 30 days</span>
+          <span className="text-xs text-muted-foreground">
+            {startDate && endDate ? `${startDate} to ${endDate}` : "Last 30 days"}
+          </span>
         </div>
         <Link href="/analytics">
           <Button variant="ghost" size="sm">

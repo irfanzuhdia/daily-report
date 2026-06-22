@@ -1,8 +1,8 @@
 "use client"
 
-import { useState, useMemo, useCallback, useEffect } from "react"
+import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import Link from "next/link"
-import { useRouter, useSearchParams, usePathname } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { ArrowLeft, Calendar, BarChart3, Clock, TrendingUp, Award } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,6 +22,12 @@ interface ContributionCalendarProps {
   data: Record<string, number>
   projects: Project[]
   users: { user_id: string; user_email: string; user_name: string | null }[]
+  viewMode: "my" | "team"
+  currentStartDate?: string
+  currentEndDate?: string
+  currentPreset?: string
+  currentProjectId?: string
+  currentUserId?: string
 }
 
 type PresetKey = "7d" | "30d" | "90d" | "1y" | "thisMonth" | "lastMonth" | "thisYear" | "custom"
@@ -124,12 +130,12 @@ function getPresetRange(key: PresetKey): { startDate: string; endDate: string } 
 
 const PRESETS: { key: PresetKey; label: string }[] = [
   { key: "7d", label: "Last 7 Days" },
-  { key: "30d", label: "Last 30 Days" },
-  { key: "90d", label: "Last 90 Days" },
-  { key: "1y", label: "Last 1 Year" },
   { key: "thisMonth", label: "This Month" },
+  { key: "30d", label: "Last 30 Days" },
   { key: "lastMonth", label: "Last Month" },
+  { key: "90d", label: "Last 90 Days" },
   { key: "thisYear", label: "This Year" },
+  { key: "1y", label: "Last 1 Year" },
   { key: "custom", label: "Custom Range" },
 ]
 
@@ -139,58 +145,34 @@ export function ContributionCalendar({
   projects,
   users,
   viewMode: globalViewMode,
-}: ContributionCalendarProps & { viewMode: "my" | "team" }) {
+  currentStartDate = "",
+  currentEndDate = "",
+  currentPreset = "1y",
+  currentProjectId = "",
+  currentUserId = "",
+}: ContributionCalendarProps) {
   const router = useRouter()
   const pathname = usePathname()
-  const searchParams = useSearchParams()
 
-  const [viewMode, setViewMode] = useState<"all" | "project" | "personal">(() => {
-    if (searchParams.get("project_id")) return "project"
-    if (searchParams.get("user_id")) return "personal"
-    return "all"
-  })
-  const [selectedProject, setSelectedProject] = useState<string>(searchParams.get("project_id") ?? "")
-  const [selectedUser, setSelectedUser] = useState<string>(searchParams.get("user_id") ?? "")
+  const [selectedProject, setSelectedProject] = useState<string>(currentProjectId)
+  const [selectedUser, setSelectedUser] = useState<string>(currentUserId)
+  const [preset, setPreset] = useState<PresetKey>(currentPreset as PresetKey)
 
-  // Use global view mode to determine default user filter
-  const effectiveViewMode = globalViewMode === "my" ? "personal" : viewMode
+  // Initial custom dates or preset range dates
+  const [inputStart, setInputStart] = useState<string>(
+    currentStartDate || getPresetRange(preset)?.startDate || ""
+  )
+  const [inputEnd, setInputEnd] = useState<string>(
+    currentEndDate || getPresetRange(preset)?.endDate || ""
+  )
+  const [customStart, setCustomStart] = useState<string>(
+    currentStartDate || getPresetRange(preset)?.startDate || ""
+  )
+  const [customEnd, setCustomEnd] = useState<string>(
+    currentEndDate || getPresetRange(preset)?.endDate || ""
+  )
 
-  useEffect(() => {
-    const params = new URLSearchParams(searchParams.toString())
-    const currentProj = params.get("project_id") ?? ""
-    const currentUser = params.get("user_id") ?? ""
-
-    let needsUpdate = false
-
-    if (effectiveViewMode === "all") {
-      if (currentProj || currentUser) {
-        params.delete("project_id")
-        params.delete("user_id")
-        needsUpdate = true
-      }
-    } else if (effectiveViewMode === "project") {
-      if (currentProj !== selectedProject || currentUser) {
-        if (selectedProject) params.set("project_id", selectedProject)
-        else params.delete("project_id")
-        params.delete("user_id")
-        needsUpdate = true
-      }
-    } else if (effectiveViewMode === "personal") {
-      if (currentUser !== selectedUser || currentProj) {
-        if (selectedUser) params.set("user_id", selectedUser)
-        else params.delete("user_id")
-        params.delete("project_id")
-        needsUpdate = true
-      }
-    }
-
-    if (needsUpdate) {
-      router.push(`${pathname}?${params.toString()}`)
-    }
-  }, [effectiveViewMode, selectedProject, selectedUser, pathname, router, searchParams])
-  const [preset, setPreset] = useState<PresetKey>("1y")
-  const [customStart, setCustomStart] = useState<string>("")
-  const [customEnd, setCustomEnd] = useState<string>("")
+  const [dateError, setDateError] = useState<string | null>(null)
   const [hoveredDay, setHoveredDay] = useState<{ date: string; hours: number } | null>(null)
 
   /* ── resolve active date range from preset or custom inputs ── */
@@ -202,6 +184,51 @@ export function ContributionCalendar({
     return range ?? { startDate: "", endDate: "" }
   }, [preset, customStart, customEnd])
 
+  const isFirstMount = useRef(true)
+
+  // Sync state values with URL search parameters on filter change
+  useEffect(() => {
+    if (isFirstMount.current) {
+      isFirstMount.current = false
+      return
+    }
+    const params = new URLSearchParams()
+    if (selectedProject) params.set("project_id", selectedProject)
+    if (globalViewMode === "team" && selectedUser) params.set("user_id", selectedUser)
+    if (startDate) params.set("start_date", startDate)
+    if (endDate) params.set("end_date", endDate)
+    if (preset) params.set("preset", preset)
+
+    router.push(`${pathname}?${params.toString()}`)
+  }, [selectedProject, selectedUser, startDate, endDate, preset, globalViewMode, pathname, router])
+
+  /* ── handle apply custom range ── */
+  const handleApplyCustomRange = useCallback(() => {
+    if (!inputStart || !inputEnd) {
+      setDateError("Please select both start and end dates.")
+      return
+    }
+    const start = new Date(inputStart + "T00:00:00")
+    const end = new Date(inputEnd + "T00:00:00")
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      setDateError("Invalid date format.")
+      return
+    }
+    if (end < start) {
+      setDateError("End date cannot be earlier than start date.")
+      return
+    }
+    const diffDays = daysBetween(start, end) + 1
+    if (diffDays > 365 * 5) {
+      setDateError("Date range cannot exceed 5 years.")
+      return
+    }
+    setDateError(null)
+    setPreset("custom")
+    setCustomStart(inputStart)
+    setCustomEnd(inputEnd)
+  }, [inputStart, inputEnd])
+
   /* ── build the day list that matches the active range exactly ── */
   const allDays = useMemo(() => {
     if (!startDate || !endDate) return []
@@ -212,6 +239,8 @@ export function ContributionCalendar({
 
     const days: string[] = []
     const total = daysBetween(start, end) + 1
+    if (total > 365 * 5 || total <= 0) return [] // Protect against browser crash
+
     for (let i = 0; i < total; i++) {
       days.push(toDateStr(addDays(start, i)))
     }
@@ -299,9 +328,12 @@ export function ContributionCalendar({
   /* ── apply a preset ── */
   const applyPreset = useCallback((key: PresetKey) => {
     setPreset(key)
+    setDateError(null)
     if (key !== "custom") {
       const range = getPresetRange(key)
       if (range) {
+        setInputStart(range.startDate)
+        setInputEnd(range.endDate)
         setCustomStart(range.startDate)
         setCustomEnd(range.endDate)
       }
@@ -401,50 +433,17 @@ export function ContributionCalendar({
             </div>
           </div>
 
-          {/* View mode + entity selectors */}
+          {/* Filters dropdowns & date range */}
           <div className="flex flex-wrap gap-3">
-            {globalViewMode !== "my" && (
+            {globalViewMode === "team" && (
               <div className="w-full sm:w-auto">
-                <Label className="text-xs text-muted-foreground mb-1 block">View Mode</Label>
-                <Select value={viewMode} onValueChange={(v) => setViewMode(v as "all" | "project" | "personal")}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Users</SelectItem>
-                    <SelectItem value="personal">By User</SelectItem>
-                    <SelectItem value="project">By Project</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {effectiveViewMode === "project" && (
-              <div className="w-full sm:w-auto">
-                <Label className="text-xs text-muted-foreground mb-1 block">Project</Label>
-                <Select value={selectedProject} onValueChange={setSelectedProject}>
-                  <SelectTrigger className="w-full sm:w-[200px]">
-                    <SelectValue placeholder="Select project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.map((p) => (
-                      <SelectItem key={p.project_id} value={p.project_id}>
-                        {p.project_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            {effectiveViewMode === "personal" && globalViewMode !== "my" && (
-              <div className="w-full sm:w-auto">
-                <Label className="text-xs text-muted-foreground mb-1 block">User</Label>
+                <Label className="text-xs text-muted-foreground mb-1 block">Created by</Label>
                 <Select value={selectedUser} onValueChange={setSelectedUser}>
                   <SelectTrigger className="w-full sm:w-[200px]">
-                    <SelectValue placeholder="Select user" />
+                    <SelectValue placeholder="All users" />
                   </SelectTrigger>
                   <SelectContent>
+                    <SelectItem value="">All users</SelectItem>
                     {users.map((u) => (
                       <SelectItem key={u.user_id} value={u.user_id}>
                         {u.user_name || u.user_email}
@@ -455,13 +454,30 @@ export function ContributionCalendar({
               </div>
             )}
 
+            <div className="w-full sm:w-auto">
+              <Label className="text-xs text-muted-foreground mb-1 block">Project</Label>
+              <Select value={selectedProject} onValueChange={setSelectedProject}>
+                <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectValue placeholder="All projects" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">All projects</SelectItem>
+                  {projects.map((p) => (
+                    <SelectItem key={p.project_id} value={p.project_id}>
+                      {p.project_name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Custom date inputs — always visible so user can fine-tune */}
             <div className="w-full sm:w-auto">
               <Label className="text-xs text-muted-foreground mb-1 block">Start Date</Label>
               <Input
                 type="date"
-                value={customStart}
-                onChange={(e) => { setCustomStart(e.target.value); setPreset("custom") }}
+                value={inputStart}
+                onChange={(e) => { setInputStart(e.target.value); setPreset("custom") }}
                 className="w-full sm:w-[160px]"
               />
             </div>
@@ -469,12 +485,25 @@ export function ContributionCalendar({
               <Label className="text-xs text-muted-foreground mb-1 block">End Date</Label>
               <Input
                 type="date"
-                value={customEnd}
-                onChange={(e) => { setCustomEnd(e.target.value); setPreset("custom") }}
+                value={inputEnd}
+                onChange={(e) => { setInputEnd(e.target.value); setPreset("custom") }}
                 className="w-full sm:w-[160px]"
               />
             </div>
+            <div className="w-full sm:w-auto flex items-end">
+              <Button
+                type="button"
+                onClick={handleApplyCustomRange}
+                className="w-full sm:w-auto"
+              >
+                Apply
+              </Button>
+            </div>
           </div>
+
+          {dateError && (
+            <p className="text-xs text-destructive font-medium mt-1">{dateError}</p>
+          )}
 
           {/* Active range summary */}
           {startDate && endDate && (
@@ -502,14 +531,14 @@ export function ContributionCalendar({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <div style={{ minWidth: `${Math.max(weeks.length * 16 + 40, 300)}px` }}>
+              <div style={{ minWidth: `${Math.max(weeks.length * 14 + 40, 300)}px` }}>
                 {/* Month labels */}
                 <div className="flex ml-10 mb-1 relative h-4">
                   {monthLabels.map((m, i) => (
                     <span
                       key={i}
                       className="text-[10px] text-muted-foreground absolute"
-                      style={{ left: `${m.index * 16}px` }}
+                      style={{ left: `${m.index * 14}px` }}
                     >
                       {m.label}
                     </span>
@@ -537,9 +566,8 @@ export function ContributionCalendar({
                         {week.map((day, di) => (
                           <div
                             key={di}
-                            className={`w-[12px] h-[12px] rounded-sm transition-colors ${
-                              day.date ? getColor(day.hours) : "bg-transparent"
-                            } ${day.hours > 0 ? "hover:ring-1 hover:ring-primary cursor-pointer" : ""}`}
+                            className={`w-[12px] h-[12px] rounded-sm transition-colors ${day.date ? getColor(day.hours) : "bg-transparent"
+                              } ${day.hours > 0 ? "hover:ring-1 hover:ring-primary cursor-pointer" : ""}`}
                             onMouseEnter={() => day.date && setHoveredDay(day)}
                             onMouseLeave={() => setHoveredDay(null)}
                             title={day.date ? `${formatDate(day.date)}: ${day.hours}h` : ""}

@@ -24,10 +24,11 @@ export default async function NewTaskPage({
   ])
 
   // If project_id is provided, get the project's team as default
-  let defaultTeamUserIds: string[] = []
+  let defaultTeamUserIds: string[] = [session.user_id]
   if (params.project_id) {
     const projectTeam = await ProjectTeamRepository.findByProjectId(params.project_id)
-    defaultTeamUserIds = projectTeam.map((pt) => pt.user_id)
+    const projectTeamUserIds = projectTeam.map((pt) => pt.user_id)
+    defaultTeamUserIds = Array.from(new Set([session.user_id, ...projectTeamUserIds]))
   }
 
   return (

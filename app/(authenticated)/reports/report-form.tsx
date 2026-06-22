@@ -71,7 +71,7 @@ export function ReportForm({
 
     try {
       if (isEdit && report) {
-        await fetch(`/api/reports/${report.report_id}`, {
+        const res = await fetch(`/api/reports/${report.report_id}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -81,8 +81,18 @@ export function ReportForm({
             remarks: remarks || undefined,
           }),
         })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(err.error || `Update failed (${res.status})`)
+        }
+        const currentTask = tasks.find((t) => t.id === report.task_id)
+        const projectId = currentTask?.project_id
+        const paths = ['/reports', `/reports/${report.report_id}`, `/tasks/${report.task_id}`, '/dashboard']
+        if (projectId) {
+          paths.push(`/projects/${projectId}`, '/projects')
+        }
         await revalidatePathsAndTags(
-          ['/reports', `/reports/${report.report_id}`, `/tasks/${report.task_id}`, '/dashboard'],
+          paths,
           ['reports', 'tasks', 'task_log', 'projects', 'project_log']
         )
         router.push(`/reports/${report.report_id}`)
@@ -98,9 +108,19 @@ export function ReportForm({
             remarks: remarks || undefined,
           }),
         })
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
+          throw new Error(err.error || `Create failed (${res.status})`)
+        }
         const data = await res.json()
+        const currentTask = tasks.find((t) => t.id === taskId)
+        const projectId = currentTask?.project_id
+        const paths = ['/reports', `/reports/${data.report_id}`, `/tasks/${taskId}`, '/dashboard']
+        if (projectId) {
+          paths.push(`/projects/${projectId}`, '/projects')
+        }
         await revalidatePathsAndTags(
-          ['/reports', `/reports/${data.report_id}`, `/tasks/${taskId}`, '/dashboard'],
+          paths,
           ['reports', 'tasks', 'task_log', 'projects', 'project_log']
         )
         router.push(`/reports/${data.report_id}`)

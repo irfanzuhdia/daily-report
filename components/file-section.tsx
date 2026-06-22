@@ -24,6 +24,7 @@ import {
   UploadCloud,
   X,
   AlertCircle,
+  Link2,
 } from "lucide-react";
 import { formatDateTime } from "@/lib/format";
 
@@ -54,6 +55,9 @@ export function FileSection({ projectId, taskId, reportId }: FileSectionProps) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [removingId, setRemovingId] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [uploadType, setUploadType] = useState<"file" | "link">("file");
+  const [linkUrl, setLinkUrl] = useState("");
+  const [linkTitle, setLinkTitle] = useState("");
 
   const [refreshTrigger, setRefreshTrigger] = useState(0);
 
@@ -113,38 +117,56 @@ export function FileSection({ projectId, taskId, reportId }: FileSectionProps) {
   const clearSelection = () => {
     setSelectedFile(null);
     setFileDescription("");
+    setLinkUrl("");
+    setLinkTitle("");
     const fileInput = document.getElementById("file-upload-input") as HTMLInputElement;
     if (fileInput) fileInput.value = "";
   };
 
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!selectedFile) return;
+    if (uploadType === "file" && !selectedFile) return;
+    if (uploadType === "link" && (!linkUrl || !linkTitle)) return;
 
     setUploading(true);
     setError(null);
 
     try {
-      // 1. Upload to Google Drive
-      const formData = new FormData();
-      formData.append("file", selectedFile);
+      let fileUrlResult = "";
+      let descVal = "";
 
-      const uploadRes = await fetch("/api/upload", {
-        method: "POST",
-        body: formData,
-      });
+      if (uploadType === "file" && selectedFile) {
+        // 1. Upload to Google Drive
+        const formData = new FormData();
+        formData.append("file", selectedFile);
 
-      if (!uploadRes.ok) {
-        const errData = await uploadRes.json();
-        throw new Error(errData.error || "Upload to Google Drive failed");
+        const uploadRes = await fetch("/api/upload", {
+          method: "POST",
+          body: formData,
+        });
+
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json();
+          throw new Error(errData.error || "Upload to Google Drive failed");
+        }
+
+        const driveResult = await uploadRes.json();
+        fileUrlResult = driveResult.webViewLink;
+
+        // Encode filename and optional description using the bracket prefix pattern
+        descVal = fileDescription.trim()
+          ? `[${selectedFile.name}] ${fileDescription.trim()}`
+          : `[${selectedFile.name}]`;
+      } else {
+        fileUrlResult = linkUrl.trim();
+        if (!/^https?:\/\//i.test(fileUrlResult)) {
+          fileUrlResult = "https://" + fileUrlResult;
+        }
+
+        descVal = fileDescription.trim()
+          ? `[${linkTitle.trim()}] ${fileDescription.trim()}`
+          : `[${linkTitle.trim()}]`;
       }
-
-      const driveResult = await uploadRes.json();
-
-      // Encode filename and optional description using the bracket prefix pattern
-      const descVal = fileDescription.trim()
-        ? `[${selectedFile.name}] ${fileDescription.trim()}`
-        : `[${selectedFile.name}]`;
 
       // 2. Save metadata to files sheet
       const metadataRes = await fetch("/api/files", {
@@ -154,7 +176,7 @@ export function FileSection({ projectId, taskId, reportId }: FileSectionProps) {
           project_id: projectId || null,
           task_id: taskId || null,
           report_id: reportId || null,
-          file_url: driveResult.webViewLink,
+          file_url: fileUrlResult,
           file_description: descVal,
         }),
       });
@@ -207,8 +229,11 @@ export function FileSection({ projectId, taskId, reportId }: FileSectionProps) {
     return { name: desc, description: "" };
   };
 
-  const getFileIcon = (nameOrUrl: string) => {
+  const getFileIcon = (nameOrUrl: string, url?: string) => {
     const lower = nameOrUrl.toLowerCase();
+    if (url && !url.includes("drive.google.com")) {
+      return <Link2 className="h-5 w-5 text-sky-500" />;
+    }
     if (lower.endsWith(".pdf")) return <FileText className="h-5 w-5 text-red-500" />;
     if (lower.endsWith(".xlsx") || lower.endsWith(".xls"))
       return <FileSpreadsheet className="h-5 w-5 text-emerald-500" />;
@@ -235,65 +260,167 @@ export function FileSection({ projectId, taskId, reportId }: FileSectionProps) {
       <CardContent className="space-y-6">
         {/* Upload Form */}
         <form onSubmit={handleUpload} className="space-y-4">
-          {!selectedFile ? (
-            <div
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
-              onClick={() => document.getElementById("file-upload-input")?.click()}
-              className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 cursor-pointer transition-all duration-200 ${
-                isDragOver
-                  ? "border-primary bg-primary/5 scale-[0.99]"
-                  : "border-muted hover:border-primary/50 hover:bg-muted/30"
+          <div className="flex border-b border-muted mb-2">
+            <button
+              type="button"
+              className={`pb-2 px-4 text-xs font-semibold transition-colors border-b-2 -mb-[1px] ${
+                uploadType === "file"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
               }`}
+              onClick={() => {
+                setUploadType("file");
+                setError(null);
+              }}
             >
-              <UploadCloud className="h-10 w-10 text-muted-foreground mb-2" />
-              <p className="text-sm font-medium text-center">
-                Drag & drop files here, or <span className="text-primary hover:underline">browse</span>
-              </p>
-              <p className="text-xs text-muted-foreground mt-1 text-center">
-                PDF, Excel, Word, Images, or ZIP (Max 50MB)
-              </p>
-              <input
-                id="file-upload-input"
-                type="file"
-                className="hidden"
-                onChange={handleFileChange}
-              />
-            </div>
+              Upload File
+            </button>
+            <button
+              type="button"
+              className={`pb-2 px-4 text-xs font-semibold transition-colors border-b-2 -mb-[1px] ${
+                uploadType === "link"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground"
+              }`}
+              onClick={() => {
+                setUploadType("link");
+                setError(null);
+              }}
+            >
+              Add Link
+            </button>
+          </div>
+
+          {uploadType === "file" ? (
+            !selectedFile ? (
+              <div
+                onDragOver={handleDragOver}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onClick={() => document.getElementById("file-upload-input")?.click()}
+                className={`flex flex-col items-center justify-center border-2 border-dashed rounded-xl p-6 cursor-pointer transition-all duration-200 ${
+                  isDragOver
+                    ? "border-primary bg-primary/5 scale-[0.99]"
+                    : "border-muted hover:border-primary/50 hover:bg-muted/30"
+                }`}
+              >
+                <UploadCloud className="h-10 w-10 text-muted-foreground mb-2" />
+                <p className="text-sm font-medium text-center">
+                  Drag & drop files here, or <span className="text-primary hover:underline">browse</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-1 text-center">
+                  PDF, Excel, Word, Images, or ZIP (Max 50MB)
+                </p>
+                <input
+                  id="file-upload-input"
+                  type="file"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </div>
+            ) : (
+              <div className="rounded-xl border p-4 bg-muted/20 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="p-2 bg-primary/10 rounded-lg shrink-0">
+                      {getFileIcon(selectedFile.name)}
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium truncate">{selectedFile.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
+                      </p>
+                    </div>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                    onClick={clearSelection}
+                    disabled={uploading}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label htmlFor="file-desc-input" className="text-xs font-semibold text-muted-foreground">
+                    Description / Remarks
+                  </Label>
+                  <Input
+                    id="file-desc-input"
+                    placeholder="Optional note about this attachment..."
+                    value={fileDescription}
+                    onChange={(e) => setFileDescription(e.target.value)}
+                    disabled={uploading}
+                    className="h-9 text-sm"
+                  />
+                </div>
+
+                <div className="flex justify-end gap-2 pt-1">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={clearSelection}
+                    disabled={uploading}
+                  >
+                    Cancel
+                  </Button>
+                  <Button type="submit" size="sm" disabled={uploading}>
+                    {uploading ? (
+                      <>
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      "Upload & Attach"
+                    )}
+                  </Button>
+                </div>
+              </div>
+            )
           ) : (
             <div className="rounded-xl border p-4 bg-muted/20 space-y-4">
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="p-2 bg-primary/10 rounded-lg shrink-0">
-                    {getFileIcon(selectedFile.name)}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{selectedFile.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {(selectedFile.size / (1024 * 1024)).toFixed(2)} MB
-                    </p>
-                  </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="link-title-input" className="text-xs font-semibold text-muted-foreground">
+                    Link Title *
+                  </Label>
+                  <Input
+                    id="link-title-input"
+                    placeholder="e.g. Project Repository"
+                    value={linkTitle}
+                    onChange={(e) => setLinkTitle(e.target.value)}
+                    disabled={uploading}
+                    required
+                    className="h-9 text-sm"
+                  />
                 </div>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-foreground"
-                  onClick={clearSelection}
-                  disabled={uploading}
-                >
-                  <X className="h-4 w-4" />
-                </Button>
+                <div className="space-y-1.5">
+                  <Label htmlFor="link-url-input" className="text-xs font-semibold text-muted-foreground">
+                    Link URL *
+                  </Label>
+                  <Input
+                    id="link-url-input"
+                    placeholder="e.g. https://github.com/my-project"
+                    value={linkUrl}
+                    onChange={(e) => setLinkUrl(e.target.value)}
+                    disabled={uploading}
+                    required
+                    className="h-9 text-sm"
+                  />
+                </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="file-desc-input" className="text-xs font-semibold text-muted-foreground">
+                <Label htmlFor="link-desc-input" className="text-xs font-semibold text-muted-foreground">
                   Description / Remarks
                 </Label>
                 <Input
-                  id="file-desc-input"
-                  placeholder="Optional note about this attachment..."
+                  id="link-desc-input"
+                  placeholder="Optional note about this link..."
                   value={fileDescription}
                   onChange={(e) => setFileDescription(e.target.value)}
                   disabled={uploading}
@@ -315,10 +442,10 @@ export function FileSection({ projectId, taskId, reportId }: FileSectionProps) {
                   {uploading ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Uploading...
+                      Saving Link...
                     </>
                   ) : (
-                    "Upload & Attach"
+                    "Attach Link"
                   )}
                 </Button>
               </div>
@@ -355,7 +482,7 @@ export function FileSection({ projectId, taskId, reportId }: FileSectionProps) {
                 >
                   <div className="flex items-start gap-3 min-w-0">
                     <div className="p-2 bg-muted rounded-lg shrink-0 mt-0.5">
-                      {getFileIcon(name)}
+                      {getFileIcon(name, file.file_url)}
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-semibold truncate leading-snug">{name}</p>
@@ -377,7 +504,7 @@ export function FileSection({ projectId, taskId, reportId }: FileSectionProps) {
                       rel="noopener noreferrer"
                       className="inline-flex items-center justify-center"
                     >
-                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" title="View in Drive">
+                      <Button variant="ghost" size="icon" className="h-8 w-8 hover:bg-muted" title="View Attachment">
                         <Eye className="h-4 w-4 text-muted-foreground hover:text-foreground" />
                       </Button>
                     </a>

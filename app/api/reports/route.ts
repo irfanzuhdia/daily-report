@@ -3,25 +3,35 @@ import { getSession } from '@/lib/session'
 import { DailyReportRepository } from '@/lib/repositories'
 
 export async function GET() {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  try {
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const reports = await DailyReportRepository.findAll()
-  return NextResponse.json(reports)
+    const reports = await DailyReportRepository.findAll()
+    return NextResponse.json(reports)
+  } catch (error) {
+    console.error('GET /api/reports error:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
 }
 
 export async function POST(request: NextRequest) {
-  const session = await getSession()
-  if (!session) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  try {
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
 
-  const body = await request.json()
-  const report = await DailyReportRepository.create(
-    { ...body, user_id: session.user_id },
-    session.user_id
-  )
-  return NextResponse.json(report, { status: 201 })
+    const body = await request.json()
+    const report = await DailyReportRepository.create(
+      { ...body, user_id: session.user_id },
+      session.user_id
+    )
+    return NextResponse.json(report, { status: 201 })
+  } catch (error) {
+    console.error('POST /api/reports error:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
 }

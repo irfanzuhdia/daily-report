@@ -1,6 +1,8 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
+import { revalidatePathsAndTags } from "@/app/actions"
 
 type ViewMode = "my" | "team"
 
@@ -29,6 +31,7 @@ const ViewModeContext = React.createContext<ViewModeContextValue>({
 
 export function ViewModeProvider({ children }: { children: React.ReactNode }) {
   const [viewMode, setViewModeState] = React.useState<ViewMode>("my")
+  const router = useRouter()
 
   React.useEffect(() => {
     const timer = setTimeout(() => {
@@ -37,10 +40,16 @@ export function ViewModeProvider({ children }: { children: React.ReactNode }) {
     return () => clearTimeout(timer)
   }, [])
 
-  const setViewMode = React.useCallback((mode: ViewMode) => {
+  const setViewMode = React.useCallback(async (mode: ViewMode) => {
     setViewModeState(mode)
     setStoredMode(mode)
-  }, [])
+    try {
+      await revalidatePathsAndTags(['/dashboard', '/projects', '/tasks', '/reports', '/analytics', '/trash'])
+    } catch (e) {
+      console.error("Failed to revalidate on view mode change:", e)
+    }
+    router.refresh()
+  }, [router])
 
   return (
     <ViewModeContext.Provider value={{ viewMode, setViewMode }}>

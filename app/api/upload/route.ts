@@ -3,7 +3,7 @@ import { getSession } from '@/lib/session';
 import { google } from 'googleapis';
 import { Readable } from 'stream';
 
-const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || '1SnNyENp3FpDmhIu57V2mbizKy_oQNEsX';
+const DRIVE_FOLDER_ID = process.env.GOOGLE_DRIVE_FOLDER_ID || '1xY_3OUXINYxnq_KS_Xc8T_lPiK7AkEHi';
 
 const ALLOWED_EXTENSIONS = [
   '.pdf',
@@ -49,6 +49,7 @@ function getDriveClient() {
     email: creds.client_email,
     key: creds.private_key,
     scopes: ['https://www.googleapis.com/auth/drive'],
+    subject: process.env.GOOGLE_DRIVE_IMPERSONATE_USER || undefined,
   });
 
   return google.drive({ version: 'v3', auth: jwt });

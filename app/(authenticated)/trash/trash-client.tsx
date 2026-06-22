@@ -2,7 +2,7 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, RotateCcw, Trash2, FolderKanban, ListTodo, FileText } from "lucide-react"
+import { ArrowLeft, RotateCcw, Trash2, FolderKanban, ListTodo, FileText, Loader2 } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -36,6 +36,8 @@ const TYPE_VARIANT = {
 
 export function TrashClient({ items }: { items: TrashItem[] }) {
   const [restoring, setRestoring] = useState<string | null>(null)
+  const [selectedItems, setSelectedItems] = useState<Record<string, TrashItem>>({})
+  const [batchRestoring, setBatchRestoring] = useState(false)
 
   const handleRestore = async (item: TrashItem) => {
     setRestoring(item.id)
@@ -52,6 +54,56 @@ export function TrashClient({ items }: { items: TrashItem[] }) {
       setRestoring(null)
     }
   }
+
+  const handleBatchRestore = async () => {
+    const list = Object.values(selectedItems)
+    if (list.length === 0) return
+    setBatchRestoring(true)
+    try {
+      await fetch(`/api/trash/restore`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: list.map(item => ({ type: item.type, id: item.id }))
+        }),
+      })
+      window.location.reload()
+    } catch (error) {
+      console.error("Batch restore failed:", error)
+    } finally {
+      setBatchRestoring(false)
+    }
+  }
+
+  const toggleSelect = (item: TrashItem) => {
+    const key = `${item.type}-${item.id}`
+    setSelectedItems(prev => {
+      const next = { ...prev }
+      if (next[key]) {
+        delete next[key]
+      } else {
+        next[key] = item
+      }
+      return next
+    })
+  }
+
+  const isAllSelected = items.length > 0 && Object.keys(selectedItems).length === items.length
+
+  const toggleSelectAll = () => {
+    if (isAllSelected) {
+      setSelectedItems({})
+    } else {
+      const next: Record<string, TrashItem> = {}
+      for (const item of items) {
+        const key = `${item.type}-${item.id}`
+        next[key] = item
+      }
+      setSelectedItems(next)
+    }
+  }
+
+  const selectedCount = Object.keys(selectedItems).length
 
   return (
     <div className="space-y-6">
@@ -70,6 +122,19 @@ export function TrashClient({ items }: { items: TrashItem[] }) {
         </div>
       </div>
 
+      {/* Auto-delete Info Alert Banner */}
+      <Card className="bg-amber-500/10 border-amber-500/20 text-amber-600 dark:text-amber-400">
+        <CardContent className="p-4 flex items-start gap-3">
+          <Trash2 className="h-5 w-5 shrink-0 mt-0.5 text-amber-500" />
+          <div className="space-y-1">
+            <p className="text-sm font-semibold">Automatic Cleanup Notice</p>
+            <p className="text-xs leading-relaxed opacity-90">
+              Deleted items are kept in the trash for <strong>30 days</strong>. After 30 days, they are automatically and permanently deleted from the database.
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {items.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
@@ -78,41 +143,87 @@ export function TrashClient({ items }: { items: TrashItem[] }) {
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
-          {items.map((item) => {
-            const Icon = TYPE_ICON[item.type]
-            return (
-              <Card key={`${item.type}-${item.id}`}>
-                <CardContent className="flex items-center justify-between p-4">
-                  <div className="flex items-center gap-3 min-w-0 flex-1">
-                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant={TYPE_VARIANT[item.type]} className="text-xs">
-                          {TYPE_LABEL[item.type]}
-                        </Badge>
-                        <p className="text-sm font-medium truncate">{item.name}</p>
-                      </div>
-                      <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                        <span>Deleted: {formatDateTime(item.deletedAt)}</span>
-                        {item.deletedBy && <span>By: {item.deletedBy}</span>}
+        <div className="space-y-4">
+          {/* Action Bar for Batch Selection */}
+          <div className="flex flex-wrap items-center justify-between gap-3 p-3 bg-muted/30 border rounded-xl">
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={isAllSelected}
+                onChange={toggleSelectAll}
+                className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary"
+                id="select-all-checkbox"
+              />
+              <label htmlFor="select-all-checkbox" className="text-sm font-medium cursor-pointer select-none">
+                {isAllSelected ? "Deselect All" : "Select All"}
+              </label>
+              {selectedCount > 0 && (
+                <span className="text-xs text-muted-foreground ml-2">
+                  ({selectedCount} selected)
+                </span>
+              )}
+            </div>
+            {selectedCount > 0 && (
+              <Button
+                variant="default"
+                size="sm"
+                onClick={handleBatchRestore}
+                disabled={batchRestoring}
+              >
+                {batchRestoring ? (
+                  <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+                ) : (
+                  <RotateCcw className="mr-1.5 h-4 w-4" />
+                )}
+                Restore Selected ({selectedCount})
+              </Button>
+            )}
+          </div>
+
+          <div className="space-y-3">
+            {items.map((item) => {
+              const Icon = TYPE_ICON[item.type]
+              const key = `${item.type}-${item.id}`
+              const isSelected = !!selectedItems[key]
+              return (
+                <Card key={key} className={`transition-all ${isSelected ? "border-primary/50 bg-primary/5" : ""}`}>
+                  <CardContent className="flex items-center justify-between p-4 gap-3">
+                    <div className="flex items-center gap-3 min-w-0 flex-1">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={() => toggleSelect(item)}
+                        className="h-4 w-4 rounded border-gray-300 text-primary focus:ring-primary cursor-pointer accent-primary shrink-0"
+                      />
+                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <Badge variant={TYPE_VARIANT[item.type]} className="text-xs">
+                            {TYPE_LABEL[item.type]}
+                          </Badge>
+                          <p className="text-sm font-medium truncate">{item.name}</p>
+                        </div>
+                        <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
+                          <span>Deleted: {formatDateTime(item.deletedAt)}</span>
+                          {item.deletedBy && <span>By: {item.deletedBy}</span>}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleRestore(item)}
-                    disabled={restoring === item.id}
-                    className="shrink-0 ml-3"
-                  >
-                    <RotateCcw className="mr-1.5 h-3 w-3" />
-                    Restore
-                  </Button>
-                </CardContent>
-              </Card>
-            )
-          })}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRestore(item)}
+                      disabled={restoring === item.id || batchRestoring}
+                      className="shrink-0 ml-3"
+                    >
+                      <RotateCcw className="mr-1.5 h-3 w-3" />
+                      Restore
+                    </Button>
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
         </div>
       )}
     </div>

@@ -25,11 +25,15 @@ export function ProjectForm({
   statuses,
   users: allUsers,
   initialTeamUserIds,
+  defaultStartDate,
+  defaultEndDate,
 }: {
   project?: Project
   statuses: Status[]
   users: User[]
   initialTeamUserIds: string[]
+  defaultStartDate?: string
+  defaultEndDate?: string
 }) {
   const router = useRouter()
   const isEdit = !!project
@@ -37,8 +41,8 @@ export function ProjectForm({
 
   const [name, setName] = useState(project?.project_name ?? "")
   const [description, setDescription] = useState(project?.project_description ?? "")
-  const [startDate, setStartDate] = useState(project?.project_start_date_plan ?? "")
-  const [endDate, setEndDate] = useState(project?.project_end_date_plan ?? "")
+  const [startDate, setStartDate] = useState(project?.project_start_date_plan ?? defaultStartDate ?? "")
+  const [endDate, setEndDate] = useState(project?.project_end_date_plan ?? defaultEndDate ?? "")
   const [status, setStatus] = useState(project?.project_status ?? "NS")
   const [projectFile, setProjectFile] = useState<string | null>(project?.project_file ?? null)
   const [fileName, setFileName] = useState<string | null>(
@@ -111,8 +115,8 @@ export function ProjectForm({
       const payload = {
         project_name: name,
         project_description: description || undefined,
-        project_start_date_plan: startDate || undefined,
-        project_end_date_plan: endDate || undefined,
+        project_start_date_plan: startDate,
+        project_end_date_plan: endDate,
         project_status: status,
         project_file: projectFile || undefined,
         team_user_ids: teamUserIds,
@@ -194,21 +198,23 @@ export function ProjectForm({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="startDate">Start Date</Label>
+                <Label htmlFor="startDate">Start Date *</Label>
                 <Input
                   id="startDate"
                   type="date"
                   value={startDate}
                   onChange={(e) => setStartDate(e.target.value)}
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="endDate">End Date</Label>
+                <Label htmlFor="endDate">End Date *</Label>
                 <Input
                   id="endDate"
                   type="date"
                   value={endDate}
                   onChange={(e) => setEndDate(e.target.value)}
+                  required
                 />
               </div>
             </div>
@@ -364,7 +370,7 @@ export function ProjectForm({
               Cancel
             </Button>
           </Link>
-          <Button type="submit" disabled={saving || !name.trim()}>
+          <Button type="submit" disabled={saving || !name.trim() || !startDate || !endDate}>
             <Save className="mr-2 h-4 w-4" />
             {saving ? "Saving..." : isEdit ? "Update" : "Create"}
           </Button>

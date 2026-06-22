@@ -54,6 +54,7 @@ export default async function ReportsPage({
     .map((r) => ({
       ...r,
       task_description: taskMap.get(r.task_id)?.task_description ?? undefined,
+      task_status: taskMap.get(r.task_id)?.task_status ?? undefined,
       project_id: taskMap.get(r.task_id)?.project_id ?? undefined,
       project_name: taskMap.get(r.task_id)
         ? projectMap.get(taskMap.get(r.task_id)!.project_id) ?? undefined

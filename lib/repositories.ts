@@ -368,14 +368,19 @@ export const ProjectRepository = {
 
     const now = new Date().toISOString();
 
-    // Auto-calculate project status from tasks
-    const allTasks = await TaskRepository.findAll();
-    const autoStatus = calcProjectStatus(projectId, allTasks);
+    // If user explicitly sets project_status, use that. Otherwise auto-calculate from tasks.
+    let newStatus: string;
+    if (updates.project_status != null) {
+      newStatus = updates.project_status;
+    } else {
+      const allTasks = await TaskRepository.findAll();
+      newStatus = calcProjectStatus(projectId, allTasks);
+    }
 
     const updated: Record<string, unknown> = {
       ...existing,
       ...updates,
-      project_status: autoStatus,
+      project_status: newStatus,
       updated_by: updatedBy,
       updated_at: now,
     };
@@ -412,12 +417,12 @@ export const ProjectRepository = {
     }
 
     // Log status change
-    if (existing.project_status !== autoStatus) {
+    if (existing.project_status !== newStatus) {
       await ProjectLogRepository.create(
         {
           project_id: projectId,
           project_status_old: existing.project_status,
-          project_status_new: autoStatus,
+          project_status_new: newStatus,
         },
         updatedBy
       );

@@ -42,7 +42,7 @@ export default async function DashboardPage() {
 
   // Stats
   const activeProjects = projects.filter((p) => p.project_status === "OP").length
-  const completedTasks = tasks.filter((t) => t.task_status === "D").length
+  const completedTasks = tasks.filter((t) => t.task_status === "D" || t.task_status === "C").length
 
   // Projects by status
   const statusCounts = new Map<string, number>()

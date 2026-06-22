@@ -144,6 +144,39 @@ export async function deleteRow(sheetName: string, rowNumber: number): Promise<v
 }
 
 /**
+ * Delete a row completely (shifting subsequent rows up).
+ */
+export async function deleteRowDimension(sheetName: string, rowNumber: number): Promise<void> {
+  const sheets = getSheetsClient();
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SPREADSHEET_ID,
+  });
+  const sheet = spreadsheet.data.sheets?.find(
+    (s) => s.properties?.title === sheetName
+  );
+  const sheetId = sheet?.properties?.sheetId;
+  if (sheetId === undefined) throw new Error(`Sheet ${sheetName} not found`);
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SPREADSHEET_ID,
+    requestBody: {
+      requests: [
+        {
+          deleteDimension: {
+            range: {
+              sheetId,
+              dimension: 'ROWS',
+              startIndex: rowNumber - 1,
+              endIndex: rowNumber,
+            },
+          },
+        },
+      ],
+    },
+  });
+}
+
+/**
  * Get the next ID for a sheet by counting existing rows.
  * Uses cached in-memory array.
  */

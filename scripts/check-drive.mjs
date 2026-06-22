@@ -42,7 +42,7 @@ async function main() {
   console.log('\n=== GOOGLE DRIVE FOLDER ===');
   try {
     const folderRes = await drive.files.get({
-      fileId: '1SnNyENp3FpDmhIu57V2mbizKy_oQNEsX',
+      fileId: '1xY_3OUXINYxnq_KS_Xc8T_lPiK7AkEHi',
       fields: 'id, name, mimeType, webViewLink',
     });
     console.log('Folder:', JSON.stringify(folderRes.data, null, 2));
@@ -54,7 +54,7 @@ async function main() {
   console.log('\n=== FILES IN FOLDER ===');
   try {
     const filesRes = await drive.files.list({
-      q: "'1SnNyENp3FpDmhIu57V2mbizKy_oQNEsX' in parents and trashed = false",
+      q: "'1xY_3OUXINYxnq_KS_Xc8T_lPiK7AkEHi' in parents and trashed = false",
       fields: 'files(id, name, mimeType, webViewLink, size)',
     });
     console.log('Files:', JSON.stringify(filesRes.data.files, null, 2));

@@ -10,6 +10,29 @@ export async function POST(request: NextRequest) {
 
   try {
     const body = await request.json();
+
+    // Check if it's a batch restore
+    if (body.items && Array.isArray(body.items)) {
+      const items = body.items as { type: string; id: string }[];
+      let successCount = 0;
+      for (const item of items) {
+        let success = false;
+        switch (item.type) {
+          case 'project':
+            success = await restoreProject(item.id, session.user_id);
+            break;
+          case 'task':
+            success = await restoreTask(item.id, session.user_id);
+            break;
+          case 'report':
+            success = await restoreReport(item.id);
+            break;
+        }
+        if (success) successCount++;
+      }
+      return NextResponse.json({ success: true, count: successCount });
+    }
+
     const { type, id } = body as { type: string; id: string };
 
     if (!type || !id) {

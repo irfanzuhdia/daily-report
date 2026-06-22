@@ -7,6 +7,13 @@ import { ArrowLeft, Plus, ListTodo, Pencil, FileDown, Users, UserPlus, X, Histor
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import type { Project, Task, Status, EnrichedProjectLog } from "@/lib/types"
 import { formatDate, formatDateTime } from "@/lib/format"
 import { revalidatePathsAndTags } from "@/app/actions"
@@ -16,6 +23,7 @@ const statusVariant: Record<string, "default" | "success" | "warning" | "destruc
   NS: "secondary",
   OP: "warning",
   D: "success",
+  C: "success",
   H: "destructive",
   CC: "destructive",
 }
@@ -52,12 +60,13 @@ export function ProjectDetailClient({
   allUsers: { user_id: string; user_name: string; user_email: string; user_occupation: string | null }[]
 }) {
   const router = useRouter()
-  const statusName = statuses.find((s) => s.id === autoProjectStatus)?.name ?? autoProjectStatus
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers)
   const [showAddMember, setShowAddMember] = useState(false)
   const [adding, setAdding] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [currentStatus, setCurrentStatus] = useState(autoProjectStatus)
 
   const availableUsers = allUsers.filter(
     (u) => !teamMembers.some((m) => m.user_id === u.user_id)
@@ -128,6 +137,30 @@ export function ProjectDetailClient({
     }
   }
 
+  const handleStatusChange = async (newStatus: string) => {
+    if (newStatus === currentStatus) return
+    setUpdatingStatus(true)
+    try {
+      const res = await fetch(`/api/projects/${project.project_id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_status: newStatus }),
+      })
+      if (res.ok) {
+        setCurrentStatus(newStatus)
+        await revalidatePathsAndTags(
+          [`/projects/${project.project_id}`, '/projects', '/dashboard'],
+          ['projects', 'project_log']
+        )
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Failed to update project status:", error)
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -146,9 +179,25 @@ export function ProjectDetailClient({
             <div>
               <div className="mb-2 flex items-center gap-2">
                 <h1 className="text-2xl font-bold">{project.project_name}</h1>
-                <Badge variant={statusVariant[autoProjectStatus ?? "NS"] ?? "default"}>
-                  {statusName}
-                </Badge>
+                <div className="relative">
+                  {updatingStatus && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md z-10">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    </div>
+                  )}
+                  <Select value={currentStatus} onValueChange={handleStatusChange}>
+                    <SelectTrigger className="h-7 text-xs w-[130px] px-2 py-0">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {statuses.map((s) => (
+                        <SelectItem key={s.id} value={s.id} className="text-xs">
+                          {s.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <p className="text-muted-foreground">
                 {project.project_description || "No description"}
@@ -395,7 +444,7 @@ export function ProjectDetailClient({
                     variant={statusVariant[task.task_status ?? "NS"] ?? "default"}
                     className="ml-3 shrink-0"
                   >
-                    {task.task_status ?? "NS"}
+                    {statuses.find((s) => s.id === task.task_status)?.name ?? task.task_status ?? "Not Started"}
                   </Badge>
                 </CardContent>
               </Card>

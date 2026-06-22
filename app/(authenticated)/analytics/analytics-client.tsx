@@ -24,7 +24,7 @@ interface ContributionCalendarProps {
   users: { user_id: string; user_email: string; user_name: string | null }[]
 }
 
-type PresetKey = "7d" | "30d" | "90d" | "thisMonth" | "lastMonth" | "thisYear" | "custom"
+type PresetKey = "7d" | "30d" | "90d" | "1y" | "thisMonth" | "lastMonth" | "thisYear" | "custom"
 
 /* ─── constants ─── */
 const GITHUB_COLORS = [
@@ -107,6 +107,8 @@ function getPresetRange(key: PresetKey): { startDate: string; endDate: string } 
       return { startDate: toDateStr(addDays(now, -29)), endDate: toDateStr(now) }
     case "90d":
       return { startDate: toDateStr(addDays(now, -89)), endDate: toDateStr(now) }
+    case "1y":
+      return { startDate: toDateStr(addDays(now, -364)), endDate: toDateStr(now) }
     case "thisMonth":
       return { startDate: toDateStr(startOfMonth(now)), endDate: toDateStr(endOfMonth(now)) }
     case "lastMonth": {
@@ -124,6 +126,7 @@ const PRESETS: { key: PresetKey; label: string }[] = [
   { key: "7d", label: "Last 7 Days" },
   { key: "30d", label: "Last 30 Days" },
   { key: "90d", label: "Last 90 Days" },
+  { key: "1y", label: "Last 1 Year" },
   { key: "thisMonth", label: "This Month" },
   { key: "lastMonth", label: "Last Month" },
   { key: "thisYear", label: "This Year" },
@@ -185,7 +188,7 @@ export function ContributionCalendar({
       router.push(`${pathname}?${params.toString()}`)
     }
   }, [effectiveViewMode, selectedProject, selectedUser, pathname, router, searchParams])
-  const [preset, setPreset] = useState<PresetKey>("30d")
+  const [preset, setPreset] = useState<PresetKey>("1y")
   const [customStart, setCustomStart] = useState<string>("")
   const [customEnd, setCustomEnd] = useState<string>("")
   const [hoveredDay, setHoveredDay] = useState<{ date: string; hours: number } | null>(null)

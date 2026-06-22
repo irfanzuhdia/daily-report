@@ -165,7 +165,7 @@ export function ReportForm({
 
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="percentage">Progress (%)</Label>
+                <Label htmlFor="percentage">Progress (%) *</Label>
                 <Input
                   id="percentage"
                   type="number"
@@ -173,10 +173,11 @@ export function ReportForm({
                   max="100"
                   value={percentage}
                   onChange={(e) => setPercentage(e.target.value)}
+                  required
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="totalHours">Total Hours</Label>
+                <Label htmlFor="totalHours">Total Hours *</Label>
                 <Input
                   id="totalHours"
                   type="number"
@@ -185,6 +186,7 @@ export function ReportForm({
                   value={totalHours}
                   onChange={(e) => setTotalHours(e.target.value)}
                   placeholder="e.g. 8"
+                  required
                 />
               </div>
             </div>
@@ -210,7 +212,7 @@ export function ReportForm({
           </Link>
           <Button
             type="submit"
-            disabled={saving || !date || (!isEdit && !taskId)}
+            disabled={saving || !date || !percentage || !totalHours || (!isEdit && !taskId)}
           >
             <Save className="mr-2 h-4 w-4" />
             {saving ? "Saving..." : isEdit ? "Update" : "Create"}

@@ -16,6 +16,7 @@ const statusVariant: Record<string, "default" | "success" | "warning" | "destruc
   NS: "secondary",
   OP: "warning",
   D: "success",
+  C: "success",
   H: "destructive",
   CC: "destructive",
 }

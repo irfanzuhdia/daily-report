@@ -18,6 +18,7 @@ import type {
   ProjectLog,
   TaskLog,
 } from './types';
+import { unstable_cache, revalidateTag } from 'next/cache';
 
 // ============ STATUS & PROGRESS CALCULATION HELPERS ============
 
@@ -30,40 +31,9 @@ const STATUS = {
   CANCEL: 'CC',
 } as const;
 
-/**
- * Calculate task progress from its latest report.
- * Returns progress_percentage from the report with the latest date.
- */
-function calcTaskProgress(taskId: string, reports: DailyReport[]): number {
-  const taskReports = reports.filter((r) => r.task_id === taskId);
-  if (taskReports.length === 0) return 0;
 
-  const latest = taskReports.reduce((max, r) => {
-    if (!r.date) return max;
-    if (!max.date) return r;
-    return r.date > max.date ? r : max;
-  }, taskReports[0]);
 
-  return parseFloat(latest.progress_percentage ?? '0') || 0;
-}
 
-/**
- * Calculate project progress as average of all task progresses.
- */
-function calcProjectProgress(
-  projectId: string,
-  tasks: Task[],
-  reports: DailyReport[]
-): number {
-  const projectTasks = tasks.filter((t) => t.project_id === projectId);
-  if (projectTasks.length === 0) return 0;
-
-  const total = projectTasks.reduce((sum, task) => {
-    return sum + calcTaskProgress(task.id, reports);
-  }, 0);
-
-  return Math.round(total / projectTasks.length);
-}
 
 /**
  * Auto-calculate project status from its tasks' statuses.
@@ -229,24 +199,48 @@ function rowToTaskLog(row: Record<string, string>): TaskLog {
 
 // ============ USER REPOSITORY ============
 
-export const UserRepository = {
-  async findAll(): Promise<User[]> {
+const getCachedUsers = unstable_cache(
+  async (): Promise<User[]> => {
     const rows = await readSheet('user');
     return rows.map(rowToUser).filter((u) => !u.deleted_at);
   },
+  ['users-all'],
+  { tags: ['users'] }
+);
 
-  async findByEmail(email: string): Promise<User | null> {
+const getCachedUserByEmail = unstable_cache(
+  async (email: string): Promise<User | null> => {
     const row = await getRowByColumn('user', 'user_email', email);
     if (!row) return null;
     const user = rowToUser(row);
     return user.deleted_at ? null : user;
   },
+  ['user-by-email'],
+  { tags: ['users'] }
+);
 
-  async findById(userId: string): Promise<User | null> {
+const getCachedUserById = unstable_cache(
+  async (userId: string): Promise<User | null> => {
     const row = await getRowByColumn('user', 'user_id', userId);
     if (!row) return null;
     const user = rowToUser(row);
     return user.deleted_at ? null : user;
+  },
+  ['user-by-id'],
+  { tags: ['users'] }
+);
+
+export const UserRepository = {
+  async findAll(): Promise<User[]> {
+    return getCachedUsers();
+  },
+
+  async findByEmail(email: string): Promise<User | null> {
+    return getCachedUserByEmail(email);
+  },
+
+  async findById(userId: string): Promise<User | null> {
+    return getCachedUserById(userId);
   },
 
   async create(
@@ -256,7 +250,7 @@ export const UserRepository = {
     const headers = await getHeaders('user');
     const now = new Date().toISOString();
     const existing = await readSheet('user');
-    const userId = `u-${String(existing.length + 1).padStart(3, '0')}`;
+    const userId = `U-${String(existing.length + 1).padStart(4, '0')}`;
 
     const newUser: User = {
       ...user,
@@ -266,23 +260,40 @@ export const UserRepository = {
     };
 
     await appendRow('user', toValues(newUser as unknown as Record<string, unknown>, headers));
+    revalidateTag('users', 'max');
     return newUser;
   },
 };
 
 // ============ PROJECT REPOSITORY ============
 
-export const ProjectRepository = {
-  async findAll(): Promise<Project[]> {
+const getCachedProjects = unstable_cache(
+  async (): Promise<Project[]> => {
     const rows = await readSheet('project');
     return rows.map(rowToProject).filter((p) => !p.deleted_at);
   },
+  ['projects-all'],
+  { tags: ['projects'] }
+);
 
-  async findById(projectId: string): Promise<Project | null> {
+const getCachedProjectById = unstable_cache(
+  async (projectId: string): Promise<Project | null> => {
     const row = await getRowByColumn('project', 'project_id', projectId);
     if (!row) return null;
     const project = rowToProject(row);
     return project.deleted_at ? null : project;
+  },
+  ['project-by-id'],
+  { tags: ['projects'] }
+);
+
+export const ProjectRepository = {
+  async findAll(): Promise<Project[]> {
+    return getCachedProjects();
+  },
+
+  async findById(projectId: string): Promise<Project | null> {
+    return getCachedProjectById(projectId);
   },
 
   async create(
@@ -317,6 +328,19 @@ export const ProjectRepository = {
     };
 
     await appendRow('project', toValues(newProject as unknown as Record<string, unknown>, headers));
+
+    // Log project creation
+    await ProjectLogRepository.create(
+      {
+        project_id: projectId,
+        project_status_old: "CREATED",
+        project_status_new: STATUS.NOT_STARTED,
+      },
+      createdBy
+    );
+
+    revalidateTag('projects', 'max');
+    revalidateTag('project_log', 'max');
     return newProject;
   },
 
@@ -357,6 +381,36 @@ export const ProjectRepository = {
     };
     await updateRow('project', rowNum, toValues(updated, headers));
 
+    // Log metadata change
+    const isMetadataUpdated =
+      (updates.project_name !== undefined && updates.project_name !== existing.project_name) ||
+      (updates.project_description !== undefined && updates.project_description !== existing.project_description) ||
+      (updates.project_start_date_plan !== undefined && updates.project_start_date_plan !== existing.project_start_date_plan) ||
+      (updates.project_end_date_plan !== undefined && updates.project_end_date_plan !== existing.project_end_date_plan);
+
+    if (isMetadataUpdated) {
+      await ProjectLogRepository.create(
+        {
+          project_id: projectId,
+          project_status_old: "UPDATED",
+          project_status_new: "metadata",
+        },
+        updatedBy
+      );
+    }
+
+    // Log file upload
+    if (updates.project_file !== undefined && updates.project_file !== existing.project_file && updates.project_file) {
+      await ProjectLogRepository.create(
+        {
+          project_id: projectId,
+          project_status_old: "FILE_UPLOAD",
+          project_status_new: updates.project_file,
+        },
+        updatedBy
+      );
+    }
+
     // Log status change
     if (existing.project_status !== autoStatus) {
       await ProjectLogRepository.create(
@@ -369,6 +423,8 @@ export const ProjectRepository = {
       );
     }
 
+    revalidateTag('projects', 'max');
+    revalidateTag('project_log', 'max');
     return rowToProject(updated as Record<string, string>);
   },
 
@@ -387,21 +443,38 @@ export const ProjectRepository = {
       deleted_at: now,
     };
     await updateRow('project', rowNum, toValues(updated, headers));
+    revalidateTag('projects', 'max');
     return true;
   },
 };
 
 // ============ PROJECT TEAM REPOSITORY ============
 
-export const ProjectTeamRepository = {
-  async findByProjectId(projectId: string): Promise<ProjectTeam[]> {
+const getCachedProjectTeamByProjectId = unstable_cache(
+  async (projectId: string): Promise<ProjectTeam[]> => {
     const rows = await getRowsByColumn('project_team', 'project_id', projectId);
     return rows.map(rowToProjectTeam).filter((pt) => !pt.deleted_at);
   },
+  ['project-team-by-project-id'],
+  { tags: ['project_team'] }
+);
 
-  async findByUserId(userId: string): Promise<ProjectTeam[]> {
+const getCachedProjectTeamByUserId = unstable_cache(
+  async (userId: string): Promise<ProjectTeam[]> => {
     const rows = await getRowsByColumn('project_team', 'user_id', userId);
     return rows.map(rowToProjectTeam).filter((pt) => !pt.deleted_at);
+  },
+  ['project-team-by-user-id'],
+  { tags: ['project_team'] }
+);
+
+export const ProjectTeamRepository = {
+  async findByProjectId(projectId: string): Promise<ProjectTeam[]> {
+    return getCachedProjectTeamByProjectId(projectId);
+  },
+
+  async findByUserId(userId: string): Promise<ProjectTeam[]> {
+    return getCachedProjectTeamByUserId(userId);
   },
 
   async create(
@@ -427,6 +500,19 @@ export const ProjectTeamRepository = {
     };
 
     await appendRow('project_team', toValues(newPT as unknown as Record<string, unknown>, headers));
+
+    // Log team member added
+    await ProjectLogRepository.create(
+      {
+        project_id: projectId,
+        project_status_old: "TEAM_ADD",
+        project_status_new: userId,
+      },
+      createdBy
+    );
+
+    revalidateTag('project_team', 'max');
+    revalidateTag('project_log', 'max');
     return newPT;
   },
 
@@ -439,28 +525,65 @@ export const ProjectTeamRepository = {
     const now = new Date().toISOString()
     const updated = { ...existing, deleted_by: deletedBy, deleted_at: now }
     await updateRow('project_team', rowNum, toValues(updated as unknown as Record<string, unknown>, headers))
+
+    // Log team member removed
+    await ProjectLogRepository.create(
+      {
+        project_id: existing.project_id,
+        project_status_old: "TEAM_REMOVE",
+        project_status_new: existing.user_id,
+      },
+      deletedBy
+    );
+
+    revalidateTag('project_team', 'max');
+    revalidateTag('project_log', 'max');
     return true
   },
 };
 
 // ============ TASK REPOSITORY ============
 
-export const TaskRepository = {
-  async findAll(): Promise<Task[]> {
+const getCachedTasks = unstable_cache(
+  async (): Promise<Task[]> => {
     const rows = await readSheet('task');
     return rows.map(rowToTask).filter((t) => !t.deleted_at);
   },
+  ['tasks-all'],
+  { tags: ['tasks'] }
+);
 
-  async findByProjectId(projectId: string): Promise<Task[]> {
+const getCachedTasksByProjectId = unstable_cache(
+  async (projectId: string): Promise<Task[]> => {
     const rows = await getRowsByColumn('task', 'project_id', projectId);
     return rows.map(rowToTask).filter((t) => !t.deleted_at);
   },
+  ['tasks-by-project-id'],
+  { tags: ['tasks'] }
+);
 
-  async findById(taskId: string): Promise<Task | null> {
+const getCachedTaskById = unstable_cache(
+  async (taskId: string): Promise<Task | null> => {
     const row = await getRowByColumn('task', 'id', taskId);
     if (!row) return null;
     const task = rowToTask(row);
     return task.deleted_at ? null : task;
+  },
+  ['task-by-id'],
+  { tags: ['tasks'] }
+);
+
+export const TaskRepository = {
+  async findAll(): Promise<Task[]> {
+    return getCachedTasks();
+  },
+
+  async findByProjectId(projectId: string): Promise<Task[]> {
+    return getCachedTasksByProjectId(projectId);
+  },
+
+  async findById(taskId: string): Promise<Task | null> {
+    return getCachedTaskById(taskId);
   },
 
   async create(
@@ -493,9 +616,23 @@ export const TaskRepository = {
 
     await appendRow('task', toValues(newTask as unknown as Record<string, unknown>, headers));
 
+    // Log task creation
+    await TaskLogRepository.create(
+      {
+        task_id: id,
+        task_status_old: "CREATED",
+        task_status_new: STATUS.NOT_STARTED,
+      },
+      createdBy
+    );
+
     // Auto-update parent project status after adding a task
     await TaskRepository._syncProjectStatus(task.project_id, createdBy);
 
+    revalidateTag('tasks', 'max');
+    revalidateTag('task_log', 'max');
+    revalidateTag('projects', 'max');
+    revalidateTag('project_log', 'max');
     return newTask;
   },
 
@@ -520,6 +657,19 @@ export const TaskRepository = {
     };
     await updateRow('task', rowNum, toValues(updated, headers));
 
+    // Log metadata change (description)
+    const isMetadataUpdated = updates.task_description !== undefined && updates.task_description !== existing.task_description;
+    if (isMetadataUpdated) {
+      await TaskLogRepository.create(
+        {
+          task_id: taskId,
+          task_status_old: "UPDATED",
+          task_status_new: "metadata",
+        },
+        updatedBy
+      );
+    }
+
     // Log status change
     if (updates.task_status && existing.task_status !== updates.task_status) {
       await TaskLogRepository.create(
@@ -538,6 +688,10 @@ export const TaskRepository = {
       await TaskRepository._syncProjectStatus(projectId, updatedBy);
     }
 
+    revalidateTag('tasks', 'max');
+    revalidateTag('task_log', 'max');
+    revalidateTag('projects', 'max');
+    revalidateTag('project_log', 'max');
     return rowToTask(updated as Record<string, string>);
   },
 
@@ -592,21 +746,39 @@ export const TaskRepository = {
       deleted_at: now,
     };
     await updateRow('task', rowNum, toValues(updated, headers));
+    revalidateTag('tasks', 'max');
+    revalidateTag('projects', 'max');
     return true;
   },
 };
 
 // ============ TASK TEAM REPOSITORY ============
 
-export const TaskTeamRepository = {
-  async findByTaskId(taskId: string): Promise<TaskTeam[]> {
+const getCachedTaskTeamByTaskId = unstable_cache(
+  async (taskId: string): Promise<TaskTeam[]> => {
     const rows = await getRowsByColumn('task_team', 'task_id', taskId);
     return rows.map(rowToTaskTeam).filter((tt) => !tt.deleted_at);
   },
+  ['task-team-by-task-id'],
+  { tags: ['task_team'] }
+);
 
-  async findByUserId(userId: string): Promise<TaskTeam[]> {
+const getCachedTaskTeamByUserId = unstable_cache(
+  async (userId: string): Promise<TaskTeam[]> => {
     const rows = await getRowsByColumn('task_team', 'user_id', userId);
     return rows.map(rowToTaskTeam).filter((tt) => !tt.deleted_at);
+  },
+  ['task-team-by-user-id'],
+  { tags: ['task_team'] }
+);
+
+export const TaskTeamRepository = {
+  async findByTaskId(taskId: string): Promise<TaskTeam[]> {
+    return getCachedTaskTeamByTaskId(taskId);
+  },
+
+  async findByUserId(userId: string): Promise<TaskTeam[]> {
+    return getCachedTaskTeamByUserId(userId);
   },
 
   async create(taskId: string, userId: string, createdBy: string): Promise<TaskTeam> {
@@ -628,6 +800,19 @@ export const TaskTeamRepository = {
     };
 
     await appendRow('task_team', toValues(newTT as unknown as Record<string, unknown>, headers));
+
+    // Log team member added to task
+    await TaskLogRepository.create(
+      {
+        task_id: taskId,
+        task_status_old: "TEAM_ADD",
+        task_status_new: userId,
+      },
+      createdBy
+    );
+
+    revalidateTag('task_team', 'max');
+    revalidateTag('task_log', 'max');
     return newTT;
   },
 
@@ -640,33 +825,78 @@ export const TaskTeamRepository = {
     const now = new Date().toISOString()
     const updated = { ...existing, deleted_by: deletedBy, deleted_at: now }
     await updateRow('task_team', rowNum, toValues(updated as unknown as Record<string, unknown>, headers))
+
+    // Log team member removed from task
+    await TaskLogRepository.create(
+      {
+        task_id: existing.task_id,
+        task_status_old: "TEAM_REMOVE",
+        task_status_new: existing.user_id,
+      },
+      deletedBy
+    );
+
+    revalidateTag('task_team', 'max');
+    revalidateTag('task_log', 'max');
     return true
   },
 };
 
 // ============ DAILY REPORT REPOSITORY ============
 
-export const DailyReportRepository = {
-  async findAll(): Promise<DailyReport[]> {
+const getCachedReports = unstable_cache(
+  async (): Promise<DailyReport[]> => {
     const rows = await readSheet('report');
     return rows.map(rowToDailyReport).filter((r) => !r.deleted_at);
   },
+  ['reports-all'],
+  { tags: ['reports'] }
+);
 
-  async findById(reportId: string): Promise<DailyReport | null> {
+const getCachedReportById = unstable_cache(
+  async (reportId: string): Promise<DailyReport | null> => {
     const row = await getRowByColumn('report', 'report_id', reportId);
     if (!row) return null;
     const report = rowToDailyReport(row);
     return report.deleted_at ? null : report;
   },
+  ['report-by-id'],
+  { tags: ['reports'] }
+);
 
-  async findByTaskId(taskId: string): Promise<DailyReport[]> {
+const getCachedReportsByTaskId = unstable_cache(
+  async (taskId: string): Promise<DailyReport[]> => {
     const rows = await getRowsByColumn('report', 'task_id', taskId);
     return rows.map(rowToDailyReport).filter((r) => !r.deleted_at);
   },
+  ['reports-by-task-id'],
+  { tags: ['reports'] }
+);
 
-  async findByUserId(userId: string): Promise<DailyReport[]> {
+const getCachedReportsByUserId = unstable_cache(
+  async (userId: string): Promise<DailyReport[]> => {
     const rows = await getRowsByColumn('report', 'user_id', userId);
     return rows.map(rowToDailyReport).filter((r) => !r.deleted_at);
+  },
+  ['reports-by-user-id'],
+  { tags: ['reports'] }
+);
+
+export const DailyReportRepository = {
+  async findAll(): Promise<DailyReport[]> {
+    return getCachedReports();
+  },
+
+  async findById(reportId: string): Promise<DailyReport | null> {
+    return getCachedReportById(reportId);
+  },
+
+  async findByTaskId(taskId: string): Promise<DailyReport[]> {
+    return getCachedReportsByTaskId(taskId);
+  },
+
+  async findByUserId(userId: string): Promise<DailyReport[]> {
+    return getCachedReportsByUserId(userId);
   },
 
   async create(
@@ -701,9 +931,24 @@ export const DailyReportRepository = {
 
     await appendRow('report', toValues(newReport as unknown as Record<string, unknown>, headers));
 
+    // Log report submission
+    await TaskLogRepository.create(
+      {
+        task_id: report.task_id,
+        task_status_old: "REPORT_SUBMIT",
+        task_status_new: report.progress_percentage,
+      },
+      createdBy
+    );
+
     // Auto-update task progress and status from latest report
     await DailyReportRepository._syncTaskFromLatestReport(report.task_id, createdBy);
 
+    revalidateTag('reports', 'max');
+    revalidateTag('tasks', 'max');
+    revalidateTag('task_log', 'max');
+    revalidateTag('projects', 'max');
+    revalidateTag('project_log', 'max');
     return newReport;
   },
 
@@ -721,6 +966,9 @@ export const DailyReportRepository = {
     const updated: Record<string, unknown> = { ...existing, ...updates };
     await updateRow('report', rowNum, toValues(updated, headers));
 
+    revalidateTag('reports', 'max');
+    revalidateTag('tasks', 'max');
+    revalidateTag('projects', 'max');
     return rowToDailyReport(updated as Record<string, string>);
   },
 
@@ -739,6 +987,9 @@ export const DailyReportRepository = {
       deleted_at: now,
     };
     await updateRow('report', rowNum, toValues(updated, headers));
+    revalidateTag('reports', 'max');
+    revalidateTag('tasks', 'max');
+    revalidateTag('projects', 'max');
     return true;
   },
 
@@ -793,20 +1044,54 @@ export const DailyReportRepository = {
 
 // ============ STATUS REPOSITORY ============
 
-export const StatusRepository = {
-  async findAll(): Promise<Status[]> {
+const getCachedStatuses = unstable_cache(
+  async (): Promise<Status[]> => {
     const rows = await readSheet('status');
     return rows.map(rowToStatus);
   },
+  ['status-all'],
+  { tags: ['status'] }
+);
 
-  async findById(id: string): Promise<Status | null> {
+const getCachedStatusById = unstable_cache(
+  async (id: string): Promise<Status | null> => {
     const row = await getRowByColumn('status', 'id', id);
     if (!row) return null;
     return rowToStatus(row);
   },
+  ['status-by-id'],
+  { tags: ['status'] }
+);
+
+export const StatusRepository = {
+  async findAll(): Promise<Status[]> {
+    return getCachedStatuses();
+  },
+
+  async findById(id: string): Promise<Status | null> {
+    return getCachedStatusById(id);
+  },
 };
 
 // ============ LOG REPOSITORIES ============
+
+const getCachedProjectLogsByProjectId = unstable_cache(
+  async (projectId: string): Promise<ProjectLog[]> => {
+    const rows = await getRowsByColumn('project_log', 'project_id', projectId);
+    return rows.map(rowToProjectLog);
+  },
+  ['project-logs-by-project-id'],
+  { tags: ['project_log'] }
+);
+
+const getCachedTaskLogsByTaskId = unstable_cache(
+  async (taskId: string): Promise<TaskLog[]> => {
+    const rows = await getRowsByColumn('task_log', 'task_id', taskId);
+    return rows.map(rowToTaskLog);
+  },
+  ['task-logs-by-task-id'],
+  { tags: ['task_log'] }
+);
 
 export const ProjectLogRepository = {
   async create(
@@ -820,7 +1105,7 @@ export const ProjectLogRepository = {
     const headers = await getHeaders('project_log');
     const now = new Date().toISOString();
     const existing = await readSheet('project_log');
-    const id = `pl-${String(existing.length + 1).padStart(3, '0')}`;
+    const id = `pl-${String(existing.length + 1).padStart(3, '0')}-${Math.random().toString(36).substring(2, 7)}`;
 
     const newLog: ProjectLog = {
       id,
@@ -832,12 +1117,12 @@ export const ProjectLogRepository = {
     };
 
     await appendRow('project_log', toValues(newLog as unknown as Record<string, unknown>, headers));
+    revalidateTag('project_log', 'max');
     return newLog;
   },
 
   async findByProjectId(projectId: string): Promise<ProjectLog[]> {
-    const rows = await getRowsByColumn('project_log', 'project_id', projectId);
-    return rows.map(rowToProjectLog);
+    return getCachedProjectLogsByProjectId(projectId);
   },
 };
 
@@ -853,7 +1138,7 @@ export const TaskLogRepository = {
     const headers = await getHeaders('task_log');
     const now = new Date().toISOString();
     const existing = await readSheet('task_log');
-    const id = `tl-${String(existing.length + 1).padStart(3, '0')}`;
+    const id = `tl-${String(existing.length + 1).padStart(3, '0')}-${Math.random().toString(36).substring(2, 7)}`;
 
     const newLog: TaskLog = {
       id,
@@ -865,40 +1150,97 @@ export const TaskLogRepository = {
     };
 
     await appendRow('task_log', toValues(newLog as unknown as Record<string, unknown>, headers));
+    revalidateTag('task_log', 'max');
     return newLog;
   },
 
   async findByTaskId(taskId: string): Promise<TaskLog[]> {
-    const rows = await getRowsByColumn('task_log', 'task_id', taskId);
-    return rows.map(rowToTaskLog);
+    return getCachedTaskLogsByTaskId(taskId);
   },
 };
 
 // ============ ANALYTICS HELPERS ============
 
+const getCachedTaskTotalHours = unstable_cache(
+  async (taskId: string): Promise<number> => {
+    const reports = await DailyReportRepository.findByTaskId(taskId);
+    return reports.reduce((sum, r) => {
+      const h = parseFloat(r.total_hours ?? '0');
+      return sum + (isNaN(h) ? 0 : h);
+    }, 0);
+  },
+  ['task-total-hours'],
+  { tags: ['reports'] }
+);
+
 /**
  * Calculate total hours for a specific task from its reports.
  */
 export async function getTaskTotalHours(taskId: string): Promise<number> {
-  const reports = await DailyReportRepository.findByTaskId(taskId);
-  return reports.reduce((sum, r) => {
-    const h = parseFloat(r.total_hours ?? '0');
-    return sum + (isNaN(h) ? 0 : h);
-  }, 0);
+  return getCachedTaskTotalHours(taskId);
 }
+
+const getCachedProjectTotalHours = unstable_cache(
+  async (projectId: string): Promise<number> => {
+    const tasks = await TaskRepository.findByProjectId(projectId);
+    let total = 0;
+    for (const task of tasks) {
+      const hours = await getTaskTotalHours(task.id);
+      total += hours;
+    }
+    return total;
+  },
+  ['project-total-hours'],
+  { tags: ['reports', 'tasks'] }
+);
 
 /**
  * Calculate total hours for a project from all its tasks' reports.
  */
 export async function getProjectTotalHours(projectId: string): Promise<number> {
-  const tasks = await TaskRepository.findByProjectId(projectId);
-  let total = 0;
-  for (const task of tasks) {
-    const hours = await getTaskTotalHours(task.id);
-    total += hours;
-  }
-  return total;
+  return getCachedProjectTotalHours(projectId);
 }
+
+const getCachedContributionData = unstable_cache(
+  async (optionsSerialized: string): Promise<Record<string, number>> => {
+    const options = JSON.parse(optionsSerialized) as {
+      userId?: string;
+      projectId?: string;
+      taskId?: string;
+      startDate?: string;
+      endDate?: string;
+    };
+    let reports = await DailyReportRepository.findAll();
+
+    if (options?.userId) {
+      reports = reports.filter((r) => r.user_id === options.userId);
+    }
+    if (options?.taskId) {
+      reports = reports.filter((r) => r.task_id === options.taskId);
+    }
+    if (options?.projectId) {
+      const tasks = await TaskRepository.findByProjectId(options.projectId);
+      const taskIds = new Set(tasks.map((t) => t.id));
+      reports = reports.filter((r) => taskIds.has(r.task_id));
+    }
+    if (options?.startDate) {
+      reports = reports.filter((r) => (r.date ?? '') >= (options.startDate ?? ''));
+    }
+    if (options?.endDate) {
+      reports = reports.filter((r) => (r.date ?? '') <= (options.endDate ?? ''));
+    }
+
+    const data: Record<string, number> = {};
+    for (const report of reports) {
+      const date = report.date ?? 'unknown';
+      const hours = parseFloat(report.total_hours ?? '0') || 0;
+      data[date] = (data[date] ?? 0) + hours;
+    }
+    return data;
+  },
+  ['contribution-data'],
+  { tags: ['reports', 'tasks'] }
+);
 
 /**
  * Get contribution data: daily aggregated hours from reports.
@@ -911,34 +1253,86 @@ export async function getContributionData(options?: {
   startDate?: string;
   endDate?: string;
 }): Promise<Record<string, number>> {
-  let reports = await DailyReportRepository.findAll();
-
-  if (options?.userId) {
-    reports = reports.filter((r) => r.user_id === options.userId);
-  }
-  if (options?.taskId) {
-    reports = reports.filter((r) => r.task_id === options.taskId);
-  }
-  if (options?.projectId) {
-    const tasks = await TaskRepository.findByProjectId(options.projectId);
-    const taskIds = new Set(tasks.map((t) => t.id));
-    reports = reports.filter((r) => taskIds.has(r.task_id));
-  }
-  if (options?.startDate) {
-    reports = reports.filter((r) => (r.date ?? '') >= (options.startDate ?? ''));
-  }
-  if (options?.endDate) {
-    reports = reports.filter((r) => (r.date ?? '') <= (options.endDate ?? ''));
-  }
-
-  const data: Record<string, number> = {};
-  for (const report of reports) {
-    const date = report.date ?? 'unknown';
-    const hours = parseFloat(report.total_hours ?? '0') || 0;
-    data[date] = (data[date] ?? 0) + hours;
-  }
-  return data;
+  return getCachedContributionData(JSON.stringify(options ?? {}));
 }
+
+const getCachedContributionSummary = unstable_cache(
+  async (optionsSerialized: string) => {
+    const options = JSON.parse(optionsSerialized) as {
+      userId?: string;
+      projectId?: string;
+      taskId?: string;
+      startDate?: string;
+      endDate?: string;
+    };
+    const data = await getContributionData(options);
+    const entries = Object.entries(data);
+    const totalHours = entries.reduce((sum, [, h]) => sum + h, 0);
+    const totalReports = entries.length;
+    const avgHoursPerDay = totalReports > 0 ? totalHours / totalReports : 0;
+
+    const allReports = await DailyReportRepository.findAll();
+
+    // Find most active user
+    let mostActiveUser = '—';
+    let mostActiveUserHours = 0;
+    if (!options?.userId) {
+      const userHours: Record<string, number> = {};
+      for (const r of allReports) {
+        const uid = r.user_id ?? 'unknown';
+        const h = parseFloat(r.total_hours ?? '0') || 0;
+        userHours[uid] = (userHours[uid] ?? 0) + h;
+      }
+      for (const [uid, hours] of Object.entries(userHours)) {
+        if (hours > mostActiveUserHours) {
+          mostActiveUserHours = hours;
+          mostActiveUser = uid;
+        }
+      }
+    }
+
+    // Find most active project (in-memory join)
+    let mostActiveProject = '—';
+    let mostActiveProjectHours = 0;
+    if (!options?.projectId) {
+      const [projects, tasks] = await Promise.all([
+        ProjectRepository.findAll(),
+        TaskRepository.findAll(),
+      ]);
+
+      const taskProjectMap = new Map(tasks.map((t) => [t.id, t.project_id]));
+      const projectHours: Record<string, number> = {};
+
+      for (const r of allReports) {
+        if (!r.task_id) continue;
+        const pid = taskProjectMap.get(r.task_id);
+        if (!pid) continue;
+        const h = parseFloat(r.total_hours ?? '0') || 0;
+        projectHours[pid] = (projectHours[pid] ?? 0) + h;
+      }
+
+      for (const p of projects) {
+        const hours = projectHours[p.project_id] ?? 0;
+        if (hours > mostActiveProjectHours) {
+          mostActiveProjectHours = hours;
+          mostActiveProject = p.project_name ?? p.project_id;
+        }
+      }
+    }
+
+    return {
+      totalHours,
+      totalReports,
+      avgHoursPerDay: Math.round(avgHoursPerDay * 10) / 10,
+      mostActiveUser,
+      mostActiveUserHours: Math.round(mostActiveUserHours * 10) / 10,
+      mostActiveProject,
+      mostActiveProjectHours: Math.round(mostActiveProjectHours * 10) / 10,
+    };
+  },
+  ['contribution-summary'],
+  { tags: ['reports', 'tasks', 'projects'] }
+);
 
 /**
  * Get contribution summary statistics.
@@ -950,54 +1344,7 @@ export async function getContributionSummary(options?: {
   startDate?: string;
   endDate?: string;
 }) {
-  const data = await getContributionData(options);
-  const entries = Object.entries(data);
-  const totalHours = entries.reduce((sum, [, h]) => sum + h, 0);
-  const totalReports = entries.length;
-  const avgHoursPerDay = totalReports > 0 ? totalHours / totalReports : 0;
-
-  // Find most active user
-  let mostActiveUser = '—';
-  let mostActiveUserHours = 0;
-  if (!options?.userId) {
-    const allReports = await DailyReportRepository.findAll();
-    const userHours: Record<string, number> = {};
-    for (const r of allReports) {
-      const uid = r.user_id ?? 'unknown';
-      const h = parseFloat(r.total_hours ?? '0') || 0;
-      userHours[uid] = (userHours[uid] ?? 0) + h;
-    }
-    for (const [uid, hours] of Object.entries(userHours)) {
-      if (hours > mostActiveUserHours) {
-        mostActiveUserHours = hours;
-        mostActiveUser = uid;
-      }
-    }
-  }
-
-  // Find most active project
-  let mostActiveProject = '—';
-  let mostActiveProjectHours = 0;
-  if (!options?.projectId) {
-    const projects = await ProjectRepository.findAll();
-    for (const p of projects) {
-      const hours = await getProjectTotalHours(p.project_id);
-      if (hours > mostActiveProjectHours) {
-        mostActiveProjectHours = hours;
-        mostActiveProject = p.project_name ?? p.project_id;
-      }
-    }
-  }
-
-  return {
-    totalHours,
-    totalReports,
-    avgHoursPerDay: Math.round(avgHoursPerDay * 10) / 10,
-    mostActiveUser,
-    mostActiveUserHours: Math.round(mostActiveUserHours * 10) / 10,
-    mostActiveProject,
-    mostActiveProjectHours: Math.round(mostActiveProjectHours * 10) / 10,
-  };
+  return getCachedContributionSummary(JSON.stringify(options ?? {}));
 }
 
 // ============ USER-SCOPED FILTERING ============
@@ -1058,17 +1405,21 @@ export async function filterReportsByUser(
 
 // ============ USER LOOKUP ============
 
-let _userMapCache: Record<string, string> | null = null
+const getCachedUserMap = unstable_cache(
+  async (): Promise<Record<string, string>> => {
+    const users = await UserRepository.findAll();
+    const map: Record<string, string> = {};
+    for (const u of users) {
+      map[u.user_id] = u.user_name || u.user_email || u.user_id;
+    }
+    return map;
+  },
+  ['user-map'],
+  { tags: ['users'] }
+);
 
 export async function getUserMap(): Promise<Record<string, string>> {
-  if (_userMapCache) return _userMapCache
-  const users = await UserRepository.findAll()
-  const map: Record<string, string> = {}
-  for (const u of users) {
-    map[u.user_id] = u.user_name || u.user_email || u.user_id
-  }
-  _userMapCache = map
-  return map
+  return getCachedUserMap();
 }
 
 export async function resolveUserName(userId: string | null | undefined): Promise<string> {
@@ -1085,31 +1436,55 @@ export async function resolveUserNames(userIds: (string | null | undefined)[]): 
 }
 
 export function invalidateUserMap() {
-  _userMapCache = null
+  revalidateTag('users', 'max');
 }
 
 // ============ TRASH / SOFT-DELETED RECORDS ============
 
+const getCachedAllProjectsIncludingDeleted = unstable_cache(
+  async (): Promise<Project[]> => {
+    const rows = await readSheet('project');
+    return rows.map(rowToProject);
+  },
+  ['projects-all-incl-deleted'],
+  { tags: ['projects'] }
+);
+
 /** Get all projects including soft-deleted ones. */
 export async function findAllProjectsIncludingDeleted(): Promise<Project[]> {
-  const rows = await readSheet('project')
-  return rows.map(rowToProject)
+  return getCachedAllProjectsIncludingDeleted();
 }
+
+const getCachedAllTasksIncludingDeleted = unstable_cache(
+  async (): Promise<Task[]> => {
+    const rows = await readSheet('task');
+    return rows.map(rowToTask);
+  },
+  ['tasks-all-incl-deleted'],
+  { tags: ['tasks'] }
+);
 
 /** Get all tasks including soft-deleted ones. */
 export async function findAllTasksIncludingDeleted(): Promise<Task[]> {
-  const rows = await readSheet('task')
-  return rows.map(rowToTask)
+  return getCachedAllTasksIncludingDeleted();
 }
+
+const getCachedAllReportsIncludingDeleted = unstable_cache(
+  async (): Promise<DailyReport[]> => {
+    const rows = await readSheet('report');
+    return rows.map(rowToDailyReport);
+  },
+  ['reports-all-incl-deleted'],
+  { tags: ['reports'] }
+);
 
 /** Get all reports including soft-deleted ones. */
 export async function findAllReportsIncludingDeleted(): Promise<DailyReport[]> {
-  const rows = await readSheet('report')
-  return rows.map(rowToDailyReport)
+  return getCachedAllReportsIncludingDeleted();
 }
 
 /** Restore a soft-deleted project by clearing deleted_at and deleted_by. */
-export async function restoreProject(projectId: string): Promise<boolean> {
+export async function restoreProject(projectId: string, restoredBy: string): Promise<boolean> {
   const rowNum = await findRowByColumn('project', 'project_id', projectId)
   if (rowNum === -1) return false
   const headers = await getHeaders('project')
@@ -1117,11 +1492,24 @@ export async function restoreProject(projectId: string): Promise<boolean> {
   if (!existing) return false
   const updated = { ...existing, deleted_by: '', deleted_at: '' }
   await updateRow('project', rowNum, toValues(updated as unknown as Record<string, unknown>, headers))
+
+  // Log project restoration
+  await ProjectLogRepository.create(
+    {
+      project_id: projectId,
+      project_status_old: "RESTORED",
+      project_status_new: "",
+    },
+    restoredBy
+  );
+
+  revalidateTag('projects', 'max');
+  revalidateTag('project_log', 'max');
   return true
 }
 
 /** Restore a soft-deleted task. */
-export async function restoreTask(taskId: string): Promise<boolean> {
+export async function restoreTask(taskId: string, restoredBy: string): Promise<boolean> {
   const rowNum = await findRowByColumn('task', 'id', taskId)
   if (rowNum === -1) return false
   const headers = await getHeaders('task')
@@ -1129,6 +1517,21 @@ export async function restoreTask(taskId: string): Promise<boolean> {
   if (!existing) return false
   const updated = { ...existing, deleted_by: '', deleted_at: '' }
   await updateRow('task', rowNum, toValues(updated as unknown as Record<string, unknown>, headers))
+
+  // Log task restoration
+  await TaskLogRepository.create(
+    {
+      task_id: taskId,
+      task_status_old: "RESTORED",
+      task_status_new: "",
+    },
+    restoredBy
+  );
+
+  revalidateTag('tasks', 'max');
+  revalidateTag('task_log', 'max');
+  revalidateTag('projects', 'max');
+  revalidateTag('project_log', 'max');
   return true
 }
 
@@ -1141,5 +1544,9 @@ export async function restoreReport(reportId: string): Promise<boolean> {
   if (!existing) return false
   const updated = { ...existing, deleted_by: '', deleted_at: '' }
   await updateRow('report', rowNum, toValues(updated as unknown as Record<string, unknown>, headers))
+
+  revalidateTag('reports', 'max');
+  revalidateTag('tasks', 'max');
+  revalidateTag('projects', 'max');
   return true
 }

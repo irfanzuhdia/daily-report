@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
     let success = false;
     switch (type) {
       case 'project':
-        success = await restoreProject(id);
+        success = await restoreProject(id, session.user_id);
         break;
       case 'task':
-        success = await restoreTask(id);
+        success = await restoreTask(id, session.user_id);
         break;
       case 'report':
         success = await restoreReport(id);

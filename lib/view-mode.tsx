@@ -28,8 +28,14 @@ const ViewModeContext = React.createContext<ViewModeContextValue>({
 })
 
 export function ViewModeProvider({ children }: { children: React.ReactNode }) {
-  // Initialize from cookie synchronously to avoid hydration mismatch
-  const [viewMode, setViewModeState] = React.useState<ViewMode>(() => getStoredMode())
+  const [viewMode, setViewModeState] = React.useState<ViewMode>("my")
+
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setViewModeState(getStoredMode())
+    }, 0)
+    return () => clearTimeout(timer)
+  }, [])
 
   const setViewMode = React.useCallback((mode: ViewMode) => {
     setViewModeState(mode)

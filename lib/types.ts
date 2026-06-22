@@ -137,3 +137,14 @@ export interface DriveUploadResult {
   webViewLink: string;
   downloadLink: string;
 }
+
+export interface EnrichedProjectLog extends ProjectLog {
+  createdByName?: string;
+  targetUserName?: string;
+}
+
+export interface EnrichedTaskLog extends TaskLog {
+  createdByName?: string;
+  targetUserName?: string;
+}
+

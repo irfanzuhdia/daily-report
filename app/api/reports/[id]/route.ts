@@ -30,7 +30,7 @@ export async function PUT(
 
   const { id } = await params
   const body = await request.json()
-  const report = await DailyReportRepository.update(id, body)
+  const report = await DailyReportRepository.update(id, body, session.user_id)
   if (!report) {
     return NextResponse.json({ error: 'Not found' }, { status: 404 })
   }

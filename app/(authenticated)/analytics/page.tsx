@@ -4,6 +4,7 @@ import {
   ProjectRepository,
   UserRepository,
   getContributionData,
+  getCategoryContributionData,
   filterProjectsByUser,
 } from "@/lib/repositories"
 import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
@@ -37,21 +38,30 @@ export default async function AnalyticsPage({
     ? await filterProjectsByUser(allProjects, userId)
     : allProjects
 
-  const contributionData = await getContributionData({
-    userId: params.user_id ?? (viewMode === "my" ? userId : undefined),
-    projectId: params.project_id,
-    startDate: params.start_date,
-    endDate: params.end_date,
-  })
+  const [contributionData, categoryContribution] = await Promise.all([
+    getContributionData({
+      userId: params.user_id ?? (viewMode === "my" ? userId : undefined),
+      projectId: params.project_id,
+      startDate: params.start_date,
+      endDate: params.end_date,
+    }),
+    getCategoryContributionData({
+      userId: params.user_id ?? (viewMode === "my" ? userId : undefined),
+      projectId: params.project_id,
+      startDate: params.start_date,
+      endDate: params.end_date,
+    }),
+  ])
 
   return (
     <ContributionCalendar
       data={contributionData}
+      categoryData={categoryContribution}
       projects={projects}
       users={users.map((u) => ({
         user_id: u.user_id,
-        user_email: u.user_email,
         user_name: u.user_name,
+        user_email: u.user_email,
       }))}
       viewMode={viewMode}
       currentStartDate={params.start_date}

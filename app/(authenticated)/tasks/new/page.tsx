@@ -17,10 +17,11 @@ export default async function NewTaskPage({
   if (!session) redirect("/login")
 
   const params = await searchParams
-  const [projects, statuses, allUsers] = await Promise.all([
+  const [projects, statuses, allUsers, uniqueCategories] = await Promise.all([
     ProjectRepository.findAll(),
     StatusRepository.findAll(),
     UserRepository.findAll(),
+    ProjectRepository.findUniqueCategories(),
   ])
 
   // If project_id is provided, get the project's team as default
@@ -44,6 +45,7 @@ export default async function NewTaskPage({
         user_email: u.user_email,
         user_occupation: u.user_occupation,
       }))}
+      uniqueCategories={uniqueCategories}
     />
   )
 }

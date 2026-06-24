@@ -18,11 +18,12 @@ export default async function EditTaskPage({
   if (!session) redirect("/login")
 
   const { id } = await params
-  const [task, projects, statuses, allUsers] = await Promise.all([
+  const [task, projects, statuses, allUsers, uniqueCategories] = await Promise.all([
     TaskRepository.findById(id),
     ProjectRepository.findAll(),
     StatusRepository.findAll(),
     UserRepository.findAll(),
+    ProjectRepository.findUniqueCategories(),
   ])
 
   if (!task) redirect("/tasks")
@@ -44,6 +45,7 @@ export default async function EditTaskPage({
         user_email: u.user_email,
         user_occupation: u.user_occupation,
       }))}
+      uniqueCategories={uniqueCategories}
     />
   )
 }

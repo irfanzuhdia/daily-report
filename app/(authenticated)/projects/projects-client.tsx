@@ -848,6 +848,11 @@ export function ProjectsClient({
                     )}
                   </div>
                   <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
+                    {project.category && (
+                      <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10">
+                        {project.category}
+                      </Badge>
+                    )}
                     {(projectProgressMap[project.project_id] ?? 0) > 0 && (
                       <Badge variant="outline">
                         {projectProgressMap[project.project_id]}% done

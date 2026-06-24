@@ -28,6 +28,7 @@ export function TaskForm({
   defaultTeamUserIds,
   allUsers,
   currentUserId,
+  uniqueCategories = [],
 }: {
   task?: Task
   projects: Project[]
@@ -36,6 +37,7 @@ export function TaskForm({
   defaultTeamUserIds?: string[]
   allUsers: { user_id: string; user_name: string; user_email: string; user_occupation: string | null }[]
   currentUserId: string
+  uniqueCategories?: string[]
 }) {
   const router = useRouter()
   const isEdit = !!task
@@ -57,6 +59,7 @@ export function TaskForm({
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false)
   const [newProjectName, setNewProjectName] = useState("")
   const [newProjectDesc, setNewProjectDesc] = useState("")
+  const [newProjectCategory, setNewProjectCategory] = useState("")
   const [newProjectStart, setNewProjectStart] = useState("")
   const [newProjectEnd, setNewProjectEnd] = useState("")
   const [projectCreating, setProjectCreating] = useState(false)
@@ -537,6 +540,7 @@ export function TaskForm({
                       project_start_date_plan: newProjectStart || undefined,
                       project_end_date_plan: newProjectEnd || undefined,
                       project_status: "NS",
+                      category: newProjectCategory.trim() || undefined,
                       team_user_ids: [currentUserId],
                     }),
                   })
@@ -553,6 +557,7 @@ export function TaskForm({
                   // Reset form
                   setNewProjectName("")
                   setNewProjectDesc("")
+                  setNewProjectCategory("")
                   setNewProjectStart("")
                   setNewProjectEnd("")
                   setShowCreateProjectModal(false)
@@ -592,6 +597,22 @@ export function TaskForm({
                   placeholder="Enter project description..."
                   rows={3}
                 />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="newProjCategory">Category</Label>
+                <Input
+                  id="newProjCategory"
+                  value={newProjectCategory}
+                  onChange={(e) => setNewProjectCategory(e.target.value)}
+                  placeholder="e.g. Frontend, Backend, Design, Marketing"
+                  list="modal-project-categories"
+                />
+                <datalist id="modal-project-categories">
+                  {uniqueCategories.map((cat) => (
+                    <option key={cat} value={cat} />
+                  ))}
+                </datalist>
               </div>
               
               <div className="grid gap-4 grid-cols-2">

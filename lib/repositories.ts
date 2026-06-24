@@ -191,6 +191,16 @@ export const ProjectRepository = {
     return getCachedProjectById(projectId);
   },
 
+  async findUniqueCategories(): Promise<string[]> {
+    const rows = await sql`
+      SELECT DISTINCT category 
+      FROM projects 
+      WHERE deleted_at IS NULL AND category IS NOT NULL AND category != ''
+      ORDER BY category ASC
+    `;
+    return rows.map((r) => r.category as string);
+  },
+
   async create(
     project: {
       project_name: string;
@@ -200,6 +210,7 @@ export const ProjectRepository = {
       project_status?: string;
       project_file?: string;
       additional_link?: string;
+      category?: string;
     },
     createdBy: string
   ): Promise<Project> {
@@ -216,6 +227,7 @@ export const ProjectRepository = {
       project_status: project.project_status ?? STATUS.NOT_STARTED,
       project_file: project.project_file ?? null,
       additional_link: project.additional_link ?? null,
+      category: project.category ?? null,
       created_by: createdBy,
       created_at: now,
       updated_by: null,
@@ -227,11 +239,11 @@ export const ProjectRepository = {
     await sql`
       INSERT INTO projects (
         project_id, project_name, project_description, project_start_date_plan, project_end_date_plan,
-        project_status, project_file, additional_link, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
+        project_status, project_file, additional_link, category, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
       ) VALUES (
         ${newProject.project_id}, ${newProject.project_name}, ${newProject.project_description},
         ${newProject.project_start_date_plan}, ${newProject.project_end_date_plan}, ${newProject.project_status},
-        ${newProject.project_file}, ${newProject.additional_link}, ${newProject.created_by}, ${newProject.created_at},
+        ${newProject.project_file}, ${newProject.additional_link}, ${newProject.category}, ${newProject.created_by}, ${newProject.created_at},
         ${newProject.updated_by}, ${newProject.updated_at}, ${newProject.deleted_by}, ${newProject.deleted_at}
       )
     `;
@@ -262,6 +274,7 @@ export const ProjectRepository = {
         | 'project_status'
         | 'project_file'
         | 'additional_link'
+        | 'category'
       >
     >,
     updatedBy: string
@@ -296,6 +309,7 @@ export const ProjectRepository = {
         project_status = ${updated.project_status},
         project_file = ${updated.project_file},
         additional_link = ${updated.additional_link},
+        category = ${updated.category},
         updated_by = ${updated.updated_by},
         updated_at = ${updated.updated_at}
       WHERE project_id = ${projectId}
@@ -1263,6 +1277,53 @@ export async function getContributionData(options?: {
   endDate?: string;
 }): Promise<Record<string, number>> {
   return getCachedContributionData(JSON.stringify(options ?? {}));
+}
+
+const getCachedCategoryContribution = unstable_cache(
+  async (optionsSerialized: string): Promise<{ category: string | null; hours: number }[]> => {
+    const options = JSON.parse(optionsSerialized) as {
+      userId?: string;
+      projectId?: string;
+      startDate?: string;
+      endDate?: string;
+    };
+
+    const userId = options?.userId || null;
+    const projectId = options?.projectId || null;
+    const startDate = options?.startDate || null;
+    const endDate = options?.endDate || null;
+
+    const rows = await sql`
+      SELECT p.category, COALESCE(SUM(r.total_hours::numeric), 0)::float as hours
+      FROM daily_reports r
+      JOIN tasks t ON r.task_id = t.id
+      JOIN projects p ON t.project_id = p.project_id
+      WHERE r.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+        AND p.deleted_at IS NULL
+        AND (${userId}::text IS NULL OR r.user_id = ${userId})
+        AND (${projectId}::text IS NULL OR t.project_id = ${projectId})
+        AND (${startDate}::text IS NULL OR r.date >= ${startDate})
+        AND (${endDate}::text IS NULL OR r.date <= ${endDate})
+      GROUP BY p.category
+    `;
+
+    return rows.map((r) => ({
+      category: r.category as string | null,
+      hours: r.hours as number,
+    }));
+  },
+  ['category-contribution-data'],
+  { tags: ['reports', 'tasks', 'projects'] }
+);
+
+export async function getCategoryContributionData(options?: {
+  userId?: string;
+  projectId?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<{ category: string | null; hours: number }[]> {
+  return getCachedCategoryContribution(JSON.stringify(options ?? {}));
 }
 
 const getCachedContributionSummary = unstable_cache(

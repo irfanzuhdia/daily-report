@@ -12,15 +12,22 @@ export default async function EditReportPage({
   if (!session) redirect("/login")
 
   const { id } = await params
-  const [report, tasks, projects] = await Promise.all([
+  const [report, tasks, projects, uniqueCategories] = await Promise.all([
     DailyReportRepository.findById(id),
     TaskRepository.findAll(),
     ProjectRepository.findAll(),
+    ProjectRepository.findUniqueCategories(),
   ])
 
   if (!report) redirect("/reports")
 
   return (
-    <ReportForm report={report} tasks={tasks} projects={projects} currentUserId={session.user_id} />
+    <ReportForm
+      report={report}
+      tasks={tasks}
+      projects={projects}
+      currentUserId={session.user_id}
+      uniqueCategories={uniqueCategories}
+    />
   )
 }

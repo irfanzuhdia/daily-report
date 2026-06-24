@@ -12,9 +12,10 @@ export default async function NewReportPage({
   if (!session) redirect("/login")
 
   const params = await searchParams
-  const [tasks, projects] = await Promise.all([
+  const [tasks, projects, uniqueCategories] = await Promise.all([
     TaskRepository.findAll(),
     ProjectRepository.findAll(),
+    ProjectRepository.findUniqueCategories(),
   ])
 
   // Get the task's current progress percentage as initial value
@@ -33,6 +34,7 @@ export default async function NewReportPage({
       defaultTaskId={params.task_id}
       defaultPercentage={defaultPercentage}
       currentUserId={session.user_id}
+      uniqueCategories={uniqueCategories}
     />
   )
 }

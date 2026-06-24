@@ -28,6 +28,7 @@ export function ProjectForm({
   initialTeamUserIds,
   defaultStartDate,
   defaultEndDate,
+  uniqueCategories = [],
 }: {
   project?: Project
   statuses: Status[]
@@ -35,6 +36,7 @@ export function ProjectForm({
   initialTeamUserIds: string[]
   defaultStartDate?: string
   defaultEndDate?: string
+  uniqueCategories?: string[]
 }) {
   const router = useRouter()
   const isEdit = !!project
@@ -45,6 +47,7 @@ export function ProjectForm({
   const [startDate, setStartDate] = useState(project?.project_start_date_plan ?? defaultStartDate ?? "")
   const [endDate, setEndDate] = useState(project?.project_end_date_plan ?? defaultEndDate ?? "")
   const [status, setStatus] = useState(project?.project_status ?? "NS")
+  const [category, setCategory] = useState(project?.category ?? "")
   const [projectFile, setProjectFile] = useState<string | null>(project?.project_file ?? null)
   const [additionalLink, setAdditionalLink] = useState(project?.additional_link ?? "")
   const [fileName, setFileName] = useState<string | null>(
@@ -118,6 +121,7 @@ export function ProjectForm({
         project_status: status,
         project_file: projectFile || undefined,
         additional_link: additionalLink || undefined,
+        category: category.trim() || undefined,
         team_user_ids: teamUserIds,
       }
 
@@ -240,6 +244,22 @@ export function ProjectForm({
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="category">Category</Label>
+              <Input
+                id="category"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+                placeholder="e.g. Frontend, Backend, Design, Marketing"
+                list="project-categories"
+              />
+              <datalist id="project-categories">
+                {uniqueCategories.map((cat) => (
+                  <option key={cat} value={cat} />
+                ))}
+              </datalist>
             </div>
 
             {/* Team Assignment */}

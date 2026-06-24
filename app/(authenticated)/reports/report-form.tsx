@@ -27,6 +27,7 @@ export function ReportForm({
   defaultTaskId,
   defaultPercentage,
   currentUserId,
+  uniqueCategories = [],
 }: {
   report?: DailyReport
   tasks: Task[]
@@ -34,6 +35,7 @@ export function ReportForm({
   defaultTaskId?: string
   defaultPercentage?: string
   currentUserId: string
+  uniqueCategories?: string[]
 }) {
   const router = useRouter()
   const isEdit = !!report
@@ -75,6 +77,7 @@ export function ReportForm({
   // Project modal inputs
   const [newProjectName, setNewProjectName] = useState("")
   const [newProjectDesc, setNewProjectDesc] = useState("")
+  const [newProjectCategory, setNewProjectCategory] = useState("")
   const [newProjectStart, setNewProjectStart] = useState("")
   const [newProjectEnd, setNewProjectEnd] = useState("")
   const [projectCreating, setProjectCreating] = useState(false)
@@ -580,6 +583,7 @@ export function ReportForm({
                       project_start_date_plan: newProjectStart || undefined,
                       project_end_date_plan: newProjectEnd || undefined,
                       project_status: "NS",
+                      category: newProjectCategory.trim() || undefined,
                       team_user_ids: [currentUserId],
                     }),
                   })
@@ -596,6 +600,7 @@ export function ReportForm({
                   // Reset form
                   setNewProjectName("")
                   setNewProjectDesc("")
+                  setNewProjectCategory("")
                   setNewProjectStart("")
                   setNewProjectEnd("")
                   setShowCreateProjectModal(false)
@@ -635,6 +640,22 @@ export function ReportForm({
                   placeholder="Enter project description..."
                   rows={3}
                 />
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="newProjCategory">Category</Label>
+                <Input
+                  id="newProjCategory"
+                  value={newProjectCategory}
+                  onChange={(e) => setNewProjectCategory(e.target.value)}
+                  placeholder="e.g. Frontend, Backend, Design, Marketing"
+                  list="modal-project-categories-report"
+                />
+                <datalist id="modal-project-categories-report">
+                  {uniqueCategories.map((cat) => (
+                    <option key={cat} value={cat} />
+                  ))}
+                </datalist>
               </div>
               
               <div className="grid gap-4 grid-cols-2">

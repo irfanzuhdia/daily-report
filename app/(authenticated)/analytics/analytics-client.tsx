@@ -20,6 +20,7 @@ import type { Project } from "@/lib/types"
 /* ─── types ─── */
 interface ContributionCalendarProps {
   data: Record<string, number>
+  categoryData: { category: string | null; hours: number }[]
   projects: Project[]
   users: { user_id: string; user_email: string; user_name: string | null }[]
   viewMode: "my" | "team"
@@ -139,9 +140,166 @@ const PRESETS: { key: PresetKey; label: string }[] = [
   { key: "custom", label: "Custom Range" },
 ]
 
+export function CategoryPieChart({ data }: { data: { category: string | null; hours: number }[] }) {
+  const activeData = useMemo(() => {
+    return data
+      .filter((item) => item.hours > 0)
+      .map((item) => ({
+        name: item.category || "Uncategorized",
+        hours: Math.round(item.hours * 10) / 10,
+      }))
+      .sort((a, b) => b.hours - a.hours)
+  }, [data])
+
+  const totalHours = useMemo(() => {
+    return activeData.reduce((sum, item) => sum + item.hours, 0)
+  }, [activeData])
+
+  const chartData = useMemo(() => {
+    const result: { name: string; hours: number; percent: number; startPercent: number }[] = []
+    activeData.reduce((acc, item) => {
+      const percent = totalHours > 0 ? (item.hours / totalHours) * 100 : 0
+      result.push({ ...item, percent, startPercent: acc })
+      return acc + percent
+    }, 0)
+    return result
+  }, [activeData, totalHours])
+
+  const colors = [
+    { stroke: "stroke-emerald-500", text: "text-emerald-500", bg: "bg-emerald-500" },
+    { stroke: "stroke-indigo-500", text: "text-indigo-500", bg: "bg-indigo-500" },
+    { stroke: "stroke-violet-500", text: "text-violet-500", bg: "bg-violet-500" },
+    { stroke: "stroke-amber-500", text: "text-amber-500", bg: "bg-amber-500" },
+    { stroke: "stroke-rose-500", text: "text-rose-500", bg: "bg-rose-500" },
+    { stroke: "stroke-cyan-500", text: "text-cyan-500", bg: "bg-cyan-500" },
+    { stroke: "stroke-sky-500", text: "text-sky-500", bg: "bg-sky-500" },
+    { stroke: "stroke-fuchsia-500", text: "text-fuchsia-500", bg: "bg-fuchsia-500" },
+  ]
+
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+
+  if (activeData.length === 0) {
+    return (
+      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-center">
+        <BarChart3 className="mb-3 h-10 w-10 opacity-40" />
+        <p className="text-sm">No report hours logged in this period</p>
+      </div>
+    )
+  }
+
+  const size = 180
+  const radius = 60
+  const strokeWidth = 20
+  const circumference = 2 * Math.PI * radius
+
+  return (
+    <div className="grid gap-6 md:grid-cols-12 items-center">
+      {/* Chart Section */}
+      <div className="md:col-span-5 flex justify-center relative">
+        <svg
+          width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          className="transform -rotate-90 select-none drop-shadow-sm"
+        >
+          {chartData.map((item, index) => {
+            const strokeDasharray = `${(item.percent / 100) * circumference} ${circumference}`
+            const strokeDashoffset = `${circumference - (item.startPercent / 100) * circumference}`
+            const isHovered = hoveredIndex === index
+            const c = colors[index % colors.length]
+
+            return (
+              <circle
+                key={index}
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="transparent"
+                strokeWidth={isHovered ? strokeWidth + 4 : strokeWidth}
+                strokeDasharray={strokeDasharray}
+                strokeDashoffset={strokeDashoffset}
+                className={`transition-all duration-300 ease-out cursor-pointer ${c.stroke}`}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+                style={{
+                  strokeLinecap: "butt",
+                  transformOrigin: "center",
+                }}
+              />
+            )
+          })}
+        </svg>
+
+        {/* Center label */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          {hoveredIndex !== null ? (
+            <>
+              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider max-w-[100px] truncate text-center px-1">
+                {chartData[hoveredIndex].name}
+              </span>
+              <span className="text-xl font-bold text-foreground">
+                {Math.round(chartData[hoveredIndex].percent * 10) / 10}%
+              </span>
+              <span className="text-[10px] text-muted-foreground font-mono">
+                {chartData[hoveredIndex].hours}h
+              </span>
+            </>
+          ) : (
+            <>
+              <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
+                Total Hours
+              </span>
+              <span className="text-2xl font-extrabold text-foreground">
+                {Math.round(totalHours * 10) / 10}h
+              </span>
+              <span className="text-[10px] text-muted-foreground">
+                {chartData.length} categories
+              </span>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Legend Section */}
+      <div className="md:col-span-7">
+        <div className="max-h-[180px] overflow-y-auto pr-1 space-y-1.5">
+          {chartData.map((item, index) => {
+            const isHovered = hoveredIndex === index
+            const c = colors[index % colors.length]
+            return (
+              <div
+                key={index}
+                className={`flex items-center justify-between p-1.5 rounded-xl transition-colors cursor-pointer ${
+                  isHovered ? "bg-muted/80" : "hover:bg-muted/30"
+                }`}
+                onMouseEnter={() => setHoveredIndex(index)}
+                onMouseLeave={() => setHoveredIndex(null)}
+              >
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${c.bg}`} />
+                  <span className="text-xs font-semibold text-foreground truncate">
+                    {item.name}
+                  </span>
+                </div>
+                <div className="flex items-center gap-2 text-xs shrink-0">
+                  <span className="text-muted-foreground font-mono font-medium">{item.hours}h</span>
+                  <span className="font-bold font-mono text-right w-10">
+                    {Math.round(item.percent * 10) / 10}%
+                  </span>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 /* ─── main component ─── */
 export function ContributionCalendar({
   data,
+  categoryData = [],
   projects,
   users,
   viewMode: globalViewMode,
@@ -512,6 +670,19 @@ export function ContributionCalendar({
               {" · "}{allDays.length} days
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Category Contribution Pie Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Time Distribution by Category
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CategoryPieChart data={categoryData} />
         </CardContent>
       </Card>
 

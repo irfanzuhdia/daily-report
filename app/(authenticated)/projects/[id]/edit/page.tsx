@@ -17,10 +17,11 @@ export default async function EditProjectPage({
   if (!session) redirect("/login")
 
   const { id } = await params
-  const [project, statuses, users] = await Promise.all([
+  const [project, statuses, users, uniqueCategories] = await Promise.all([
     ProjectRepository.findById(id),
     StatusRepository.findAll(),
     UserRepository.findAll(),
+    ProjectRepository.findUniqueCategories(),
   ])
 
   if (!project) redirect("/projects")
@@ -35,6 +36,7 @@ export default async function EditProjectPage({
       statuses={statuses}
       users={users}
       initialTeamUserIds={initialTeamUserIds}
+      uniqueCategories={uniqueCategories}
     />
   )
 }

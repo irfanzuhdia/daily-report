@@ -249,6 +249,16 @@ export function ProjectDetailClient({
               <p className="text-xs font-medium text-muted-foreground">End Date</p>
               <p className="text-sm">{project.project_end_date_plan ? formatDate(project.project_end_date_plan) : "—"}</p>
             </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Category</p>
+              {project.category ? (
+                <Badge variant="outline" className="mt-1 bg-primary/10 text-primary border-primary/20">
+                  {project.category}
+                </Badge>
+              ) : (
+                <p className="text-sm text-muted-foreground">—</p>
+              )}
+            </div>
           </div>
 
           <div className="mt-4 border-t pt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

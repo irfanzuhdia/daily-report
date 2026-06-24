@@ -24,6 +24,7 @@ export interface Project {
   project_status: string | null;
   project_file: string | null;
   additional_link: string | null;
+  category: string | null;
   created_by: string | null;
   created_at: string | null;
   updated_by: string | null;

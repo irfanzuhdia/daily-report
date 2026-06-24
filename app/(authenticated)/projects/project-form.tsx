@@ -46,6 +46,7 @@ export function ProjectForm({
   const [endDate, setEndDate] = useState(project?.project_end_date_plan ?? defaultEndDate ?? "")
   const [status, setStatus] = useState(project?.project_status ?? "NS")
   const [projectFile, setProjectFile] = useState<string | null>(project?.project_file ?? null)
+  const [additionalLink, setAdditionalLink] = useState(project?.additional_link ?? "")
   const [fileName, setFileName] = useState<string | null>(
     project?.project_file ? extractFileName(project.project_file) : null
   )
@@ -116,6 +117,7 @@ export function ProjectForm({
         project_end_date_plan: endDate,
         project_status: status,
         project_file: projectFile || undefined,
+        additional_link: additionalLink || undefined,
         team_user_ids: teamUserIds,
       }
 
@@ -323,6 +325,17 @@ export function ProjectForm({
               {uploadError && (
                 <p className="text-xs text-destructive">{uploadError}</p>
               )}
+            </div>
+
+            {/* Additional Link */}
+            <div className="space-y-2">
+              <Label htmlFor="additionalLink">Additional Link</Label>
+              <Input
+                id="additionalLink"
+                value={additionalLink}
+                onChange={(e) => setAdditionalLink(e.target.value)}
+                placeholder="Enter additional link (e.g. Google Drive, Figma, Notion)"
+              />
             </div>
           </CardContent>
         </Card>

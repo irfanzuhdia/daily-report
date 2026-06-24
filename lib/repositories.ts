@@ -10,6 +10,8 @@ import type {
   ProjectLog,
   TaskLog,
   FileRecord,
+  Comment,
+  Notification,
 } from './types';
 import { unstable_cache as nextUnstableCache, revalidateTag as nextRevalidateTag } from 'next/cache';
 
@@ -197,6 +199,7 @@ export const ProjectRepository = {
       project_end_date_plan?: string;
       project_status?: string;
       project_file?: string;
+      additional_link?: string;
     },
     createdBy: string
   ): Promise<Project> {
@@ -212,6 +215,7 @@ export const ProjectRepository = {
       project_end_date_plan: project.project_end_date_plan ?? null,
       project_status: project.project_status ?? STATUS.NOT_STARTED,
       project_file: project.project_file ?? null,
+      additional_link: project.additional_link ?? null,
       created_by: createdBy,
       created_at: now,
       updated_by: null,
@@ -223,11 +227,11 @@ export const ProjectRepository = {
     await sql`
       INSERT INTO projects (
         project_id, project_name, project_description, project_start_date_plan, project_end_date_plan,
-        project_status, project_file, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
+        project_status, project_file, additional_link, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
       ) VALUES (
         ${newProject.project_id}, ${newProject.project_name}, ${newProject.project_description},
         ${newProject.project_start_date_plan}, ${newProject.project_end_date_plan}, ${newProject.project_status},
-        ${newProject.project_file}, ${newProject.created_by}, ${newProject.created_at},
+        ${newProject.project_file}, ${newProject.additional_link}, ${newProject.created_by}, ${newProject.created_at},
         ${newProject.updated_by}, ${newProject.updated_at}, ${newProject.deleted_by}, ${newProject.deleted_at}
       )
     `;
@@ -257,6 +261,7 @@ export const ProjectRepository = {
         | 'project_end_date_plan'
         | 'project_status'
         | 'project_file'
+        | 'additional_link'
       >
     >,
     updatedBy: string
@@ -290,6 +295,7 @@ export const ProjectRepository = {
         project_end_date_plan = ${updated.project_end_date_plan},
         project_status = ${updated.project_status},
         project_file = ${updated.project_file},
+        additional_link = ${updated.additional_link},
         updated_by = ${updated.updated_by},
         updated_at = ${updated.updated_at}
       WHERE project_id = ${projectId}
@@ -525,6 +531,8 @@ export const TaskRepository = {
       task_description: string;
       task_status?: string;
       task_latest_percentage?: string;
+      task_file?: string;
+      additional_link?: string;
     },
     createdBy: string
   ): Promise<Task> {
@@ -538,6 +546,8 @@ export const TaskRepository = {
       task_description: task.task_description,
       task_status: task.task_status ?? STATUS.NOT_STARTED,
       task_latest_percentage: task.task_latest_percentage ?? '0',
+      task_file: task.task_file ?? null,
+      additional_link: task.additional_link ?? null,
       created_by: createdBy,
       created_at: now,
       updated_by: null,
@@ -549,10 +559,10 @@ export const TaskRepository = {
     await sql`
       INSERT INTO tasks (
         id, project_id, task_description, task_status, task_latest_percentage,
-        created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
+        task_file, additional_link, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
       ) VALUES (
         ${newTask.id}, ${newTask.project_id}, ${newTask.task_description}, ${newTask.task_status},
-        ${newTask.task_latest_percentage}, ${newTask.created_by}, ${newTask.created_at},
+        ${newTask.task_latest_percentage}, ${newTask.task_file}, ${newTask.additional_link}, ${newTask.created_by}, ${newTask.created_at},
         ${newTask.updated_by}, ${newTask.updated_at}, ${newTask.deleted_by}, ${newTask.deleted_at}
       )
     `;
@@ -581,7 +591,7 @@ export const TaskRepository = {
 
   async update(
     taskId: string,
-    updates: Partial<Pick<Task, 'task_description' | 'task_status' | 'task_latest_percentage'>>,
+    updates: Partial<Pick<Task, 'project_id' | 'task_description' | 'task_status' | 'task_latest_percentage' | 'task_file' | 'additional_link'>>,
     updatedBy: string
   ): Promise<Task | null> {
     const existing = await TaskRepository.findById(taskId);
@@ -597,9 +607,12 @@ export const TaskRepository = {
 
     await sql`
       UPDATE tasks SET
+        project_id = ${updated.project_id},
         task_description = ${updated.task_description},
         task_status = ${updated.task_status},
         task_latest_percentage = ${updated.task_latest_percentage},
+        task_file = ${updated.task_file},
+        additional_link = ${updated.additional_link},
         updated_by = ${updated.updated_by},
         updated_at = ${updated.updated_at}
       WHERE id = ${taskId}
@@ -631,9 +644,11 @@ export const TaskRepository = {
     }
 
     // Auto-update parent project status after task change
-    const projectId = existing.project_id;
-    if (projectId) {
-      await TaskRepository._syncProjectStatus(projectId, updatedBy);
+    if (existing.project_id) {
+      await TaskRepository._syncProjectStatus(existing.project_id, updatedBy);
+    }
+    if (updated.project_id && updated.project_id !== existing.project_id) {
+      await TaskRepository._syncProjectStatus(updated.project_id, updatedBy);
     }
 
     revalidateTag('tasks');
@@ -931,7 +946,7 @@ export const DailyReportRepository = {
 
   async update(
     reportId: string,
-    updates: Partial<Pick<DailyReport, 'date' | 'progress_percentage' | 'total_hours' | 'remarks'>>,
+    updates: Partial<Pick<DailyReport, 'task_id' | 'date' | 'progress_percentage' | 'total_hours' | 'remarks'>>,
     updatedBy: string
   ): Promise<DailyReport | null> {
     const existing = await DailyReportRepository.findById(reportId);
@@ -944,6 +959,7 @@ export const DailyReportRepository = {
 
     await sql`
       UPDATE daily_reports SET
+        task_id = ${updated.task_id},
         date = ${updated.date},
         progress_percentage = ${updated.progress_percentage},
         total_hours = ${updated.total_hours},
@@ -954,6 +970,9 @@ export const DailyReportRepository = {
     // Auto-update task progress and status
     if (existing.task_id) {
       await DailyReportRepository._syncTaskFromLatestReport(existing.task_id, updatedBy);
+    }
+    if (updated.task_id && updated.task_id !== existing.task_id) {
+      await DailyReportRepository._syncTaskFromLatestReport(updated.task_id, updatedBy);
     }
 
     revalidateTag('reports');
@@ -1622,5 +1641,130 @@ export const FileRepository = {
 
     revalidateTag('files');
     return true;
+  },
+};
+
+// ============ COMMENT REPOSITORY ============
+
+export const CommentRepository = {
+  async findById(id: string): Promise<Comment | null> {
+    const rows = await sql`SELECT * FROM comments WHERE id = ${id}`;
+    if (rows.length === 0) return null;
+    return rows[0] as unknown as Comment;
+  },
+
+  async findByProjectId(projectId: string): Promise<Comment[]> {
+    const rows = await sql`SELECT * FROM comments WHERE project_id = ${projectId} ORDER BY created_at ASC`;
+    return rows as unknown as Comment[];
+  },
+
+  async findByTaskId(taskId: string): Promise<Comment[]> {
+    const rows = await sql`SELECT * FROM comments WHERE task_id = ${taskId} ORDER BY created_at ASC`;
+    return rows as unknown as Comment[];
+  },
+
+  async create(
+    comment: {
+      project_id: string | null;
+      task_id: string | null;
+      parent_id: string | null;
+      content: string;
+    },
+    createdBy: string
+  ): Promise<Comment> {
+    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM comments`;
+    const nextId = 'c-' + String((res[0].max_val || 0) + 1).padStart(3, '0');
+    const now = new Date().toISOString();
+
+    const newComment: Comment = {
+      id: nextId,
+      project_id: comment.project_id,
+      task_id: comment.task_id,
+      parent_id: comment.parent_id ?? null,
+      content: comment.content,
+      created_by: createdBy,
+      created_at: now,
+    };
+
+    await sql`
+      INSERT INTO comments (
+        id, project_id, task_id, parent_id, content, created_by, created_at
+      ) VALUES (
+        ${newComment.id}, ${newComment.project_id}, ${newComment.task_id}, ${newComment.parent_id}, ${newComment.content},
+        ${newComment.created_by}, ${newComment.created_at}
+      )
+    `;
+
+    return newComment;
+  },
+};
+
+// ============ NOTIFICATION REPOSITORY ============
+
+export const NotificationRepository = {
+  async findByUserId(userId: string): Promise<Notification[]> {
+    const rows = await sql`SELECT * FROM notifications WHERE user_id = ${userId} ORDER BY created_at DESC`;
+    return rows as unknown as Notification[];
+  },
+
+  async findPaginated(userId: string, limit: number, offset: number): Promise<Notification[]> {
+    const rows = await sql`
+      SELECT * FROM notifications 
+      WHERE user_id = ${userId} 
+      ORDER BY created_at DESC 
+      LIMIT ${limit} OFFSET ${offset}
+    `;
+    return rows as unknown as Notification[];
+  },
+
+  async findUnreadCount(userId: string): Promise<number> {
+    const res = await sql`SELECT COUNT(*)::int as count FROM notifications WHERE user_id = ${userId} AND is_read = false`;
+    return res[0].count || 0;
+  },
+
+  async markAsRead(id: string, userId: string): Promise<boolean> {
+    await sql`UPDATE notifications SET is_read = true WHERE id = ${id} AND user_id = ${userId}`;
+    return true;
+  },
+
+  async markAllAsRead(userId: string): Promise<boolean> {
+    await sql`UPDATE notifications SET is_read = true WHERE user_id = ${userId}`;
+    return true;
+  },
+
+  async create(
+    notification: {
+      user_id: string;
+      type: string;
+      title: string;
+      content: string;
+      link: string;
+    }
+  ): Promise<Notification> {
+    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM notifications`;
+    const nextId = 'n-' + String((res[0].max_val || 0) + 1).padStart(3, '0');
+    const now = new Date().toISOString();
+
+    const newNotification: Notification = {
+      id: nextId,
+      user_id: notification.user_id,
+      type: notification.type,
+      title: notification.title,
+      content: notification.content,
+      link: notification.link,
+      is_read: false,
+      created_at: now,
+    };
+
+    await sql`
+      INSERT INTO notifications (
+        id, user_id, type, title, content, link, is_read, created_at
+      ) VALUES (
+        ${newNotification.id}, ${newNotification.user_id}, ${newNotification.type}, ${newNotification.title},
+        ${newNotification.content}, ${newNotification.link}, ${newNotification.is_read}, ${newNotification.created_at}
+      )
+    `;
+
+    return newNotification;
   },
 };

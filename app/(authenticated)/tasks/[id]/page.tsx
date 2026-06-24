@@ -6,9 +6,11 @@ import {
   DailyReportRepository,
   StatusRepository,
   TaskTeamRepository,
+  ProjectTeamRepository,
   UserRepository,
   TaskLogRepository,
 } from "@/lib/repositories"
+import type { DailyReport, ProjectTeam } from "@/lib/types"
 import { TaskDetailClient } from "./task-detail-client"
 
 export default async function TaskDetailPage({
@@ -29,26 +31,32 @@ export default async function TaskDetailPage({
 
   if (!task) redirect("/tasks")
 
-  const [project, reports] = await Promise.all([
+  const [project, reports, projectTeam] = await Promise.all([
     ProjectRepository.findById(task.project_id),
     DailyReportRepository.findByTaskId(id),
+    ProjectTeamRepository.findByProjectId(task.project_id),
   ])
 
   // Get task team members
   const taskTeam = await TaskTeamRepository.findByTaskId(id)
-  const teamMembers = taskTeam
-    .map((tt) => {
-      const user = allUsers.find((u) => u.user_id === tt.user_id)
-      return user ? {
-        user_id: user.user_id,
-        user_name: user.user_name || user.user_email,
-        user_email: user.user_email,
-        user_occupation: user.user_occupation,
-      } : null
-    })
-    .filter((m): m is NonNullable<typeof m> => m !== null)
+  const teamMembers = Array.from(
+    new Map(
+      taskTeam
+        .map((tt) => {
+          const user = allUsers.find((u) => u.user_id === tt.user_id)
+          return user ? {
+            user_id: user.user_id,
+            user_name: user.user_name || user.user_email,
+            user_email: user.user_email,
+            user_occupation: user.user_occupation,
+          } : null
+        })
+        .filter((m): m is NonNullable<typeof m> => m !== null)
+        .map((m) => [m.user_id, m])
+    ).values()
+  )
 
-  const sortedReports = reports.sort((a, b) =>
+  const sortedReports = reports.sort((a: DailyReport, b: DailyReport) =>
     (b.date ?? "").localeCompare(a.date ?? "")
   )
 
@@ -87,6 +95,8 @@ export default async function TaskDetailPage({
       userMap={userMap}
       teamMembers={teamMembers}
       taskLogs={enrichedTaskLogs}
+      currentUserId={session.user_id}
+      projectTeamUserIds={projectTeam.map((pt: ProjectTeam) => pt.user_id)}
       allUsers={allUsers.map((u) => ({
         user_id: u.user_id,
         user_name: u.user_name || u.user_email,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
-import { ProjectTeamRepository } from '@/lib/repositories';
+import { ProjectTeamRepository, ProjectRepository, NotificationRepository } from '@/lib/repositories';
 
 export async function POST(
   request: NextRequest,
@@ -13,20 +13,55 @@ export async function POST(
 
   const { id: projectId } = await params;
   const body = await request.json();
-  const { user_id } = body;
+  const { user_id, user_ids } = body;
 
-  if (!user_id) {
-    return NextResponse.json({ error: 'Missing user_id' }, { status: 400 });
+  if (!user_id && (!user_ids || !Array.isArray(user_ids))) {
+    return NextResponse.json({ error: 'Missing user_id or user_ids' }, { status: 400 });
   }
 
   try {
-    // Check if already exists
     const existing = await ProjectTeamRepository.findByProjectId(projectId);
+    const project = await ProjectRepository.findById(projectId);
+    const senderName = session.name || session.email || 'Someone';
+
+    if (user_ids && Array.isArray(user_ids)) {
+      const existingIds = new Set(existing.map((pt) => pt.user_id));
+      const addedMembers = [];
+      for (const uid of user_ids) {
+        if (existingIds.has(uid)) continue;
+        const result = await ProjectTeamRepository.create(projectId, uid, session.user_id);
+        addedMembers.push(result);
+
+        if (uid !== session.user_id && project) {
+          await NotificationRepository.create({
+            user_id: uid,
+            type: 'project_team_added',
+            title: 'Assigned to Project',
+            content: `${senderName} added you to the project: ${project.project_name}`,
+            link: `/projects/${projectId}`
+          });
+        }
+      }
+      return NextResponse.json(addedMembers, { status: 201 });
+    }
+
+    // Check if already exists (single user fallback)
     if (existing.some((pt) => pt.user_id === user_id)) {
       return NextResponse.json({ error: 'User already in team' }, { status: 409 });
     }
 
     const result = await ProjectTeamRepository.create(projectId, user_id, session.user_id);
+
+    if (user_id !== session.user_id && project) {
+      await NotificationRepository.create({
+        user_id,
+        type: 'project_team_added',
+        title: 'Assigned to Project',
+        content: `${senderName} added you to the project: ${project.project_name}`,
+        link: `/projects/${projectId}`
+      });
+    }
+
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
     console.error('Failed to add team member:', error);

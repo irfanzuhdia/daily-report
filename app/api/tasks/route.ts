@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
-import { TaskRepository, TaskTeamRepository } from '@/lib/repositories'
+import { TaskRepository, TaskTeamRepository, NotificationRepository } from '@/lib/repositories'
 
 export async function GET() {
   try {
@@ -31,8 +31,20 @@ export async function POST(request: NextRequest) {
 
     // Create TaskTeam entries
     if (task_user_ids && Array.isArray(task_user_ids)) {
+      const senderName = session.name || session.email || 'Someone'
+      const desc = task.task_description || ''
+      const truncatedDesc = desc.length > 60 ? desc.substring(0, 60) + '...' : desc
       for (const userId of task_user_ids) {
         await TaskTeamRepository.create(task.id, userId, session.user_id)
+        if (userId !== session.user_id) {
+          await NotificationRepository.create({
+            user_id: userId,
+            type: 'task_created',
+            title: 'Assigned to Task',
+            content: `${senderName} assigned you to the task: "${truncatedDesc}"`,
+            link: `/tasks/${task.id}`
+          })
+        }
       }
     }
 

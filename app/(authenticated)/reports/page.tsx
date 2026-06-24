@@ -96,6 +96,7 @@ export default async function ReportsPage({
       currentSearch={params.search}
       currentCreatedBy={params.created_by}
       viewMode={viewMode}
+      currentUserId={userId}
     />
   )
 }

@@ -35,11 +35,17 @@ export async function PUT(
     }
 
     const { id } = await params
-    const body = await request.json()
-    const report = await DailyReportRepository.update(id, body, session.user_id)
-    if (!report) {
+    const existing = await DailyReportRepository.findById(id)
+    if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
+
+    if (existing.user_id !== session.user_id && existing.created_by !== session.user_id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const body = await request.json()
+    const report = await DailyReportRepository.update(id, body, session.user_id)
     return NextResponse.json(report)
   } catch (error) {
     console.error('PUT /api/reports/[id] error:', error)
@@ -58,13 +64,20 @@ export async function DELETE(
     }
 
     const { id } = await params
-    const success = await DailyReportRepository.softDelete(id, session.user_id)
-    if (!success) {
+    const existing = await DailyReportRepository.findById(id)
+    if (!existing) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
+
+    if (existing.user_id !== session.user_id && existing.created_by !== session.user_id) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    await DailyReportRepository.softDelete(id, session.user_id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('DELETE /api/reports/[id] error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
+

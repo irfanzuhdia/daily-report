@@ -35,17 +35,22 @@ export default async function ProjectDetailPage({
 
   // Get project team members
   const projectTeam = await ProjectTeamRepository.findByProjectId(id)
-  const teamMembers = projectTeam
-    .map((pt) => {
-      const user = allUsers.find((u) => u.user_id === pt.user_id)
-      return user ? {
-        user_id: user.user_id,
-        user_name: user.user_name || user.user_email,
-        user_email: user.user_email,
-        user_occupation: user.user_occupation,
-      } : null
-    })
-    .filter((m): m is NonNullable<typeof m> => m !== null)
+  const teamMembers = Array.from(
+    new Map(
+      projectTeam
+        .map((pt) => {
+          const user = allUsers.find((u) => u.user_id === pt.user_id)
+          return user ? {
+            user_id: user.user_id,
+            user_name: user.user_name || user.user_email,
+            user_email: user.user_email,
+            user_occupation: user.user_occupation,
+          } : null
+        })
+        .filter((m): m is NonNullable<typeof m> => m !== null)
+        .map((m) => [m.user_id, m])
+    ).values()
+  )
 
   const taskReports: Record<string, number> = {}
   const taskHours: Record<string, number> = {}
@@ -117,6 +122,7 @@ export default async function ProjectDetailPage({
       updatedByName={updatedByName}
       teamMembers={teamMembers}
       projectLogs={enrichedProjectLogs}
+      currentUserId={session.user_id}
       allUsers={allUsers.map((u) => ({
         user_id: u.user_id,
         user_name: u.user_name || u.user_email,

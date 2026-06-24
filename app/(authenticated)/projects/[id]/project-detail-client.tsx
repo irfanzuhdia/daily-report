@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Plus, ListTodo, Pencil, FileDown, Users, UserPlus, X, History, Loader2 } from "lucide-react"
+import { ArrowLeft, Plus, ListTodo, Pencil, FileDown, Users, X, History, Loader2, ExternalLink } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -17,8 +17,9 @@ import {
 import type { Project, Task, Status, EnrichedProjectLog } from "@/lib/types"
 import { formatDate, formatDateTime } from "@/lib/format"
 import { revalidatePathsAndTags } from "@/app/actions"
-import { Input } from "@/components/ui/input"
 import { FileSection } from "@/components/file-section"
+import { CommentsSection } from "@/components/comments-section"
+import { SearchableUserSelect } from "@/components/ui/searchable-user-select"
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
   NS: "secondary",
@@ -44,6 +45,7 @@ export function ProjectDetailClient({
   teamMembers: initialTeamMembers,
   projectLogs,
   allUsers,
+  currentUserId,
 }: {
   project: Project
   tasks: Task[]
@@ -59,57 +61,53 @@ export function ProjectDetailClient({
   teamMembers: { user_id: string; user_name: string; user_email: string; user_occupation: string | null }[]
   projectLogs: EnrichedProjectLog[]
   allUsers: { user_id: string; user_name: string; user_email: string; user_occupation: string | null }[]
+  currentUserId: string
 }) {
   const router = useRouter()
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers)
-  const [showAddMember, setShowAddMember] = useState(false)
+  const [selectedNewUserIds, setSelectedNewUserIds] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
-  const [searchQuery, setSearchQuery] = useState("")
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [currentStatus, setCurrentStatus] = useState(autoProjectStatus)
+
+  const isProjectCreator = project.created_by === currentUserId
+  const isProjectTeamMember = teamMembers.some((m) => m.user_id === currentUserId)
+  const hasEditPermission = isProjectCreator || isProjectTeamMember
 
   const availableUsers = allUsers.filter(
     (u) => !teamMembers.some((m) => m.user_id === u.user_id)
   )
 
-  const filteredAvailableUsers = availableUsers.filter((u) => {
-    const name = (u.user_name || "").toLowerCase()
-    const email = (u.user_email || "").toLowerCase()
-    const query = searchQuery.toLowerCase()
-    return name.includes(query) || email.includes(query)
-  })
-
-  const handleAddMember = async (userId: string) => {
+  const handleSaveNewMembers = async () => {
+    if (selectedNewUserIds.length === 0) return
     setAdding(true)
     try {
       const res = await fetch(`/api/projects/${project.project_id}/team`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ user_id: userId }),
+        body: JSON.stringify({ user_ids: selectedNewUserIds }),
       })
       if (res.ok) {
-        const user = allUsers.find((u) => u.user_id === userId)
-        if (user) {
-          setTeamMembers([
-            ...teamMembers,
-            {
-              user_id: user.user_id,
-              user_name: user.user_name || user.user_email,
-              user_email: user.user_email,
-              user_occupation: user.user_occupation,
-            },
-          ])
-        }
+        const newMembers = selectedNewUserIds.map((uid) => {
+          const user = allUsers.find((u) => u.user_id === uid)
+          return {
+            user_id: uid,
+            user_name: user?.user_name || user?.user_email || uid,
+            user_email: user?.user_email || '',
+            user_occupation: user?.user_occupation || null,
+          }
+        })
+        setTeamMembers([...teamMembers, ...newMembers])
         await revalidatePathsAndTags(
           [`/projects/${project.project_id}`],
           ['project_team', 'project_log']
         )
         router.refresh()
-        setShowAddMember(false)
+        setSelectedNewUserIds([])
       }
     } catch (error) {
-      console.error("Failed to add team member:", error)
+      console.error("Failed to add team members:", error)
     } finally {
       setAdding(false)
     }
@@ -186,30 +184,38 @@ export function ProjectDetailClient({
                       <Loader2 className="h-4 w-4 animate-spin text-primary" />
                     </div>
                   )}
-                  <Select value={currentStatus} onValueChange={handleStatusChange}>
-                    <SelectTrigger className="h-7 text-xs w-[130px] px-2 py-0">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {statuses.map((s) => (
-                        <SelectItem key={s.id} value={s.id} className="text-xs">
-                          {s.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                  {!hasEditPermission ? (
+                    <Badge variant={statusVariant[currentStatus] || "default"}>
+                      {statuses.find((s) => s.id === currentStatus)?.name || currentStatus}
+                    </Badge>
+                  ) : (
+                    <Select value={currentStatus} onValueChange={handleStatusChange}>
+                      <SelectTrigger className="h-7 text-xs w-[130px] px-2 py-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statuses.map((s) => (
+                          <SelectItem key={s.id} value={s.id} className="text-xs">
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
                 </div>
               </div>
               <p className="text-muted-foreground">
                 {project.project_description || "No description"}
               </p>
             </div>
-            <Link href={`/projects/${project.project_id}/edit`}>
-              <Button variant="outline" size="sm">
-                <Pencil className="mr-2 h-4 w-4" />
-                Edit
-              </Button>
-            </Link>
+            {hasEditPermission && (
+              <Link href={`/projects/${project.project_id}/edit`}>
+                <Button variant="outline" size="sm">
+                  <Pencil className="mr-2 h-4 w-4" />
+                  Edit
+                </Button>
+              </Link>
+            )}
           </div>
         </CardHeader>
         <CardContent>
@@ -279,83 +285,72 @@ export function ProjectDetailClient({
               </a>
             </div>
           )}
+
+          {project.additional_link && (
+            <div className="mt-4 border-t pt-4">
+              <p className="mb-2 text-xs font-medium text-muted-foreground">Additional Link</p>
+              <a
+                href={
+                  /^https?:\/\//i.test(project.additional_link)
+                    ? project.additional_link
+                    : `https://${project.additional_link}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm hover:bg-muted transition-colors text-primary font-medium"
+              >
+                <ExternalLink className="h-4 w-4" />
+                <span>{project.additional_link}</span>
+              </a>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* Project Team */}
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-center justify-between pb-4 border-b">
           <CardTitle className="flex items-center gap-2">
-            <Users className="h-4 w-4" />
+            <Users className="h-4 w-4 text-primary" />
             Project Team
             <Badge variant="secondary">{teamMembers.length}</Badge>
           </CardTitle>
-          <div className="flex items-center gap-2">
-            {showAddMember ? (
-              <Button type="button" variant="ghost" size="sm" onClick={() => setShowAddMember(false)} disabled={adding || removingId !== null}>
-                <X className="h-3.5 w-3.5" />
-              </Button>
-            ) : (
-              <Button type="button" variant="outline" size="sm" onClick={() => setShowAddMember(true)} disabled={availableUsers.length === 0 || adding || removingId !== null}>
-                <UserPlus className="mr-1.5 h-3.5 w-3.5" />
-                Add
-              </Button>
-            )}
-          </div>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-4 pt-4">
           {/* Add member picker */}
-          {showAddMember && availableUsers.length > 0 && (
-            <div className="space-y-3 p-3 rounded-xl border bg-muted/30">
-              {adding ? (
-                <div className="flex items-center gap-2 py-1 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  <span>Adding team member...</span>
-                </div>
-              ) : (
-                <>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="Search users..."
-                      value={searchQuery}
-                      onChange={(e) => setSearchQuery(e.target.value)}
-                      className="h-8 text-xs"
-                      autoFocus
-                    />
-                    {searchQuery && (
-                      <Button variant="ghost" size="xs" onClick={() => setSearchQuery("")}>
-                        Clear
-                      </Button>
+          {hasEditPermission && availableUsers.length > 0 && (
+            <div className="space-y-3 p-3 rounded-xl border bg-muted/20">
+              <SearchableUserSelect
+                allUsers={availableUsers}
+                selectedUserIds={selectedNewUserIds}
+                onAddUser={(uid) => setSelectedNewUserIds([...selectedNewUserIds, uid])}
+                onRemoveUser={(uid) => setSelectedNewUserIds(selectedNewUserIds.filter(id => id !== uid))}
+                placeholder="Assign project team members..."
+              />
+              {selectedNewUserIds.length > 0 && (
+                <div className="flex justify-end gap-2 pt-2 border-t border-muted animate-in fade-in duration-200">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="xs"
+                    onClick={() => setSelectedNewUserIds([])}
+                    disabled={adding}
+                  >
+                    Cancel
+                  </Button>
+                  <Button
+                    type="button"
+                    size="xs"
+                    onClick={handleSaveNewMembers}
+                    disabled={adding}
+                  >
+                    {adding ? (
+                      <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      "Save Team"
                     )}
-                  </div>
-                  {filteredAvailableUsers.length === 0 ? (
-                    <p className="text-xs text-muted-foreground p-1">No users found matching &quot;{searchQuery}&quot;</p>
-                  ) : (
-                    <div className="max-h-48 overflow-y-auto space-y-1 pr-1">
-                      {filteredAvailableUsers.map((u) => (
-                        <button
-                          key={u.user_id}
-                          type="button"
-                          onClick={() => {
-                            handleAddMember(u.user_id)
-                            setSearchQuery("")
-                          }}
-                          className="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-xs hover:bg-accent transition-colors"
-                        >
-                          <div>
-                            <p className="font-medium">{u.user_name || u.user_email}</p>
-                            <p className="text-[10px] text-muted-foreground">{u.user_email}</p>
-                          </div>
-                          {u.user_occupation && (
-                            <Badge variant="outline" className="text-[9px] py-0 px-1 border-muted-foreground/30">
-                              {u.user_occupation}
-                            </Badge>
-                          )}
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </>
+                  </Button>
+                </div>
               )}
             </div>
           )}
@@ -380,18 +375,20 @@ export function ProjectDetailClient({
                     )}
                   </div>
                   {removingId === member.user_id ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveMember(member.user_id)}
-                      className="rounded-full p-1 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-                      title="Remove from team"
-                      disabled={removingId !== null || adding}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  )}
+                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+                   ) : (
+                     hasEditPermission && (
+                       <button
+                         type="button"
+                         onClick={() => handleRemoveMember(member.user_id)}
+                         className="rounded-full p-1 hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                         title="Remove from team"
+                         disabled={removingId !== null || adding}
+                       >
+                         <X className="h-3.5 w-3.5" />
+                       </button>
+                     )
+                   )}
                 </div>
               ))}
             </div>
@@ -402,12 +399,14 @@ export function ProjectDetailClient({
       {/* Tasks */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Tasks</h2>
-        <Link href={`/tasks/new?project_id=${project.project_id}`}>
-          <Button size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            New Task
-          </Button>
-        </Link>
+        {hasEditPermission && (
+          <Link href={`/tasks/new?project_id=${project.project_id}`}>
+            <Button size="sm">
+              <Plus className="mr-2 h-4 w-4" />
+              New Task
+            </Button>
+          </Link>
+        )}
       </div>
 
       {tasks.length === 0 ? (
@@ -415,12 +414,14 @@ export function ProjectDetailClient({
           <CardContent className="flex flex-col items-center justify-center py-12">
             <ListTodo className="mb-4 h-12 w-12 text-muted-foreground/50" />
             <p className="text-muted-foreground">No tasks yet</p>
-            <Link href={`/tasks/new?project_id=${project.project_id}`} className="mt-4">
-              <Button variant="outline" size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Create first task
-              </Button>
-            </Link>
+            {hasEditPermission && (
+              <Link href={`/tasks/new?project_id=${project.project_id}`} className="mt-4">
+                <Button variant="outline" size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create first task
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -456,6 +457,9 @@ export function ProjectDetailClient({
 
       {/* Files Attachments */}
       <FileSection projectId={project.project_id} />
+
+      {/* Comments Section */}
+      <CommentsSection projectId={project.project_id} allUsers={allUsers} />
 
       {/* Project Activity Log */}
       <Card>

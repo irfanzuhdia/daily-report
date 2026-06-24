@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { getSession } from "@/lib/session"
-import { DailyReportRepository, TaskRepository } from "@/lib/repositories"
+import { DailyReportRepository, TaskRepository, ProjectRepository } from "@/lib/repositories"
 import { ReportForm } from "../../report-form"
 
 export default async function EditReportPage({
@@ -12,14 +12,15 @@ export default async function EditReportPage({
   if (!session) redirect("/login")
 
   const { id } = await params
-  const [report, tasks] = await Promise.all([
+  const [report, tasks, projects] = await Promise.all([
     DailyReportRepository.findById(id),
     TaskRepository.findAll(),
+    ProjectRepository.findAll(),
   ])
 
   if (!report) redirect("/reports")
 
   return (
-    <ReportForm report={report} tasks={tasks} />
+    <ReportForm report={report} tasks={tasks} projects={projects} currentUserId={session.user_id} />
   )
 }

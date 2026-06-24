@@ -23,6 +23,7 @@ export interface Project {
   project_end_date_plan: string | null;
   project_status: string | null;
   project_file: string | null;
+  additional_link: string | null;
   created_by: string | null;
   created_at: string | null;
   updated_by: string | null;
@@ -49,6 +50,8 @@ export interface Task {
   task_description: string | null;
   task_status: string | null;
   task_latest_percentage: string | null;
+  task_file: string | null;
+  additional_link: string | null;
   created_by: string | null;
   created_at: string | null;
   updated_by: string | null;
@@ -56,6 +59,7 @@ export interface Task {
   deleted_by: string | null;
   deleted_at: string | null;
 }
+
 
 export interface TaskTeam {
   id: string;
@@ -161,5 +165,26 @@ export interface FileRecord {
   updated_at: string | null;
   deleted_by: string | null;
   deleted_at: string | null;
+}
+
+export interface Comment {
+  id: string;
+  project_id: string | null;
+  task_id: string | null;
+  parent_id: string | null;
+  content: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface Notification {
+  id: string;
+  user_id: string;
+  type: string;
+  title: string;
+  content: string;
+  link: string;
+  is_read: boolean;
+  created_at: string;
 }
 

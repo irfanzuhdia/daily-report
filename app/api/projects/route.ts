@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
-import { ProjectRepository, ProjectTeamRepository } from '@/lib/repositories'
+import { ProjectRepository, ProjectTeamRepository, NotificationRepository } from '@/lib/repositories'
 
 export async function GET() {
   try {
@@ -31,8 +31,18 @@ export async function POST(request: NextRequest) {
 
     // Create ProjectTeam entries
     if (team_user_ids && Array.isArray(team_user_ids)) {
+      const senderName = session.name || session.email || 'Someone'
       for (const userId of team_user_ids) {
         await ProjectTeamRepository.create(project.project_id, userId, session.user_id)
+        if (userId !== session.user_id) {
+          await NotificationRepository.create({
+            user_id: userId,
+            type: 'project_created',
+            title: 'Assigned to Project',
+            content: `${senderName} added you to the project: ${project.project_name}`,
+            link: `/projects/${project.project_id}`
+          })
+        }
       }
     }
 

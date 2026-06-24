@@ -48,6 +48,7 @@
 }
 
 :root {
+    color-scheme: light;
     --background: oklch(1 0 0);
     --foreground: oklch(0.145 0 0);
     --card: oklch(1 0 0);
@@ -83,6 +84,7 @@
 }
 
 .dark {
+    color-scheme: dark;
     --background: oklch(0.145 0 0);
     --foreground: oklch(0.985 0 0);
     --card: oklch(0.205 0 0);
@@ -126,4 +128,18 @@
   html {
     @apply font-sans;
     }
+  /* Fix height and spacing of native date inputs (especially on iOS Safari / WebKit) */
+  input[type="date"] {
+    display: inline-flex;
+    align-items: center;
+    padding-top: 0;
+    padding-bottom: 0;
+    min-height: 2.25rem; /* h-9 */
+  }
+  input[type="date"]::-webkit-date-and-time-value {
+    min-height: 1.25rem;
+    height: auto;
+    margin: 0;
+    padding: 0;
+  }
 }

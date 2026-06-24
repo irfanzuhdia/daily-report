@@ -15,6 +15,7 @@ import {
   Trash2,
   User,
   Users,
+  Inbox,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -32,6 +33,7 @@ const navItems = [
   { href: "/tasks", label: "Tasks", icon: ListTodo },
   { href: "/reports", label: "Daily Reports", icon: FileText },
   { href: "/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/inbox", label: "Inbox", icon: Inbox },
   { href: "/trash", label: "Trash", icon: Trash2 },
 ]
 
@@ -48,6 +50,38 @@ export function Sidebar({
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [logoutConfirm, setLogoutConfirm] = React.useState(false)
   const { viewMode, setViewMode } = useViewMode()
+
+  const [localUnreadCount, setLocalUnreadCount] = React.useState(0)
+
+  React.useEffect(() => {
+    let active = true
+    const fetchUnreadCount = async () => {
+      try {
+        const res = await fetch("/api/notifications?count_only=true")
+        if (res.ok && active) {
+          const data = await res.json()
+          setLocalUnreadCount(data.unreadCount || 0)
+        }
+      } catch (e) {
+        console.error(e)
+      }
+    }
+
+    fetchUnreadCount()
+    
+    const handleUpdate = () => {
+      fetchUnreadCount()
+    }
+    
+    window.addEventListener("notificationsUpdated", handleUpdate)
+    const interval = setInterval(fetchUnreadCount, 10000)
+    
+    return () => {
+      active = false
+      window.removeEventListener("notificationsUpdated", handleUpdate)
+      clearInterval(interval)
+    }
+  }, [])
 
   const handleLogoutClick = () => {
     setLogoutConfirm(true)
@@ -121,20 +155,28 @@ export function Sidebar({
         <nav className="flex-1 space-y-1 p-4">
           {navItems.map((item) => {
             const active = pathname === item.href || pathname.startsWith(item.href + "/")
+            const isInbox = item.href === "/inbox"
             return (
               <Link
                 key={item.href}
                 href={item.href}
                 onClick={() => setMobileOpen(false)}
                 className={cn(
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
+                  "flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                   active
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground hover:bg-muted hover:text-foreground"
                 )}
               >
-                <item.icon className="h-4 w-4" />
-                {item.label}
+                <div className="flex items-center gap-3">
+                  <item.icon className="h-4 w-4" />
+                  {item.label}
+                </div>
+                {isInbox && localUnreadCount > 0 && (
+                  <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
+                    {localUnreadCount}
+                  </span>
+                )}
               </Link>
             )
           })}

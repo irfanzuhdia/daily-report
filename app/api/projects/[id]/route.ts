@@ -3,7 +3,24 @@ import { getSession } from '@/lib/session'
 import {
   ProjectRepository,
   ProjectTeamRepository,
+  TaskRepository,
+  DailyReportRepository,
 } from '@/lib/repositories'
+
+async function checkProjectPermission(projectId: string, userId: string) {
+  const project = await ProjectRepository.findById(projectId)
+  if (!project) return { error: 'Not found', status: 404 }
+
+  const projectTeam = await ProjectTeamRepository.findByProjectId(projectId)
+  const isProjectCreator = project.created_by === userId
+  const isProjectTeamMember = projectTeam.some((pt) => pt.user_id === userId)
+
+  if (!isProjectCreator && !isProjectTeamMember) {
+    return { error: 'Forbidden', status: 403 }
+  }
+
+  return { project }
+}
 
 export async function GET(
   _request: NextRequest,
@@ -38,11 +55,16 @@ export async function PUT(
     }
 
     const { id } = await params
+    const permission = await checkProjectPermission(id, session.user_id)
+    if (permission.error) {
+      return NextResponse.json({ error: permission.error }, { status: permission.status })
+    }
+
     const body = await request.json()
     const { team_user_ids, ...projectData } = body
 
-    const project = await ProjectRepository.update(id, projectData, session.user_id)
-    if (!project) {
+    const updatedProject = await ProjectRepository.update(id, projectData, session.user_id)
+    if (!updatedProject) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
 
@@ -67,7 +89,7 @@ export async function PUT(
       }
     }
 
-    return NextResponse.json(project)
+    return NextResponse.json(updatedProject)
   } catch (error) {
     console.error('PUT /api/projects/[id] error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
@@ -85,13 +107,28 @@ export async function DELETE(
     }
 
     const { id } = await params
-    const success = await ProjectRepository.softDelete(id, session.user_id)
-    if (!success) {
-      return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    const permission = await checkProjectPermission(id, session.user_id)
+    if (permission.error) {
+      return NextResponse.json({ error: permission.error }, { status: permission.status })
     }
+
+    // Prevent deletion if project has any task with daily reports
+    const tasks = await TaskRepository.findByProjectId(id)
+    for (const task of tasks) {
+      const reports = await DailyReportRepository.findByTaskId(task.id)
+      if (reports && reports.length > 0) {
+        return NextResponse.json(
+          { error: 'Cannot delete project because it has tasks with associated reports.' },
+          { status: 400 }
+        )
+      }
+    }
+
+    await ProjectRepository.softDelete(id, session.user_id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('DELETE /api/projects/[id] error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
+

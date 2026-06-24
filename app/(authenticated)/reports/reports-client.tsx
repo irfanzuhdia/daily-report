@@ -70,12 +70,14 @@ function SortableReportCard({
   isPinned,
   onTogglePin,
   updatingTaskId,
+  currentUserId,
 }: {
   report: EnrichedReport
   onDelete: (id: string) => void
   isPinned: boolean
   onTogglePin: (id: string) => void
   updatingTaskId: string | null
+  currentUserId?: string
 }) {
   const {
     attributes,
@@ -160,19 +162,23 @@ function SortableReportCard({
                   <Eye className="h-3 w-3" />
                 </Button>
               </Link>
-              <Link href={`/reports/${report.report_id}/edit`}>
-                <Button variant="ghost" size="icon-sm" className="h-6 w-6">
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              </Link>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="h-6 w-6"
-                onClick={() => onDelete(report.report_id)}
-              >
-                <Trash2 className="h-3 w-3 text-destructive" />
-              </Button>
+              {(report.user_id === currentUserId || report.created_by === currentUserId) && (
+                <>
+                  <Link href={`/reports/${report.report_id}/edit`}>
+                    <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="h-6 w-6"
+                    onClick={() => onDelete(report.report_id)}
+                  >
+                    <Trash2 className="h-3 w-3 text-destructive" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </CardContent>
@@ -274,6 +280,7 @@ export function ReportsClient({
   currentSearch,
   currentCreatedBy,
   viewMode,
+  currentUserId,
 }: {
   reports: EnrichedReport[]
   tasks: Task[]
@@ -282,6 +289,7 @@ export function ReportsClient({
   currentSearch?: string
   currentCreatedBy?: string
   viewMode: "my" | "team"
+  currentUserId?: string
 }) {
   const router = useRouter()
   const [search, setSearch] = useState(currentSearch ?? "")
@@ -623,26 +631,26 @@ export function ReportsClient({
         </div>
         <div className="flex items-center gap-2">
           {/* Layout Toggle */}
-          <div className="flex rounded-xl border p-1 bg-muted/20 mr-2">
+          <div className="flex rounded-xl border p-1 bg-muted/20 mr-1 sm:mr-2">
             <Button
               type="button"
               variant={layout === "kanban" ? "secondary" : "ghost"}
               size="sm"
-              className="h-8 px-3 rounded-lg text-xs"
+              className="h-8 px-2 sm:px-3 rounded-lg text-xs"
               onClick={() => setLayout("kanban")}
             >
-              <Kanban className="mr-1.5 h-3.5 w-3.5" />
-              Kanban
+              <Kanban className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Kanban</span>
             </Button>
             <Button
               type="button"
               variant={layout === "list" ? "secondary" : "ghost"}
               size="sm"
-              className="h-8 px-3 rounded-lg text-xs"
+              className="h-8 px-2 sm:px-3 rounded-lg text-xs"
               onClick={() => setLayout("list")}
             >
-              <List className="mr-1.5 h-3.5 w-3.5" />
-              List
+              <List className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">List</span>
             </Button>
           </div>
 
@@ -652,18 +660,19 @@ export function ReportsClient({
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 text-xs border-dashed"
+              className="h-8 px-2 sm:px-3 text-xs border-dashed"
               onClick={() => setShowArchive(true)}
             >
-              <Archive className="mr-1.5 h-3.5 w-3.5 text-primary" />
-              Complete &amp; Cancel ({cancelledReports.length})
+              <Archive className="h-3.5 w-3.5 text-primary sm:mr-1.5" />
+              <span className="hidden sm:inline">Complete &amp; Cancel </span>
+              <span>({cancelledReports.length})</span>
             </Button>
           )}
 
           <Link href="/reports/new">
-            <Button size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              New Report
+            <Button size="sm" className="h-8 px-2 sm:px-4 sm:h-9">
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">New Report</span>
             </Button>
           </Link>
         </div>
@@ -741,6 +750,7 @@ export function ReportsClient({
                       isPinned={pinnedIds.includes(report.report_id)}
                       onTogglePin={togglePin}
                       updatingTaskId={updatingTaskId}
+                      currentUserId={currentUserId}
                     />
                   ))}
                 </DroppableColumn>
@@ -811,18 +821,22 @@ export function ReportsClient({
                         <Eye className="h-3 w-3" />
                       </Button>
                     </Link>
-                    <Link href={`/reports/${report.report_id}/edit`}>
-                      <Button variant="ghost" size="icon-sm">
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setDeleteId(report.report_id)}
-                    >
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
+                    {(report.user_id === currentUserId || report.created_by === currentUserId) && (
+                      <>
+                        <Link href={`/reports/${report.report_id}/edit`}>
+                          <Button variant="ghost" size="icon-sm">
+                            <Pencil className="h-3 w-3" />
+                          </Button>
+                        </Link>
+                        <Button
+                          variant="ghost"
+                          size="icon-sm"
+                          onClick={() => setDeleteId(report.report_id)}
+                        >
+                          <Trash2 className="h-3 w-3 text-destructive" />
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </CardContent>
               </Card>

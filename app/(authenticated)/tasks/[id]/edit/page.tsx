@@ -37,6 +37,7 @@ export default async function EditTaskPage({
       projects={projects}
       statuses={statuses}
       defaultTeamUserIds={defaultTeamUserIds}
+      currentUserId={session.user_id}
       allUsers={allUsers.map((u) => ({
         user_id: u.user_id,
         user_name: u.user_name || u.user_email,

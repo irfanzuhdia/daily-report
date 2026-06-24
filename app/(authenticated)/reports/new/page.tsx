@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { getSession } from "@/lib/session"
-import { TaskRepository } from "@/lib/repositories"
+import { TaskRepository, ProjectRepository } from "@/lib/repositories"
 import { ReportForm } from "../report-form"
 
 export default async function NewReportPage({
@@ -12,7 +12,10 @@ export default async function NewReportPage({
   if (!session) redirect("/login")
 
   const params = await searchParams
-  const tasks = await TaskRepository.findAll()
+  const [tasks, projects] = await Promise.all([
+    TaskRepository.findAll(),
+    ProjectRepository.findAll(),
+  ])
 
   // Get the task's current progress percentage as initial value
   let defaultPercentage: string | undefined
@@ -26,8 +29,10 @@ export default async function NewReportPage({
   return (
     <ReportForm
       tasks={tasks}
+      projects={projects}
       defaultTaskId={params.task_id}
       defaultPercentage={defaultPercentage}
+      currentUserId={session.user_id}
     />
   )
 }

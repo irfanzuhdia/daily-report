@@ -645,26 +645,26 @@ export function ProjectsClient({
         </div>
         <div className="flex items-center gap-2">
           {/* Layout Toggle */}
-          <div className="flex rounded-xl border p-1 bg-muted/20 mr-2">
+          <div className="flex rounded-xl border p-1 bg-muted/20 mr-1 sm:mr-2">
             <Button
               type="button"
               variant={layout === "kanban" ? "secondary" : "ghost"}
               size="sm"
-              className="h-8 px-3 rounded-lg text-xs"
+              className="h-8 px-2 sm:px-3 rounded-lg text-xs"
               onClick={() => setLayout("kanban")}
             >
-              <Kanban className="mr-1.5 h-3.5 w-3.5" />
-              Kanban
+              <Kanban className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Kanban</span>
             </Button>
             <Button
               type="button"
               variant={layout === "list" ? "secondary" : "ghost"}
               size="sm"
-              className="h-8 px-3 rounded-lg text-xs"
+              className="h-8 px-2 sm:px-3 rounded-lg text-xs"
               onClick={() => setLayout("list")}
             >
-              <List className="mr-1.5 h-3.5 w-3.5" />
-              List
+              <List className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">List</span>
             </Button>
           </div>
 
@@ -674,18 +674,19 @@ export function ProjectsClient({
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 text-xs border-dashed"
+              className="h-8 px-2 sm:px-3 text-xs border-dashed"
               onClick={() => setShowArchive(true)}
             >
-              <Archive className="mr-1.5 h-3.5 w-3.5 text-primary" />
-              Complete &amp; Cancel ({cancelledProjects.length})
+              <Archive className="h-3.5 w-3.5 text-primary sm:mr-1.5" />
+              <span className="hidden sm:inline">Complete &amp; Cancel </span>
+              <span>({cancelledProjects.length})</span>
             </Button>
           )}
 
           <Link href="/projects/new">
-            <Button size="sm">
-              <Plus className="mr-2 h-4 w-4" />
-              New Project
+            <Button size="sm" className="h-8 px-2 sm:px-4 sm:h-9">
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">New Project</span>
             </Button>
           </Link>
         </div>

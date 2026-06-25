@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useState, useEffect, useRef, useTransition } from "react"
+import React, { useState, useEffect, useRef, useTransition, useCallback } from "react"
 import { useRouter } from "next/navigation"
 import { 
   Building, 
@@ -49,6 +49,19 @@ interface OrgTreeGraphProps {
   onEditUser?: (user: UserProfile) => void
   onImpersonateUser?: (userId: string) => void
   startTransition?: React.TransitionStartFunction
+}
+
+// Check if caller is Admin (Super User or Co-Super User)
+const isSuperUser = (occ: string | null | undefined) => {
+  if (!occ) return false
+  const o = occ.toLowerCase().replace(/\s+/g, "")
+  return o === "superuser"
+}
+
+const isCoSuperUser = (occ: string | null | undefined) => {
+  if (!occ) return false
+  const o = occ.toLowerCase().replace(/\s+/g, "")
+  return o === "cosuperuser" || o === "co-superuser"
 }
 
 export function OrgTreeGraph({
@@ -249,33 +262,20 @@ export function OrgTreeGraph({
   }
 
   // Resolve user level on the fly
-  const getUserLevel = (occ: string | null | undefined): number => {
+  const getUserLevel = useCallback((occ: string | null | undefined): number => {
     if (!occ) return 1
     const o = occ.toLowerCase().replace(/\s+/g, "")
     if (["superuser", "cosuperuser", "co-superuser"].includes(o)) return 7
     const role = roleLevels.find((r) => r.role_name.toLowerCase() === occ.toLowerCase())
     return role ? role.level : 1
-  }
-
-  // Check if caller is Admin (Super User or Co-Super User)
-  const isSuperUser = (occ: string | null | undefined) => {
-    if (!occ) return false
-    const o = occ.toLowerCase().replace(/\s+/g, "")
-    return o === "superuser"
-  }
-
-  const isCoSuperUser = (occ: string | null | undefined) => {
-    if (!occ) return false
-    const o = occ.toLowerCase().replace(/\s+/g, "")
-    return o === "cosuperuser" || o === "co-superuser"
-  }
+  }, [roleLevels])
 
   const realEmail = realUserEmail ?? currentUserEmail
   const isSuperUserCaller = realEmail === "gadmin@multidayamitra.co.id"
   const callerIsAdmin = isSuperUserCaller || isSuperUser(currentUserOccupation) || isCoSuperUser(currentUserOccupation)
 
   // Handle Drag & Drop events
-  const handleDragStart = (e: React.DragEvent, userId: string) => {
+  const handleDragStart = useCallback((e: React.DragEvent, userId: string) => {
     if (!callerIsAdmin) {
       e.preventDefault()
       return
@@ -283,24 +283,24 @@ export function OrgTreeGraph({
     setDraggedUserId(userId)
     e.dataTransfer.setData("text/plain", userId)
     e.dataTransfer.effectAllowed = "move"
-  }
+  }, [callerIsAdmin])
 
-  const handleDragEnd = () => {
+  const handleDragEnd = useCallback(() => {
     setDraggedUserId(null)
     setHoveredDropZone(null)
-  }
+  }, [])
 
-  const handleDragOver = (e: React.DragEvent, zoneId: string) => {
+  const handleDragOver = useCallback((e: React.DragEvent, zoneId: string) => {
     if (!callerIsAdmin) return
     e.preventDefault()
     setHoveredDropZone(zoneId)
-  }
+  }, [callerIsAdmin])
 
-  const handleDragLeave = () => {
+  const handleDragLeave = useCallback(() => {
     setHoveredDropZone(null)
-  }
+  }, [])
 
-  const handleDrop = async (
+  const handleDrop = useCallback(async (
     e: React.DragEvent,
     target: {
       dept: string | null
@@ -435,7 +435,7 @@ export function OrgTreeGraph({
       onUsersUpdate(originalUsers)
       triggerNotice("error", err.message || "An error occurred while moving the user.")
     }
-  }
+  }, [users, callerIsAdmin, draggedUserId, customDepts, customSites, customDivs, customTeams, customUnits, onUsersUpdate, triggerNotice, startTransition, router, isSuperUserCaller])
 
   // Handle new node creation
   const handleCreateNode = () => {

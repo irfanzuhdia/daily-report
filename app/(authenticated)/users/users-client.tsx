@@ -149,11 +149,13 @@ export function UsersClient({
   const [filterUnit, setFilterUnit] = useState<string>("all")
 
   // Helpers for cascading dropdown levelling
-  const existingDepts = Array.from(
-    new Set(users.map((u) => u.user_departement).filter(Boolean))
-  ).sort() as string[]
+  const existingDepts = useMemo(() => {
+    return Array.from(
+      new Set(users.map((u) => u.user_departement).filter(Boolean))
+    ).sort() as string[]
+  }, [users])
 
-  const getExistingSites = (dept: string | null | undefined) => {
+  const getExistingSites = useCallback((dept: string | null | undefined) => {
     if (!dept) return []
     return Array.from(
       new Set(
@@ -162,9 +164,9 @@ export function UsersClient({
           .map((u) => u.user_site)
       )
     ).sort() as string[]
-  }
+  }, [users])
 
-  const getExistingDivs = (dept: string | null | undefined, site: string | null | undefined) => {
+  const getExistingDivs = useCallback((dept: string | null | undefined, site: string | null | undefined) => {
     if (!dept || !site) return []
     return Array.from(
       new Set(
@@ -173,9 +175,9 @@ export function UsersClient({
           .map((u) => u.user_division)
       )
     ).sort() as string[]
-  }
+  }, [users])
 
-  const getExistingTeams = (dept: string | null | undefined, site: string | null | undefined, div: string | null | undefined) => {
+  const getExistingTeams = useCallback((dept: string | null | undefined, site: string | null | undefined, div: string | null | undefined) => {
     if (!dept || !site || !div) return []
     return Array.from(
       new Set(
@@ -184,9 +186,9 @@ export function UsersClient({
           .map((u) => u.user_team)
       )
     ).sort() as string[]
-  }
+  }, [users])
 
-  const getExistingUnits = (dept: string | null | undefined, site: string | null | undefined, div: string | null | undefined, team: string | null | undefined) => {
+  const getExistingUnits = useCallback((dept: string | null | undefined, site: string | null | undefined, div: string | null | undefined, team: string | null | undefined) => {
     if (!dept || !site || !div || !team) return []
     return Array.from(
       new Set(
@@ -195,7 +197,11 @@ export function UsersClient({
           .map((u) => u.user_unit)
       )
     ).sort() as string[]
-  }
+  }, [users])
+
+  const selectableRoleLevels = useMemo(() => {
+    return roleLevels.filter((r) => !["super user", "co - super user"].includes(r.role_name.toLowerCase()))
+  }, [roleLevels])
 
   // Create Role State
   const [newRoleName, setNewRoleName] = useState("")
@@ -297,29 +303,31 @@ export function UsersClient({
   }, [users, filterDept, filterSite, filterDiv, filterTeam])
 
   // Filtered users for search and dropdown filters
-  const filteredUsers = users.filter((u) => {
-    const isDeleted = !!u.deleted_at
-    if (!showInactive && isDeleted) return false
+  const filteredUsers = useMemo(() => {
+    return users.filter((u) => {
+      const isDeleted = !!u.deleted_at
+      if (!showInactive && isDeleted) return false
 
-    // Apply cascading dropdown filters
-    if (filterDept !== "all" && u.user_departement !== filterDept) return false
-    if (filterSite !== "all" && u.user_site !== filterSite) return false
-    if (filterDiv !== "all" && u.user_division !== filterDiv) return false
-    if (filterTeam !== "all" && u.user_team !== filterTeam) return false
-    if (filterUnit !== "all" && u.user_unit !== filterUnit) return false
+      // Apply cascading dropdown filters
+      if (filterDept !== "all" && u.user_departement !== filterDept) return false
+      if (filterSite !== "all" && u.user_site !== filterSite) return false
+      if (filterDiv !== "all" && u.user_division !== filterDiv) return false
+      if (filterTeam !== "all" && u.user_team !== filterTeam) return false
+      if (filterUnit !== "all" && u.user_unit !== filterUnit) return false
 
-    const q = searchQuery.toLowerCase()
-    return (
-      (u.user_name || "").toLowerCase().includes(q) ||
-      u.user_email.toLowerCase().includes(q) ||
-      (u.user_occupation || "").toLowerCase().includes(q) ||
-      (u.user_departement || "").toLowerCase().includes(q) ||
-      (u.user_division || "").toLowerCase().includes(q) ||
-      (u.user_site || "").toLowerCase().includes(q) ||
-      (u.user_team || "").toLowerCase().includes(q) ||
-      (u.user_unit || "").toLowerCase().includes(q)
-    )
-  })
+      const q = searchQuery.toLowerCase()
+      return (
+        (u.user_name || "").toLowerCase().includes(q) ||
+        u.user_email.toLowerCase().includes(q) ||
+        (u.user_occupation || "").toLowerCase().includes(q) ||
+        (u.user_departement || "").toLowerCase().includes(q) ||
+        (u.user_division || "").toLowerCase().includes(q) ||
+        (u.user_site || "").toLowerCase().includes(q) ||
+        (u.user_team || "").toLowerCase().includes(q) ||
+        (u.user_unit || "").toLowerCase().includes(q)
+      )
+    })
+  }, [users, showInactive, filterDept, filterSite, filterDiv, filterTeam, filterUnit, searchQuery])
 
   // Open edit modal for user
   const handleEditUserClick = (user: UserProfile) => {
@@ -1599,13 +1607,11 @@ export function UsersClient({
                                 <SelectItem value="CO - Super User">CO - Super User (Level 7)</SelectItem>
                               </>
                             )}
-                            {roleLevels
-                              .filter((r) => !["super user", "co - super user"].includes(r.role_name.toLowerCase()))
-                              .map((r) => (
-                                <SelectItem key={r.role_name} value={r.role_name}>
-                                  {r.role_name} (Level {r.level})
-                                </SelectItem>
-                              ))}
+                            {selectableRoleLevels.map((r) => (
+                              <SelectItem key={r.role_name} value={r.role_name}>
+                                {r.role_name} (Level {r.level})
+                              </SelectItem>
+                            ))}
                             <SelectItem value="custom" className="font-semibold text-primary">
                               + Other (Type Custom Role...)
                             </SelectItem>
@@ -2073,13 +2079,11 @@ export function UsersClient({
                             <SelectItem value="CO - Super User">CO - Super User (Level 7)</SelectItem>
                           </>
                         )}
-                        {roleLevels
-                          .filter((r) => !["super user", "co - super user"].includes(r.role_name.toLowerCase()))
-                          .map((r) => (
-                            <SelectItem key={r.role_name} value={r.role_name}>
-                              {r.role_name} (Level {r.level})
-                            </SelectItem>
-                          ))}
+                        {selectableRoleLevels.map((r) => (
+                          <SelectItem key={r.role_name} value={r.role_name}>
+                            {r.role_name} (Level {r.level})
+                          </SelectItem>
+                        ))}
                         <SelectItem value="custom" className="font-semibold text-primary">
                           + Other (Type Custom Role...)
                         </SelectItem>

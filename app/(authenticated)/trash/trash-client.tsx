@@ -2,10 +2,18 @@
 
 import { useState } from "react"
 import Link from "next/link"
-import { ArrowLeft, RotateCcw, Trash2, FolderKanban, ListTodo, FileText, Loader2 } from "lucide-react"
+import { ArrowLeft, RotateCcw, Trash2, FolderKanban, ListTodo, FileText, Loader2, Search, Filter } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { formatDateTime } from "@/lib/format"
 
 interface TrashItem {
@@ -38,6 +46,33 @@ export function TrashClient({ items }: { items: TrashItem[] }) {
   const [restoring, setRestoring] = useState<string | null>(null)
   const [selectedItems, setSelectedItems] = useState<Record<string, TrashItem>>({})
   const [batchRestoring, setBatchRestoring] = useState(false)
+
+  // Filter state
+  const [searchQuery, setSearchQuery] = useState("")
+  const [typeFilter, setTypeFilter] = useState<"all" | "project" | "task" | "report">("all")
+  const [deletedByFilter, setDeletedByFilter] = useState("all")
+
+  // Derive unique deletedBy values from the actual data
+  const uniqueDeletedBy = Array.from(
+    new Set(items.map((i) => i.deletedBy).filter(Boolean))
+  ) as string[]
+
+  // Apply filters
+  const filteredItems = items.filter((item) => {
+    if (typeFilter !== "all" && item.type !== typeFilter) return false
+    if (deletedByFilter !== "all" && item.deletedBy !== deletedByFilter) return false
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase()
+      if (
+        !item.name.toLowerCase().includes(q) &&
+        !item.id.toLowerCase().includes(q) &&
+        !(item.deletedBy || "").toLowerCase().includes(q)
+      ) {
+        return false
+      }
+    }
+    return true
+  })
 
   const handleRestore = async (item: TrashItem) => {
     setRestoring(item.id)
@@ -88,14 +123,14 @@ export function TrashClient({ items }: { items: TrashItem[] }) {
     })
   }
 
-  const isAllSelected = items.length > 0 && Object.keys(selectedItems).length === items.length
+  const isAllSelected = filteredItems.length > 0 && Object.keys(selectedItems).length === filteredItems.length
 
   const toggleSelectAll = () => {
     if (isAllSelected) {
       setSelectedItems({})
     } else {
       const next: Record<string, TrashItem> = {}
-      for (const item of items) {
+      for (const item of filteredItems) {
         const key = `${item.type}-${item.id}`
         next[key] = item
       }
@@ -117,7 +152,7 @@ export function TrashClient({ items }: { items: TrashItem[] }) {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Trash</h1>
           <p className="text-muted-foreground">
-            {items.length} deleted item{items.length !== 1 ? "s" : ""} — review or restore
+            {filteredItems.length} of {items.length} deleted item{items.length !== 1 ? "s" : ""} — review or restore
           </p>
         </div>
       </div>
@@ -135,11 +170,55 @@ export function TrashClient({ items }: { items: TrashItem[] }) {
         </CardContent>
       </Card>
 
-      {items.length === 0 ? (
+      {/* Filter Bar */}
+      <div className="flex flex-col sm:flex-row gap-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+          <Input
+            placeholder="Search by name, ID, or deleted by..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10 h-9"
+          />
+        </div>
+        <div className="flex gap-2">
+          <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as typeof typeFilter)}>
+            <SelectTrigger className="h-9 w-[140px]">
+              <Filter className="mr-1.5 h-3.5 w-3.5 text-muted-foreground" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Types</SelectItem>
+              <SelectItem value="project">Projects</SelectItem>
+              <SelectItem value="task">Tasks</SelectItem>
+              <SelectItem value="report">Reports</SelectItem>
+            </SelectContent>
+          </Select>
+          {uniqueDeletedBy.length > 1 && (
+            <Select value={deletedByFilter} onValueChange={setDeletedByFilter}>
+              <SelectTrigger className="h-9 w-[160px]">
+                <SelectValue placeholder="Deleted by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Users</SelectItem>
+                {uniqueDeletedBy.map((name) => (
+                  <SelectItem key={name} value={name}>
+                    {name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+        </div>
+      </div>
+
+      {filteredItems.length === 0 ? (
         <Card>
           <CardContent className="flex flex-col items-center justify-center py-12">
             <Trash2 className="mb-4 h-12 w-12 text-muted-foreground/50" />
-            <p className="text-muted-foreground">Trash is empty</p>
+            <p className="text-muted-foreground">
+              {items.length === 0 ? "Trash is empty" : "No items match your filters"}
+            </p>
           </CardContent>
         </Card>
       ) : (
@@ -181,7 +260,7 @@ export function TrashClient({ items }: { items: TrashItem[] }) {
           </div>
 
           <div className="space-y-3">
-            {items.map((item) => {
+            {filteredItems.map((item) => {
               const Icon = TYPE_ICON[item.type]
               const key = `${item.type}-${item.id}`
               const isSelected = !!selectedItems[key]

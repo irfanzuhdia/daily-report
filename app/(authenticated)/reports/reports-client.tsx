@@ -42,6 +42,7 @@ import {
 } from "@/components/ui/dialog"
 import type { Task } from "@/lib/types"
 import { revalidatePathsAndTags } from "@/app/actions"
+import { useViewDensity } from "@/lib/view-density"
 
 interface EnrichedReport {
   report_id: string
@@ -71,6 +72,7 @@ function SortableReportCard({
   onTogglePin,
   updatingTaskId,
   currentUserId,
+  density,
 }: {
   report: EnrichedReport
   onDelete: (id: string) => void
@@ -78,6 +80,7 @@ function SortableReportCard({
   onTogglePin: (id: string) => void
   updatingTaskId: string | null
   currentUserId?: string
+  density?: "comfortable" | "compact"
 }) {
   const {
     attributes,
@@ -94,6 +97,8 @@ function SortableReportCard({
     opacity: isDragging ? 0.4 : 1,
   }
 
+  const isCompact = density === "compact"
+
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
       <Card className={`shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isDragging ? "ring-2 ring-primary" : ""}`}>
@@ -102,7 +107,7 @@ function SortableReportCard({
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
         )}
-        <CardContent className="p-4 space-y-3">
+        <CardContent className={isCompact ? "p-3 space-y-2" : "p-4 space-y-3"}>
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2">
               <button
@@ -113,11 +118,11 @@ function SortableReportCard({
                 <GripVertical className="h-4 w-4" />
               </button>
               <div className="flex items-center gap-1.5">
-                <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+                <Badge variant="outline" className="text-[9px] py-0 px-1">
                   {report.progress_percentage ?? 0}%
                 </Badge>
                 {report.total_hours && (
-                  <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+                  <Badge variant="secondary" className="text-[9px] py-0 px-1">
                     {report.total_hours}h
                   </Badge>
                 )}
@@ -135,8 +140,8 @@ function SortableReportCard({
             </div>
           </div>
 
-          <div className="space-y-1.5">
-            <h4 className="text-sm font-semibold text-foreground leading-snug line-clamp-3">
+          <div className={isCompact ? "space-y-1" : "space-y-1.5"}>
+            <h4 className={`font-semibold text-foreground leading-snug ${isCompact ? "text-xs line-clamp-1" : "text-sm line-clamp-3"}`}>
               {report.remarks || "No remarks"}
             </h4>
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
@@ -155,24 +160,24 @@ function SortableReportCard({
             )}
           </div>
 
-          <div className="flex items-center justify-end pt-2 border-t border-muted/50">
+          <div className={`flex items-center justify-end border-t border-muted/50 ${isCompact ? "pt-1.5" : "pt-2"}`}>
             <div className="flex items-center gap-1">
               <Link href={`/reports/${report.report_id}`}>
-                <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                <Button variant="ghost" size="icon-sm" className={isCompact ? "h-6 w-6" : "h-7 w-7"}>
                   <Eye className="h-3 w-3" />
                 </Button>
               </Link>
               {(report.user_id === currentUserId || report.created_by === currentUserId) && (
                 <>
                   <Link href={`/reports/${report.report_id}/edit`}>
-                    <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                    <Button variant="ghost" size="icon-sm" className={isCompact ? "h-6 w-6" : "h-7 w-7"}>
                       <Pencil className="h-3 w-3" />
                     </Button>
                   </Link>
                   <Button
                     variant="ghost"
                     size="icon-sm"
-                    className="h-6 w-6"
+                    className={isCompact ? "h-6 w-6" : "h-7 w-7"}
                     onClick={() => onDelete(report.report_id)}
                   >
                     <Trash2 className="h-3 w-3 text-destructive" />
@@ -281,20 +286,49 @@ export function ReportsClient({
   currentCreatedBy,
   viewMode,
   currentUserId,
+  currentDept = "",
+  currentSite = "",
+  currentDiv = "",
+  currentTeam = "",
 }: {
   reports: EnrichedReport[]
   tasks: Task[]
-  users?: { user_id: string; user_name: string | null; user_email: string }[]
+  users?: any[]
   currentTaskId?: string
   currentSearch?: string
   currentCreatedBy?: string
   viewMode: "my" | "team"
   currentUserId?: string
+  currentDept?: string
+  currentSite?: string
+  currentDiv?: string
+  currentTeam?: string
 }) {
+  const { density } = useViewDensity()
+  const currentUser = (users || []).find(u => u.user_id === currentUserId)
+  const isSuperUser = currentUser?.user_occupation?.toLowerCase() === 'super user'
+  const userLevel = currentUser?.level || 1
+
+  const isDeptDisabled = userLevel < 6
+  const isSiteDisabled = userLevel < 5
+  const isDivDisabled = userLevel < 3
+  const isTeamDisabled = userLevel < 2
+
+  const defaultDept = isDeptDisabled ? (currentUser?.user_departement || "") : ""
+  const defaultSite = isSiteDisabled ? (currentUser?.user_site || "") : ""
+  const defaultDiv = isDivDisabled ? (currentUser?.user_division || "") : ""
+  const defaultTeam = isTeamDisabled ? (currentUser?.user_team || "") : ""
+
   const router = useRouter()
   const [search, setSearch] = useState(currentSearch ?? "")
   const [taskFilter, setTaskFilter] = useState(currentTaskId ?? "")
   const [createdByFilter, setCreatedByFilter] = useState(currentCreatedBy ?? "")
+
+  const [dept, setDept] = useState(currentDept || defaultDept)
+  const [site, setSite] = useState(currentSite || defaultSite)
+  const [division, setDivision] = useState(currentDiv || defaultDiv)
+  const [team, setTeam] = useState(currentTeam || defaultTeam)
+
   const [deleteId, setDeleteId] = useState<string | null>(null)
   
   const [layout, setLayout] = useState<"kanban" | "list">("list")
@@ -343,12 +377,16 @@ export function ReportsClient({
     const params = new URLSearchParams()
     if (debouncedSearch) params.set("search", debouncedSearch)
     if (taskFilter) params.set("task_id", taskFilter)
-    if (viewMode === "team" && createdByFilter) {
-      params.set("created_by", createdByFilter)
+    if (viewMode === "team") {
+      if (createdByFilter) params.set("created_by", createdByFilter)
+      if (dept) params.set("dept_filter", dept)
+      if (site) params.set("site_filter", site)
+      if (division) params.set("div_filter", division)
+      if (team) params.set("team_filter", team)
     }
     const query = params.toString()
     router.push(`/reports${query ? "?" + query : ""}`)
-  }, [debouncedSearch, taskFilter, createdByFilter, viewMode, router])
+  }, [debouncedSearch, taskFilter, createdByFilter, viewMode, router, dept, site, division, team])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -616,6 +654,15 @@ export function ReportsClient({
 
   const activeReport = activeId ? activeReports.find(r => r.report_id === activeId) : null
 
+  const uniqueDepts = Array.from(new Set(users.map((u) => u.user_departement).filter(Boolean))) as string[]
+  const uniqueSites = Array.from(new Set(users.map((u) => u.user_site).filter(Boolean))) as string[]
+  const uniqueDivs = Array.from(new Set(users.map((u) => u.user_division).filter(Boolean))) as string[]
+  const uniqueTeams = Array.from(new Set(users.map((u) => u.user_team).filter(Boolean))) as string[]
+
+  // Only show users who have actually created a report
+  const reporterIds = new Set(reports.map((r) => r.created_by || r.user_id).filter(Boolean))
+  const uniqueReporters = users.filter((u) => reporterIds.has(u.user_id))
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -707,20 +754,82 @@ export function ReportsClient({
               </SelectContent>
             </Select>
             {viewMode === "team" && (
-              <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <Filter className="mr-2 h-4 w-4" />
-                  <SelectValue placeholder="Created by" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All reporters</SelectItem>
-                  {users.map((u) => (
-                    <SelectItem key={u.user_id} value={u.user_id}>
-                      {u.user_name || u.user_email}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <>
+                <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Created by" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All reporters</SelectItem>
+                    {uniqueReporters.map((u) => (
+                      <SelectItem key={u.user_id} value={u.user_id}>
+                        {u.user_name || u.user_email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={dept} onValueChange={setDept} disabled={isDeptDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Departments</SelectItem>
+                    {uniqueDepts.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={site} onValueChange={setSite} disabled={isSiteDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Site" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Sites</SelectItem>
+                    {uniqueSites.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={division} onValueChange={setDivision} disabled={isDivDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Division" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Divisions</SelectItem>
+                    {uniqueDivs.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={team} onValueChange={setTeam} disabled={isTeamDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Teams</SelectItem>
+                    {uniqueTeams.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </>
             )}
           </div>
         </CardContent>
@@ -751,6 +860,7 @@ export function ReportsClient({
                       onTogglePin={togglePin}
                       updatingTaskId={updatingTaskId}
                       currentUserId={currentUserId}
+                      density={density}
                     />
                   ))}
                 </DroppableColumn>
@@ -785,55 +895,51 @@ export function ReportsClient({
           <div className="space-y-3">
             {localReports.map((report) => (
               <Card key={report.report_id} className="transition-shadow hover:shadow-md">
-                <CardContent className="flex items-center justify-between p-4 gap-4">
+                <CardContent className={`flex items-center justify-between gap-3 ${density === "compact" ? "p-2.5" : "p-4"}`}>
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2 mb-1.5 flex-wrap">
-                      <Badge variant="outline" className="text-[10px] py-0 px-1.5">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
+                      <Badge variant="outline" className="text-[9px] py-0 px-1">
                         {report.progress_percentage ?? 0}%
                       </Badge>
                       {report.total_hours && (
-                        <Badge variant="secondary" className="text-[10px] py-0 px-1.5">
+                        <Badge variant="secondary" className="text-[9px] py-0 px-1">
                           {report.total_hours}h
                         </Badge>
                       )}
-                    </div>
-                    <h4 className="text-sm font-semibold text-foreground line-clamp-2 leading-snug">
-                      {report.remarks || "No remarks"}
-                    </h4>
-                    <div className="flex items-center gap-1.5 mt-1 text-[10px] text-muted-foreground">
-                      <span>{report.date}</span>
+                      <span className="text-[10px] text-muted-foreground">{report.date}</span>
                       {report.created_by_name && (
-                        <>
-                          <span>·</span>
-                          <span>{report.created_by_name}</span>
-                        </>
+                        <span className="text-[10px] text-muted-foreground">· {report.created_by_name}</span>
                       )}
                     </div>
+                    <h4 className={`font-semibold text-foreground leading-snug truncate ${density === "compact" ? "text-xs" : "text-sm"}`}>
+                      {report.remarks || "No remarks"}
+                    </h4>
                     {report.task_description && (
-                      <p className="mt-1 text-xs text-muted-foreground pt-0.5">
+                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
                         📁 {report.project_name ?? "Unknown"} → {report.task_description}
                       </p>
                     )}
                   </div>
-                  <div className="flex items-center gap-1 shrink-0">
+                  <div className="flex items-center gap-0.5 shrink-0">
                     <Link href={`/reports/${report.report_id}`}>
-                      <Button variant="ghost" size="icon-sm">
+                      <Button variant="ghost" size="icon-sm" className="h-6 w-6">
                         <Eye className="h-3 w-3" />
                       </Button>
                     </Link>
                     {(report.user_id === currentUserId || report.created_by === currentUserId) && (
                       <>
                         <Link href={`/reports/${report.report_id}/edit`}>
-                          <Button variant="ghost" size="icon-sm">
+                          <Button variant="ghost" size="icon-sm" className="h-6 w-6">
                             <Pencil className="h-3 w-3" />
                           </Button>
                         </Link>
                         <Button
                           variant="ghost"
                           size="icon-sm"
+                          className="h-6 w-6 text-destructive hover:text-destructive"
                           onClick={() => setDeleteId(report.report_id)}
                         >
-                          <Trash2 className="h-3 w-3 text-destructive" />
+                          <Trash2 className="h-3 w-3" />
                         </Button>
                       </>
                     )}

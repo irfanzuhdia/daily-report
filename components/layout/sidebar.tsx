@@ -16,6 +16,9 @@ import {
   User,
   Users,
   Inbox,
+  Sun,
+  Moon,
+  Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -26,30 +29,57 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { useViewMode } from "@/lib/view-mode"
-
-const navItems = [
-  { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/projects", label: "Projects", icon: FolderKanban },
-  { href: "/tasks", label: "Tasks", icon: ListTodo },
-  { href: "/reports", label: "Daily Reports", icon: FileText },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
-  { href: "/inbox", label: "Inbox", icon: Inbox },
-  { href: "/trash", label: "Trash", icon: Trash2 },
-]
+import { useViewDensity } from "@/lib/view-density"
+import { useTheme } from "next-themes"
 
 export function Sidebar({
   userName,
   userEmail,
+  userOccupation,
+  userLevel,
   onLogout,
+  isImpersonating = false,
+  realEmail,
 }: {
   userName: string
   userEmail: string
+  userOccupation?: string | null
+  userLevel: number
   onLogout: () => void
+  isImpersonating?: boolean
+  realEmail?: string
 }) {
+  const isRealSuperUser = realEmail === 'gadmin@multidayamitra.co.id' || (!isImpersonating && userEmail === 'gadmin@multidayamitra.co.id');
+  const normOcc = userOccupation?.toLowerCase().replace(/\s+/g, "") ?? "";
+  const isAdmin = ["superuser", "cosuperuser", "co-superuser"].includes(normOcc) || isRealSuperUser;
+  const navItems = [
+    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/projects", label: "Projects", icon: FolderKanban },
+    { href: "/tasks", label: "Tasks", icon: ListTodo },
+    { href: "/reports", label: "Daily Reports", icon: FileText },
+    { href: "/analytics", label: "Analytics", icon: BarChart3 },
+    { href: "/inbox", label: "Inbox", icon: Inbox },
+    ...(isAdmin ? [{ href: "/users", label: "Users & Roles", icon: Users }] : []),
+    { href: "/trash", label: "Trash", icon: Trash2 },
+  ]
   const pathname = usePathname()
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [logoutConfirm, setLogoutConfirm] = React.useState(false)
+  const [settingsOpen, setSettingsOpen] = React.useState(false)
   const { viewMode, setViewMode } = useViewMode()
+  const { density, setDensity } = useViewDensity()
+  const [mounted, setMounted] = React.useState(false)
+  const { resolvedTheme, setTheme } = useTheme()
+
+  React.useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  React.useEffect(() => {
+    if (userLevel === 1 && viewMode !== "my") {
+      setViewMode("my")
+    }
+  }, [userLevel, viewMode, setViewMode])
 
   const [localUnreadCount, setLocalUnreadCount] = React.useState(0)
 
@@ -123,34 +153,37 @@ export function Sidebar({
         </div>
 
         {/* View Mode Toggle */}
-        <div className="px-4 pt-4">
-          <div className="flex rounded-xl border p-1 gap-1">
-            <button
-              onClick={() => setViewMode("my")}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
-                viewMode === "my"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <User className="h-3 w-3" />
-              My View
-            </button>
-            <button
-              onClick={() => setViewMode("team")}
-              className={cn(
-                "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
-                viewMode === "team"
-                  ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground"
-              )}
-            >
-              <Users className="h-3 w-3" />
-              Team
-            </button>
+        {userLevel > 1 && (
+          <div className="px-4 pt-4">
+            <div className="flex rounded-xl border p-1 gap-1">
+              <button
+                onClick={() => setViewMode("my")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
+                  viewMode === "my"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <User className="h-3 w-3" />
+                My View
+              </button>
+              <button
+                onClick={() => setViewMode("team")}
+                className={cn(
+                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
+                  viewMode === "team"
+                    ? "bg-primary text-primary-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                )}
+              >
+                <Users className="h-3 w-3" />
+                Team
+              </button>
+            </div>
           </div>
-        </div>
+        )}
+
 
         <nav className="flex-1 space-y-1 p-4">
           {navItems.map((item) => {
@@ -169,8 +202,15 @@ export function Sidebar({
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <item.icon className="h-4 w-4" />
-                  {item.label}
+                  <item.icon className="h-4 w-4 shrink-0" />
+                  <div className="flex flex-col min-w-0">
+                    <span className="truncate">{item.label}</span>
+                    {item.href === "/users" && isImpersonating && (
+                      <span className="text-[9px] text-destructive font-normal leading-none mt-0.5 whitespace-normal">
+                        *Not available for this user
+                      </span>
+                    )}
+                  </div>
                 </div>
                 {isInbox && localUnreadCount > 0 && (
                   <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[10px] font-bold text-primary-foreground">
@@ -183,14 +223,25 @@ export function Sidebar({
         </nav>
 
         <div className="border-t p-4">
-          <div className="mb-3 flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary">
-              {userName.charAt(0).toUpperCase()}
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-3 min-w-0 flex-1">
+              <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-sm font-semibold text-primary shrink-0">
+                {userName.charAt(0).toUpperCase()}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium">{userName}</p>
+                <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
+              </div>
             </div>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-medium">{userName}</p>
-              <p className="truncate text-xs text-muted-foreground">{userEmail}</p>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className="h-8 w-8 shrink-0 text-muted-foreground hover:text-foreground rounded-lg"
+              onClick={() => setSettingsOpen(true)}
+              title="Settings"
+            >
+              <Settings className="h-4 w-4" />
+            </Button>
           </div>
           <Button
             variant="outline"
@@ -219,6 +270,94 @@ export function Sidebar({
             </Button>
             <Button variant="destructive" onClick={handleLogoutConfirm}>
               Logout
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Settings / Preferences Dialog */}
+      <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
+        <DialogContent className="sm:max-w-[360px]">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-base">
+              <Settings className="h-4 w-4 text-primary" />
+              Preferences
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-3">
+            {/* Theme setting */}
+            <div className="flex items-center justify-between">
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium">Theme Mode</p>
+                <p className="text-[10px] text-muted-foreground">Toggle dark or light theme</p>
+              </div>
+              <div className="flex rounded-xl border p-0.5 bg-muted/20">
+                <button
+                  type="button"
+                  onClick={() => setTheme("light")}
+                  className={cn(
+                    "rounded-lg p-1.5 text-[10px] font-medium transition-colors flex items-center justify-center h-7 w-9",
+                    mounted && resolvedTheme === "light"
+                      ? "bg-background text-foreground shadow-sm border"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  title="Light Mode"
+                >
+                  <Sun className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setTheme("dark")}
+                  className={cn(
+                    "rounded-lg p-1.5 text-[10px] font-medium transition-colors flex items-center justify-center h-7 w-9",
+                    mounted && resolvedTheme === "dark"
+                      ? "bg-background text-foreground shadow-sm border"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                  title="Dark Mode"
+                >
+                  <Moon className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Density setting */}
+            <div className="flex items-center justify-between border-t pt-3">
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium">Layout Density</p>
+                <p className="text-[10px] text-muted-foreground">Adjust text sizing and spacing density</p>
+              </div>
+              <div className="flex rounded-xl border p-0.5 bg-muted/20">
+                <button
+                  type="button"
+                  onClick={() => setDensity("comfortable")}
+                  className={cn(
+                    "rounded-lg px-2.5 py-1 text-[10px] font-medium transition-colors h-7 flex items-center justify-center",
+                    density === "comfortable"
+                      ? "bg-background text-foreground shadow-sm border"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Comfortable
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDensity("compact")}
+                  className={cn(
+                    "rounded-lg px-2.5 py-1 text-[10px] font-medium transition-colors h-7 flex items-center justify-center",
+                    density === "compact"
+                      ? "bg-background text-foreground shadow-sm border"
+                      : "text-muted-foreground hover:text-foreground"
+                  )}
+                >
+                  Compact
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end pt-2 border-t">
+            <Button variant="secondary" size="xs" onClick={() => setSettingsOpen(false)}>
+              Close
             </Button>
           </div>
         </DialogContent>

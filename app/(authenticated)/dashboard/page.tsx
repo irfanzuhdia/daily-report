@@ -7,6 +7,8 @@ import {
   DailyReportRepository,
   StatusRepository,
   UserRepository,
+  ProjectTeamRepository,
+  TaskTeamRepository,
   getContributionData,
   filterProjectsByUser,
   filterTasksByUser,
@@ -22,6 +24,10 @@ export default async function DashboardPage({
     created_by?: string
     start_date?: string
     end_date?: string
+    dept_filter?: string
+    site_filter?: string
+    div_filter?: string
+    team_filter?: string
   }>
 }) {
   const session = await getSession()
@@ -41,17 +47,57 @@ export default async function DashboardPage({
     UserRepository.findAll(),
   ])
 
-  // Filter by user when in "my" view
+  const currentUser = allUsers.find((u) => u.user_id === userId)
+  const userLevel = currentUser?.level || 1
+  const effectiveViewMode = userLevel === 1 ? "my" : viewMode
+
+  // Filter by user based on visibility levels
   let [projects, tasks, reports] = await Promise.all([
-    viewMode === "my" ? filterProjectsByUser(allProjects, userId) : allProjects,
-    viewMode === "my" ? filterTasksByUser(allTasks, userId) : allTasks,
-    viewMode === "my" ? filterReportsByUser(allReports, userId) : allReports,
+    filterProjectsByUser(allProjects, userId),
+    filterTasksByUser(allTasks, userId),
+    filterReportsByUser(allReports, userId),
   ])
+
+  if (effectiveViewMode === "my") {
+    const [projectTeam, taskTeam] = await Promise.all([
+      ProjectTeamRepository.findByUserId(userId),
+      TaskTeamRepository.findByUserId(userId),
+    ])
+    const myProjectIds = new Set(projectTeam.map((pt) => pt.project_id))
+    projects = projects.filter((p) => p.created_by === userId || myProjectIds.has(p.project_id))
+
+    const myTaskIds = new Set(taskTeam.map((tt) => tt.task_id))
+    tasks = tasks.filter((t) => t.created_by === userId || myTaskIds.has(t.id))
+
+    reports = reports.filter((r) => r.user_id === userId || r.created_by === userId)
+  }
+
+  // Apply enterprise filters on dashboard
+  if (params.dept_filter) {
+    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_departement === params.dept_filter)
+    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_departement === params.dept_filter)
+    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_departement === params.dept_filter)
+  }
+  if (params.site_filter) {
+    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_site === params.site_filter)
+    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_site === params.site_filter)
+    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_site === params.site_filter)
+  }
+  if (params.div_filter) {
+    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_division === params.div_filter)
+    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_division === params.div_filter)
+    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_division === params.div_filter)
+  }
+  if (params.team_filter) {
+    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_team === params.team_filter)
+    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_team === params.team_filter)
+    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_team === params.team_filter)
+  }
 
   const userMap = new Map(allUsers.map((u) => [u.user_id, u.user_name || u.user_email || u.user_id]))
 
   // Apply team view filters
-  if (viewMode === "team" && params.created_by) {
+  if (effectiveViewMode === "team" && params.created_by) {
     projects = projects.filter((p) => p.created_by === params.created_by)
     tasks = tasks.filter((t) => t.created_by === params.created_by)
     reports = reports.filter((r) => r.user_id === params.created_by || r.created_by === params.created_by)
@@ -92,7 +138,7 @@ export default async function DashboardPage({
   // Recent reports with enriched data
   const recentReports = reports
     .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
-    .slice(0, 10)
+    .slice(0, 5)
     .map((r) => {
       const task = allTasks.find((t) => t.id === r.task_id)
       const project = task
@@ -135,15 +181,26 @@ export default async function DashboardPage({
   return (
     <DashboardClient
       stats={stats}
-      viewMode={viewMode}
+      viewMode={effectiveViewMode}
       users={allUsers.map((u) => ({
         user_id: u.user_id,
         user_email: u.user_email,
         user_name: u.user_name,
+        user_occupation: u.user_occupation,
+        user_departement: u.user_departement,
+        user_division: u.user_division,
+        user_site: u.user_site,
+        user_team: u.user_team,
+        level: u.level,
       }))}
       currentCreatedBy={params.created_by}
       currentStartDate={params.start_date}
       currentEndDate={params.end_date}
+      currentDept={params.dept_filter}
+      currentSite={params.site_filter}
+      currentDiv={params.div_filter}
+      currentTeam={params.team_filter}
+      currentUserId={userId}
     />
   )
 }

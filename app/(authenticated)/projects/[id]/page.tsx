@@ -128,6 +128,11 @@ export default async function ProjectDetailPage({
         user_name: u.user_name || u.user_email,
         user_email: u.user_email,
         user_occupation: u.user_occupation,
+        user_division: u.user_division,
+        user_departement: u.user_departement,
+        user_site: u.user_site,
+        user_team: u.user_team,
+        level: u.level,
       }))}
     />
   )

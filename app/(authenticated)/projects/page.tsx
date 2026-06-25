@@ -15,7 +15,16 @@ import { ProjectsClient } from "./projects-client"
 export default async function ProjectsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ status?: string; search?: string; created_by?: string; member_id?: string }>
+  searchParams: Promise<{
+    status?: string
+    search?: string
+    created_by?: string
+    member_id?: string
+    dept_filter?: string
+    site_filter?: string
+    div_filter?: string
+    team_filter?: string
+  }>
 }) {
   const session = await getSession()
   if (!session) redirect("/login")
@@ -33,12 +42,35 @@ export default async function ProjectsPage({
     ProjectTeamRepository.findAll(),
   ])
 
-  // Filter by user when in "my" view
-  let projects = viewMode === "my"
-    ? await filterProjectsByUser(allProjects, userId)
-    : allProjects
+  const currentUser = allUsers.find((u) => u.user_id === userId)
+  const userLevel = currentUser?.level || 1
+  const effectiveViewMode = userLevel === 1 ? "my" : viewMode
+
+  // Filter by user based on visibility levels
+  let projects = await filterProjectsByUser(allProjects, userId)
+
+  if (effectiveViewMode === "my") {
+    const myProjectIds = new Set(
+      allProjectTeams.filter((pt) => pt.user_id === userId).map((pt) => pt.project_id)
+    )
+    projects = projects.filter((p) => p.created_by === userId || myProjectIds.has(p.project_id))
+  }
 
   const userMap = new Map(allUsers.map((u) => [u.user_id, (u.user_name || u.user_email || "").toLowerCase()]))
+
+  // Apply enterprise filters
+  if (params.dept_filter) {
+    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_departement === params.dept_filter)
+  }
+  if (params.site_filter) {
+    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_site === params.site_filter)
+  }
+  if (params.div_filter) {
+    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_division === params.div_filter)
+  }
+  if (params.team_filter) {
+    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_team === params.team_filter)
+  }
 
   // Apply search/status/created_by/member_id filters
   if (params.status) {
@@ -113,7 +145,13 @@ export default async function ProjectsPage({
       currentSearch={params.search}
       currentCreatedBy={params.created_by}
       currentMemberId={params.member_id}
-      viewMode={viewMode}
+      viewMode={effectiveViewMode}
+      projectTeams={allProjectTeams}
+      currentUserId={userId}
+      currentDept={params.dept_filter}
+      currentSite={params.site_filter}
+      currentDiv={params.div_filter}
+      currentTeam={params.team_filter}
     />
   )
 }

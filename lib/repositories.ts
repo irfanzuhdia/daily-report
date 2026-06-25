@@ -12,6 +12,7 @@ import type {
   FileRecord,
   Comment,
   Notification,
+  UserLog,
 } from './types';
 import { unstable_cache as nextUnstableCache, revalidateTag as nextRevalidateTag } from 'next/cache';
 
@@ -86,9 +87,18 @@ const getCachedUsers = unstable_cache(
   { tags: ['users'], revalidate: 60 }
 );
 
+const getCachedUsersIncludingDeleted = unstable_cache(
+  async (): Promise<User[]> => {
+    const rows = await sql`SELECT * FROM users`;
+    return rows as unknown as User[];
+  },
+  ['users-all-including-deleted'],
+  { tags: ['users'], revalidate: 60 }
+);
+
 const getCachedUserByEmail = unstable_cache(
   async (email: string): Promise<User | null> => {
-    const rows = await sql`SELECT * FROM users WHERE user_email = ${email} AND deleted_at IS NULL LIMIT 1`;
+    const rows = await sql`SELECT * FROM users WHERE LOWER(user_email) = LOWER(${email}) AND deleted_at IS NULL LIMIT 1`;
     return (rows[0] as unknown as User) || null;
   },
   ['user-by-email'],
@@ -106,7 +116,51 @@ const getCachedUserById = unstable_cache(
 
 export const UserRepository = {
   async findAll(): Promise<User[]> {
-    return getCachedUsers();
+    const users = await getCachedUsers();
+    const roles = await RoleLevelRepository.findAll();
+    const roleLevelMap = new Map<string, number>();
+    for (const r of roles) {
+      roleLevelMap.set(r.role_name.toLowerCase(), r.level);
+    }
+    return users.map((u) => {
+      let level = 1;
+      if (u.user_occupation) {
+        const norm = u.user_occupation.toLowerCase().replace(/\s+/g, "");
+        if (['superuser', 'cosuperuser', 'co-superuser'].includes(norm)) {
+          level = 7;
+        } else {
+          level = roleLevelMap.get(u.user_occupation.toLowerCase()) || 1;
+        }
+      }
+      return {
+        ...u,
+        level,
+      };
+    });
+  },
+
+  async findAllIncludingDeleted(): Promise<User[]> {
+    const users = await getCachedUsersIncludingDeleted();
+    const roles = await RoleLevelRepository.findAll();
+    const roleLevelMap = new Map<string, number>();
+    for (const r of roles) {
+      roleLevelMap.set(r.role_name.toLowerCase(), r.level);
+    }
+    return users.map((u) => {
+      let level = 1;
+      if (u.user_occupation) {
+        const norm = u.user_occupation.toLowerCase().replace(/\s+/g, "");
+        if (['superuser', 'cosuperuser', 'co-superuser'].includes(norm)) {
+          level = 7;
+        } else {
+          level = roleLevelMap.get(u.user_occupation.toLowerCase()) || 1;
+        }
+      }
+      return {
+        ...u,
+        level,
+      };
+    });
   },
 
   async findByEmail(email: string): Promise<User | null> {
@@ -124,6 +178,9 @@ export const UserRepository = {
       user_occupation: string | null;
       user_division: string | null;
       user_departement: string | null;
+      user_site?: string | null;
+      user_team?: string | null;
+      user_unit?: string | null;
     },
     createdBy: string
   ): Promise<User> {
@@ -138,6 +195,9 @@ export const UserRepository = {
       user_occupation: user.user_occupation,
       user_division: user.user_division,
       user_departement: user.user_departement,
+      user_site: user.user_site || null,
+      user_team: user.user_team || null,
+      user_unit: user.user_unit || null,
       created_by: createdBy,
       created_at: now,
       updated_by: null,
@@ -149,16 +209,72 @@ export const UserRepository = {
     await sql`
       INSERT INTO users (
         user_id, user_email, user_name, user_occupation, user_division, user_departement,
+        user_site, user_team, user_unit,
         created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
       ) VALUES (
         ${newUser.user_id}, ${newUser.user_email}, ${newUser.user_name}, ${newUser.user_occupation},
-        ${newUser.user_division}, ${newUser.user_departement}, ${newUser.created_by}, ${newUser.created_at},
+        ${newUser.user_division}, ${newUser.user_departement}, ${newUser.user_site}, ${newUser.user_team}, ${newUser.user_unit},
+        ${newUser.created_by}, ${newUser.created_at},
         ${newUser.updated_by}, ${newUser.updated_at}, ${newUser.deleted_by}, ${newUser.deleted_at}
       )
     `;
 
     revalidateTag('users');
     return newUser;
+  },
+
+  async updateUser(
+    userId: string,
+    data: {
+      user_name: string | null;
+      user_email?: string;
+      user_occupation: string | null;
+      user_departement: string | null;
+      user_division: string | null;
+      user_site: string | null;
+      user_team: string | null;
+      user_unit: string | null;
+      deleted_at?: string | null;
+      deleted_by?: string | null;
+    },
+    updatedBy: string
+  ): Promise<boolean> {
+    const hasDeletedAt = 'deleted_at' in data;
+    if (hasDeletedAt) {
+      await sql`
+        UPDATE users 
+        SET user_name = ${data.user_name},
+            user_email = ${data.user_email !== undefined ? data.user_email : sql`user_email`},
+            user_occupation = ${data.user_occupation},
+            user_departement = ${data.user_departement},
+            user_division = ${data.user_division},
+            user_site = ${data.user_site},
+            user_team = ${data.user_team},
+            user_unit = ${data.user_unit},
+            deleted_at = ${data.deleted_at},
+            deleted_by = ${data.deleted_by},
+            updated_at = ${new Date().toISOString()}, 
+            updated_by = ${updatedBy} 
+        WHERE user_id = ${userId}
+      `;
+    } else {
+      await sql`
+        UPDATE users 
+        SET user_name = ${data.user_name},
+            user_email = ${data.user_email !== undefined ? data.user_email : sql`user_email`},
+            user_occupation = ${data.user_occupation},
+            user_departement = ${data.user_departement},
+            user_division = ${data.user_division},
+            user_site = ${data.user_site},
+            user_team = ${data.user_team},
+            user_unit = ${data.user_unit},
+            updated_at = ${new Date().toISOString()}, 
+            updated_by = ${updatedBy} 
+        WHERE user_id = ${userId}
+      `;
+    }
+    revalidateTag('users');
+    return true;
   },
 };
 
@@ -215,7 +331,9 @@ export const ProjectRepository = {
     createdBy: string
   ): Promise<Project> {
     const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(project_id, '\\D', '', 'g'), '')::int), 0) as max_val FROM projects`;
-    const nextId = 'p-' + String((res[0].max_val || 0) + 1).padStart(3, '0');
+    const maxVal = res[0].max_val || 0;
+    const nextVal = maxVal < 260000 ? 260001 : maxVal + 1;
+    const nextId = 'P-' + String(nextVal);
     const now = new Date().toISOString();
 
     const newProject: Project = {
@@ -551,7 +669,7 @@ export const TaskRepository = {
     createdBy: string
   ): Promise<Task> {
     const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM tasks`;
-    const nextId = 't-' + String((res[0].max_val || 0) + 1).padStart(3, '0');
+    const nextId = 'T-' + String((res[0].max_val || 0) + 1).padStart(5, '0');
     const now = new Date().toISOString();
 
     const newTask: Task = {
@@ -911,7 +1029,7 @@ export const DailyReportRepository = {
     createdBy: string
   ): Promise<DailyReport> {
     const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(report_id, '\\D', '', 'g'), '')::int), 0) as max_val FROM daily_reports`;
-    const nextId = 'r-' + String((res[0].max_val || 0) + 1).padStart(3, '0');
+    const nextId = 'R-' + String((res[0].max_val || 0) + 1).padStart(4, '0');
     const now = new Date().toISOString();
 
     const newReport: DailyReport = {
@@ -1420,15 +1538,108 @@ export async function getUserTaskIds(userId: string): Promise<string[]> {
   return [...new Set(taskTeams.map((tt) => tt.task_id))];
 }
 
+function isSupervised(
+  user: User, 
+  userLevel: number, 
+  x: User, 
+  roleLevelMap: Map<string, number>
+): boolean {
+  if (x.user_id === user.user_id) return true;
+  
+  const viewerOcc = (user.user_occupation || "").toLowerCase().trim();
+  const normViewer = viewerOcc.replace(/\s+/g, "");
+
+  // Super User, Co-Super User, Direktur see everything
+  if (
+    ["superuser", "cosuperuser", "co-superuser", "direktur"].includes(normViewer) || 
+    userLevel >= 6
+  ) {
+    return true;
+  }
+
+  // Kepala Departement
+  if (viewerOcc === "kepala departement" || viewerOcc === "kepala department") {
+    return !!x.user_departement && !!user.user_departement &&
+           x.user_departement.toLowerCase().trim() === user.user_departement.toLowerCase().trim();
+  }
+
+  // Site Manager & Site Admin (Level 5)
+  if (viewerOcc === "site manager" || viewerOcc === "site admin" || userLevel === 5) {
+    return !!x.user_site && !!user.user_site &&
+           x.user_site.toLowerCase().trim() === user.user_site.toLowerCase().trim();
+  }
+
+  // Divisi Manager & Divisi Admin & Supervisor (Level 4 / 3)
+  if (
+    viewerOcc === "divisi manager" || 
+    viewerOcc === "divisi admin" || 
+    viewerOcc === "div manager" || 
+    viewerOcc === "div admin" || 
+    userLevel === 4 || 
+    userLevel === 3
+  ) {
+    return !!x.user_division && !!user.user_division &&
+           x.user_division.toLowerCase().trim() === user.user_division.toLowerCase().trim();
+  }
+
+  // Team Leader (Level 2)
+  if (viewerOcc === "team leader" || userLevel === 2) {
+    return !!x.user_team && !!user.user_team &&
+           x.user_team.toLowerCase().trim() === user.user_team.toLowerCase().trim();
+  }
+
+  return false;
+}
+
 export async function filterProjectsByUser(
   projects: Project[],
   userId: string
 ): Promise<Project[]> {
   if (!userId) return projects;
-  const projectIds = await getUserProjectIds(userId);
-  return projects.filter(
-    (p) => p.created_by === userId || projectIds.includes(p.project_id)
-  );
+  const user = await UserRepository.findById(userId);
+  if (!user) return [];
+
+  const level = await getUserLevel(user.user_occupation);
+  if (level >= 6) return projects; // Level 6 and 7 see everything
+
+  const allUsers = await UserRepository.findAll();
+  const userMap = new Map(allUsers.map((u) => [u.user_id, u]));
+
+  const roles = await RoleLevelRepository.findAll();
+  const roleLevelMap = new Map<string, number>();
+  for (const r of roles) {
+    roleLevelMap.set(r.role_name.toLowerCase(), r.level);
+  }
+
+  // Pre-fetch project team mappings
+  const allProjectTeams = await sql`SELECT project_id, user_id FROM project_teams WHERE deleted_at IS NULL`;
+  const projectTeamMap = new Map<string, string[]>();
+  for (const pt of allProjectTeams) {
+    const list = projectTeamMap.get(pt.project_id) || [];
+    list.push(pt.user_id);
+    projectTeamMap.set(pt.project_id, list);
+  }
+
+  return projects.filter((p) => {
+    if (p.created_by === userId) return true;
+
+    const teamMembers = projectTeamMap.get(p.project_id) || [];
+    if (teamMembers.includes(userId)) return true;
+
+    // Check if creator is supervised
+    if (p.created_by) {
+      const creatorUser = userMap.get(p.created_by);
+      if (creatorUser && isSupervised(user, level, creatorUser, roleLevelMap)) return true;
+    }
+
+    // Check if any team member is supervised
+    for (const memberId of teamMembers) {
+      const memberUser = userMap.get(memberId);
+      if (memberUser && isSupervised(user, level, memberUser, roleLevelMap)) return true;
+    }
+
+    return false;
+  });
 }
 
 export async function filterTasksByUser(
@@ -1436,10 +1647,50 @@ export async function filterTasksByUser(
   userId: string
 ): Promise<Task[]> {
   if (!userId) return tasks;
-  const taskIds = await getUserTaskIds(userId);
-  return tasks.filter(
-    (t) => t.created_by === userId || taskIds.includes(t.id)
-  );
+  const user = await UserRepository.findById(userId);
+  if (!user) return [];
+
+  const level = await getUserLevel(user.user_occupation);
+  if (level >= 6) return tasks;
+
+  const allUsers = await UserRepository.findAll();
+  const userMap = new Map(allUsers.map((u) => [u.user_id, u]));
+
+  const roles = await RoleLevelRepository.findAll();
+  const roleLevelMap = new Map<string, number>();
+  for (const r of roles) {
+    roleLevelMap.set(r.role_name.toLowerCase(), r.level);
+  }
+
+  // Pre-fetch task team mappings
+  const allTaskTeams = await sql`SELECT task_id, user_id FROM task_teams WHERE deleted_at IS NULL`;
+  const taskTeamMap = new Map<string, string[]>();
+  for (const tt of allTaskTeams) {
+    const list = taskTeamMap.get(tt.task_id) || [];
+    list.push(tt.user_id);
+    taskTeamMap.set(tt.task_id, list);
+  }
+
+  return tasks.filter((t) => {
+    if (t.created_by === userId) return true;
+
+    const teamMembers = taskTeamMap.get(t.id) || [];
+    if (teamMembers.includes(userId)) return true;
+
+    // Check if creator is supervised
+    if (t.created_by) {
+      const creatorUser = userMap.get(t.created_by);
+      if (creatorUser && isSupervised(user, level, creatorUser, roleLevelMap)) return true;
+    }
+
+    // Check if any team member is supervised
+    for (const memberId of teamMembers) {
+      const memberUser = userMap.get(memberId);
+      if (memberUser && isSupervised(user, level, memberUser, roleLevelMap)) return true;
+    }
+
+    return false;
+  });
 }
 
 export async function filterReportsByUser(
@@ -1447,9 +1698,36 @@ export async function filterReportsByUser(
   userId: string
 ): Promise<DailyReport[]> {
   if (!userId) return reports;
-  return reports.filter(
-    (r) => r.user_id === userId || r.created_by === userId
-  );
+  const user = await UserRepository.findById(userId);
+  if (!user) return [];
+
+  const level = await getUserLevel(user.user_occupation);
+  if (level >= 6) return reports;
+
+  const allUsers = await UserRepository.findAll();
+  const userMap = new Map(allUsers.map((u) => [u.user_id, u]));
+
+  const roles = await RoleLevelRepository.findAll();
+  const roleLevelMap = new Map<string, number>();
+  for (const r of roles) {
+    roleLevelMap.set(r.role_name.toLowerCase(), r.level);
+  }
+
+  return reports.filter((r) => {
+    if (r.user_id === userId || r.created_by === userId) return true;
+
+    // Check if creator/reporter is supervised
+    if (r.user_id) {
+      const creatorUser = userMap.get(r.user_id);
+      if (creatorUser && isSupervised(user, level, creatorUser, roleLevelMap)) return true;
+    }
+    if (r.created_by && r.created_by !== r.user_id) {
+      const creatorUser = userMap.get(r.created_by);
+      if (creatorUser && isSupervised(user, level, creatorUser, roleLevelMap)) return true;
+    }
+
+    return false;
+  });
 }
 
 // ============ USER LOOKUP ============
@@ -1829,3 +2107,158 @@ export const NotificationRepository = {
     return newNotification;
   },
 };
+
+// ============ ROLE-BASED ACCESS CONTROL (RBAC) ============
+
+export interface RoleLevel {
+  role_name: string;
+  level: number;
+}
+
+export const RoleLevelRepository = {
+  async findAll(): Promise<RoleLevel[]> {
+    const rows = await sql`SELECT * FROM role_levels ORDER BY level DESC, role_name ASC`;
+    return rows as unknown as RoleLevel[];
+  },
+
+  async findByRole(roleName: string): Promise<RoleLevel | null> {
+    const rows = await sql`SELECT * FROM role_levels WHERE LOWER(role_name) = LOWER(${roleName}) LIMIT 1`;
+    if (rows.length === 0) return null;
+    return rows[0] as unknown as RoleLevel;
+  },
+
+  async upsert(roleName: string, level: number): Promise<RoleLevel> {
+    const norm = roleName.toLowerCase().replace(/\s+/g, "");
+    if (['superuser', 'cosuperuser', 'co-superuser'].includes(norm)) {
+      const existing = await this.findByRole(roleName);
+      if (existing) return existing;
+    }
+    const rows = await sql`
+      INSERT INTO role_levels (role_name, level) 
+      VALUES (${roleName}, ${level}) 
+      ON CONFLICT (role_name) 
+      DO UPDATE SET level = ${level}
+      RETURNING *
+    `;
+    return rows[0] as unknown as RoleLevel;
+  },
+
+  async delete(roleName: string): Promise<boolean> {
+    const norm = roleName.toLowerCase().replace(/\s+/g, "");
+    if (['superuser', 'cosuperuser', 'co-superuser'].includes(norm)) return false;
+    await sql`DELETE FROM role_levels WHERE LOWER(role_name) = LOWER(${roleName})`;
+    return true;
+  }
+};
+
+export async function getUserLevel(userOccupation: string | null): Promise<number> {
+  if (!userOccupation) return 1; // Default to Staff (Level 1)
+  const norm = userOccupation.toLowerCase().replace(/\s+/g, "");
+  if (['superuser', 'cosuperuser', 'co-superuser'].includes(norm)) return 7; // Lock Admin to Level 7
+
+  const role = await RoleLevelRepository.findByRole(userOccupation);
+  return role ? role.level : 1; // Default to Level 1 if not mapped
+}
+
+export async function hasProjectWritePermission(projectId: string, userId: string): Promise<boolean> {
+  const project = await ProjectRepository.findById(projectId);
+  if (!project) return false;
+
+  const user = await UserRepository.findById(userId);
+  if (!user) return false;
+
+  const userLevel = await getUserLevel(user.user_occupation);
+  if (userLevel === 7) return true; // Super User has full access
+
+  const projectTeam = await ProjectTeamRepository.findByProjectId(projectId);
+  const isProjectTeamMember = projectTeam.some((pt) => pt.user_id === userId);
+  const isCreatedBy = project.created_by === userId;
+
+  return isProjectTeamMember || isCreatedBy;
+}
+
+export async function hasTaskWritePermission(taskId: string, userId: string): Promise<boolean> {
+  const task = await TaskRepository.findById(taskId);
+  if (!task) return false;
+
+  const user = await UserRepository.findById(userId);
+  if (!user) return false;
+
+  const userLevel = await getUserLevel(user.user_occupation);
+  if (userLevel === 7) return true; // Super User has full access
+
+  const taskTeam = await TaskTeamRepository.findByTaskId(taskId);
+  const isTaskTeamMember = taskTeam.some((tt) => tt.user_id === userId);
+  const isCreatedBy = task.created_by === userId;
+
+  const projectTeam = await ProjectTeamRepository.findByProjectId(task.project_id);
+  const isProjectTeamMember = projectTeam.some((pt) => pt.user_id === userId);
+  
+  const project = await ProjectRepository.findById(task.project_id);
+  const isProjectCreator = project ? project.created_by === userId : false;
+
+  return isTaskTeamMember || isProjectTeamMember || isCreatedBy || isProjectCreator;
+}
+
+// ============ USER LOG REPOSITORY ============
+
+export const UserLogRepository = {
+  async create(
+    log: {
+      user_id: string;
+      action: string;
+      details: string | null;
+    },
+    createdBy: string
+  ): Promise<UserLog> {
+    const res = await sql`SELECT COUNT(*)::int as count FROM user_logs`;
+    const nextId = 'ul-' + String((res[0].count || 0) + 1).padStart(3, '0') + '-' + Math.random().toString(36).substring(2, 7);
+    const now = new Date().toISOString();
+
+    const newLog: UserLog = {
+      id: nextId,
+      user_id: log.user_id,
+      action: log.action,
+      details: log.details,
+      created_by: createdBy,
+      created_at: now,
+    };
+
+    await sql`
+      INSERT INTO user_logs (
+        id, user_id, action, details, created_by, created_at
+      ) VALUES (
+        ${newLog.id}, ${newLog.user_id}, ${newLog.action}, ${newLog.details},
+        ${newLog.created_by}, ${newLog.created_at}
+      )
+    `;
+
+    return newLog;
+  },
+
+  async findByUserId(userId: string): Promise<UserLog[]> {
+    const rows = await sql`
+      SELECT ul.*, u.user_name as actor_name, u.user_email as actor_email
+      FROM user_logs ul
+      LEFT JOIN users u ON ul.created_by = u.user_id
+      WHERE ul.user_id = ${userId}
+      ORDER BY ul.created_at DESC
+    `;
+    return rows as any[];
+  },
+
+  async findAll(): Promise<UserLog[]> {
+    const rows = await sql`
+      SELECT ul.*, 
+             u_target.user_name as target_name, u_target.user_email as target_email,
+             u_actor.user_name as actor_name, u_actor.user_email as actor_email
+      FROM user_logs ul
+      LEFT JOIN users u_target ON ul.user_id = u_target.user_id
+      LEFT JOIN users u_actor ON ul.created_by = u_actor.user_id
+      ORDER BY ul.created_at DESC
+      LIMIT 200
+    `;
+    return rows as any[];
+  }
+};
+

@@ -40,7 +40,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { Task, Status, Project } from "@/lib/types"
+import type { Task, Status, Project, TaskTeam, ProjectTeam } from "@/lib/types"
+import { useViewDensity } from "@/lib/view-density"
 import { revalidatePathsAndTags } from "@/app/actions"
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -73,6 +74,8 @@ function SortableTaskCard({
   onDelete,
   isPinned,
   onTogglePin,
+  isTaskTeamMember,
+  density,
 }: {
   task: Task
   projectMap: Record<string, string | null>
@@ -83,6 +86,8 @@ function SortableTaskCard({
   onDelete: (taskId: string) => void
   isPinned: boolean
   onTogglePin: (taskId: string) => void
+  isTaskTeamMember: boolean
+  density: "comfortable" | "compact"
 }) {
   const {
     attributes,
@@ -99,6 +104,8 @@ function SortableTaskCard({
     opacity: isDragging ? 0.4 : 1,
   }
 
+  const isCompact = density === "compact"
+
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
       <Card className={`shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isDragging ? "ring-2 ring-primary" : ""}`}>
@@ -107,20 +114,22 @@ function SortableTaskCard({
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
         )}
-        <CardContent className="p-4 space-y-3">
+        <CardContent className={isCompact ? "p-3 space-y-2" : "p-4 space-y-3"}>
           <div className="flex items-start gap-2">
-            <button
-              {...listeners}
-              className="mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
-              tabIndex={-1}
-            >
-              <GripVertical className="h-4 w-4" />
-            </button>
+            {isTaskTeamMember && (
+              <button
+                {...listeners}
+                className="mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
+                tabIndex={-1}
+              >
+                <GripVertical className="h-4 w-4" />
+              </button>
+            )}
             <div className="space-y-1 min-w-0 flex-1">
               <Link href={`/tasks/${task.id}`} className="font-medium text-sm hover:text-primary leading-snug line-clamp-2">
                 {task.task_description}
               </Link>
-              <p className="text-[11px] text-muted-foreground truncate">
+              <p className="text-[10px] text-muted-foreground truncate">
                 📁 {projectMap[task.project_id] ?? task.project_id}
               </p>
             </div>
@@ -134,7 +143,7 @@ function SortableTaskCard({
             </Button>
           </div>
 
-          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t">
+          <div className={`flex items-center justify-between text-xs text-muted-foreground pt-1 border-t ${isCompact ? "border-t-muted/30" : ""}`}>
             <span>Progress: <span className="font-medium text-foreground">{task.task_latest_percentage ?? 0}%</span></span>
             {taskHoursMap[task.id] > 0 && (
               <span>Hours: <span className="font-medium text-foreground">{taskHoursMap[task.id]}h</span></span>
@@ -146,8 +155,9 @@ function SortableTaskCard({
             <Select
               value={task.task_status || "NS"}
               onValueChange={(val) => onStatusChange(task.id, val)}
+              disabled={!isTaskTeamMember}
             >
-              <SelectTrigger className="h-7 text-[10px] w-[110px] px-2 py-0">
+              <SelectTrigger className={`text-[10px] px-2 py-0 ${isCompact ? "h-6 w-[95px]" : "h-7 w-[110px]"}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -161,23 +171,27 @@ function SortableTaskCard({
 
             <div className="flex items-center gap-0.5">
               <Link href={`/tasks/${task.id}`}>
-                <Button variant="ghost" size="icon-sm" className="h-7 w-7">
+                <Button variant="ghost" size="icon-sm" className={isCompact ? "h-6 w-6" : "h-7 w-7"}>
                   <Eye className="h-3 w-3" />
                 </Button>
               </Link>
-              <Link href={`/tasks/${task.id}/edit`}>
-                <Button variant="ghost" size="icon-sm" className="h-7 w-7">
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              </Link>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="h-7 w-7"
-                onClick={() => onDelete(task.id)}
-              >
-                <Trash2 className="h-3 w-3 text-destructive" />
-              </Button>
+              {isTaskTeamMember && (
+                <>
+                  <Link href={`/tasks/${task.id}/edit`}>
+                    <Button variant="ghost" size="icon-sm" className={isCompact ? "h-6 w-6" : "h-7 w-7"}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className={`text-destructive hover:text-destructive ${isCompact ? "h-6 w-6" : "h-7 w-7"}`}
+                    onClick={() => onDelete(task.id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </CardContent>
@@ -274,11 +288,18 @@ export function TasksClient({
   currentCreatedBy,
   currentMemberId,
   viewMode,
+  taskTeams = [],
+  projectTeams = [],
+  currentUserId = "",
+  currentDept = "",
+  currentSite = "",
+  currentDiv = "",
+  currentTeam = "",
 }: {
   tasks: Task[]
   statuses: Status[]
   projects: Project[]
-  users?: { user_id: string; user_name: string | null; user_email: string }[]
+  users?: any[]
   projectMap: Record<string, string | null>
   taskHoursMap: Record<string, number>
   currentProjectId?: string
@@ -287,13 +308,41 @@ export function TasksClient({
   currentCreatedBy?: string
   currentMemberId?: string
   viewMode: "my" | "team"
+  taskTeams?: TaskTeam[]
+  projectTeams?: ProjectTeam[]
+  currentUserId?: string
+  currentDept?: string
+  currentSite?: string
+  currentDiv?: string
+  currentTeam?: string
 }) {
+  const { density } = useViewDensity()
+  const currentUser = (users || []).find(u => u.user_id === currentUserId)
+  const isSuperUser = currentUser?.user_occupation?.toLowerCase() === 'super user'
+  const userLevel = currentUser?.level || 1
+
+  const isDeptDisabled = userLevel < 6
+  const isSiteDisabled = userLevel < 5
+  const isDivDisabled = userLevel < 3
+  const isTeamDisabled = userLevel < 2
+
+  const defaultDept = isDeptDisabled ? (currentUser?.user_departement || "") : ""
+  const defaultSite = isSiteDisabled ? (currentUser?.user_site || "") : ""
+  const defaultDiv = isDivDisabled ? (currentUser?.user_division || "") : ""
+  const defaultTeam = isTeamDisabled ? (currentUser?.user_team || "") : ""
+
   const router = useRouter()
   const [search, setSearch] = useState(currentSearch ?? "")
   const [statusFilter, setStatusFilter] = useState(currentStatus ?? "")
   const [projectFilter, setProjectFilter] = useState(currentProjectId ?? "")
   const [createdByFilter, setCreatedByFilter] = useState(currentCreatedBy ?? "")
   const [memberFilter, setMemberFilter] = useState(currentMemberId ?? "")
+
+  const [dept, setDept] = useState(currentDept || defaultDept)
+  const [site, setSite] = useState(currentSite || defaultSite)
+  const [division, setDivision] = useState(currentDiv || defaultDiv)
+  const [team, setTeam] = useState(currentTeam || defaultTeam)
+
   const [deleteId, setDeleteId] = useState<string | null>(null)
   
   const [layout, setLayout] = useState<"kanban" | "list">("kanban")
@@ -346,10 +395,14 @@ export function TasksClient({
     if (viewMode === "team") {
       if (createdByFilter) params.set("created_by", createdByFilter)
       if (memberFilter) params.set("member_id", memberFilter)
+      if (dept) params.set("dept_filter", dept)
+      if (site) params.set("site_filter", site)
+      if (division) params.set("div_filter", division)
+      if (team) params.set("team_filter", team)
     }
     const query = params.toString()
     router.push(`/tasks${query ? "?" + query : ""}`)
-  }, [debouncedSearch, statusFilter, projectFilter, createdByFilter, memberFilter, viewMode, router])
+  }, [debouncedSearch, statusFilter, projectFilter, createdByFilter, memberFilter, viewMode, router, dept, site, division, team])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -615,6 +668,19 @@ export function TasksClient({
     }
   }
 
+  const uniqueDepts = Array.from(new Set(users.map((u) => u.user_departement).filter(Boolean))) as string[]
+  const uniqueSites = Array.from(new Set(users.map((u) => u.user_site).filter(Boolean))) as string[]
+  const uniqueDivs = Array.from(new Set(users.map((u) => u.user_division).filter(Boolean))) as string[]
+  const uniqueTeams = Array.from(new Set(users.map((u) => u.user_team).filter(Boolean))) as string[]
+
+  // Only show users who have actually created a task
+  const creatorIds = new Set(tasks.map((t) => t.created_by).filter(Boolean))
+  const uniqueCreators = users.filter((u) => creatorIds.has(u.user_id))
+
+  // Only show users who are actually a team member on some task
+  const memberIds = new Set(taskTeams.map((tt) => tt.user_id).filter(Boolean))
+  const uniqueMembers = users.filter((u) => memberIds.has(u.user_id))
+
   const activeTask = activeId ? activeTasks.find(t => t.id === activeId) : null
 
   return (
@@ -730,7 +796,7 @@ export function TasksClient({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All creators</SelectItem>
-                    {users.map((u) => (
+                    {uniqueCreators.map((u) => (
                       <SelectItem key={u.user_id} value={u.user_id}>
                         {u.user_name || u.user_email}
                       </SelectItem>
@@ -745,9 +811,69 @@ export function TasksClient({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All members</SelectItem>
-                    {users.map((u) => (
+                    {uniqueMembers.map((u) => (
                       <SelectItem key={u.user_id} value={u.user_id}>
                         {u.user_name || u.user_email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={dept} onValueChange={setDept} disabled={isDeptDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Departments</SelectItem>
+                    {uniqueDepts.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={site} onValueChange={setSite} disabled={isSiteDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Site" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Sites</SelectItem>
+                    {uniqueSites.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={division} onValueChange={setDivision} disabled={isDivDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Division" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Divisions</SelectItem>
+                    {uniqueDivs.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={team} onValueChange={setTeam} disabled={isTeamDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Teams</SelectItem>
+                    {uniqueTeams.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -774,20 +900,29 @@ export function TasksClient({
               const colTasks = getSortedColumnTasks(col.id)
               return (
                 <DroppableColumn key={col.id} column={col} tasks={colTasks}>
-                  {colTasks.map((task) => (
-                    <SortableTaskCard
-                      key={task.id}
-                      task={task}
-                      projectMap={projectMap}
-                      taskHoursMap={taskHoursMap}
-                      statuses={statuses}
-                      updatingId={updatingId}
-                      onStatusChange={handleStatusChange}
-                      onDelete={setDeleteId}
-                      isPinned={pinnedIds.includes(task.id)}
-                      onTogglePin={togglePin}
-                    />
-                  ))}
+                  {colTasks.map((task) => {
+                    const isMember = taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
+                      projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||
+                      task.created_by === currentUserId ||
+                      projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
+                      isSuperUser
+                    return (
+                      <SortableTaskCard
+                        key={task.id}
+                        task={task}
+                        projectMap={projectMap}
+                        taskHoursMap={taskHoursMap}
+                        statuses={statuses}
+                        updatingId={updatingId}
+                        onStatusChange={handleStatusChange}
+                        onDelete={setDeleteId}
+                        isPinned={pinnedIds.includes(task.id)}
+                        onTogglePin={togglePin}
+                        isTaskTeamMember={isMember}
+                        density={density}
+                      />
+                    )
+                  })}
                 </DroppableColumn>
               )
             })}
@@ -821,51 +956,132 @@ export function TasksClient({
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
-            {localTasks.map((task) => (
-              <Card key={task.id} className="transition-shadow hover:shadow-md">
-                <CardContent className="flex items-center justify-between p-4">
-                  <div className="min-w-0 flex-1">
-                    <Link href={`/tasks/${task.id}`} className="font-medium hover:text-primary">
-                      <p className="truncate">{task.task_description}</p>
-                    </Link>
-                    <p className="text-xs text-muted-foreground">
-                      {projectMap[task.project_id] ?? task.project_id} •{" "}
-                      {task.task_latest_percentage ?? 0}% complete
-                      {(taskHoursMap[task.id] ?? 0) > 0 && (
-                        <> • <span className="font-medium">{taskHoursMap[task.id]}h</span></>
-                      )}
-                    </p>
+          density === "compact" ? (
+            <div className="flex flex-col border rounded-xl divide-y divide-border/55 bg-card overflow-hidden">
+              {localTasks.map((task) => {
+                const isMember = taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
+                  projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||
+                  task.created_by === currentUserId ||
+                  projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
+                  isSuperUser
+                return (
+                  <div key={task.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 gap-2.5 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <Badge variant="outline" className="shrink-0 text-[10px] font-mono py-0 px-1 bg-muted">
+                        {task.id.substring(0, 6)}
+                      </Badge>
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/tasks/${task.id}`} className="font-medium text-xs hover:text-primary leading-none block truncate">
+                          {task.task_description}
+                        </Link>
+                        <p className="text-[10px] text-muted-foreground mt-0.5 max-w-xl truncate">
+                          📁 {projectMap[task.project_id] ?? task.project_id}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 text-xs">
+                      <Badge
+                        variant={statusVariant[task.task_status ?? "NS"] ?? "default"}
+                        className="text-[9px] py-0 px-1.5 shrink-0"
+                      >
+                        {statusLabel[task.task_status ?? "NS"] ?? task.task_status ?? "NS"}
+                      </Badge>
+
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground min-w-[100px] justify-end">
+                        <span className="shrink-0">{task.task_latest_percentage ?? 0}% done</span>
+                        {(taskHoursMap[task.id] ?? 0) > 0 && (
+                          <span className="shrink-0 font-medium text-foreground">{taskHoursMap[task.id]}h</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-0.5">
+                        <Link href={`/tasks/${task.id}`}>
+                          <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                            <Eye className="h-3 w-3" />
+                          </Button>
+                        </Link>
+                        {isMember && (
+                          <>
+                            <Link href={`/tasks/${task.id}/edit`}>
+                              <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-destructive hover:text-destructive h-6 w-6"
+                              onClick={() => setDeleteId(task.id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge
-                      variant={statusVariant[task.task_status ?? "NS"] ?? "default"}
-                      className="shrink-0"
-                    >
-                      {statusLabel[task.task_status ?? "NS"] ?? task.task_status ?? "NS"}
-                    </Badge>
-                    <Link href={`/tasks/${task.id}`}>
-                      <Button variant="ghost" size="icon-sm">
-                        <Eye className="h-3 w-3" />
-                      </Button>
-                    </Link>
-                    <Link href={`/tasks/${task.id}/edit`}>
-                      <Button variant="ghost" size="icon-sm">
-                        <Pencil className="h-3 w-3" />
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => setDeleteId(task.id)}
-                    >
-                      <Trash2 className="h-3 w-3 text-destructive" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {localTasks.map((task) => {
+                const isMember = taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
+                  projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||
+                  task.created_by === currentUserId ||
+                  projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
+                  isSuperUser
+                return (
+                  <Card key={task.id} className="transition-shadow hover:shadow-md">
+                    <CardContent className="flex items-center justify-between p-4">
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/tasks/${task.id}`} className="font-medium hover:text-primary">
+                          <p className="truncate">{task.task_description}</p>
+                        </Link>
+                        <p className="text-xs text-muted-foreground">
+                          {projectMap[task.project_id] ?? task.project_id} •{" "}
+                          {task.task_latest_percentage ?? 0}% complete
+                          {(taskHoursMap[task.id] ?? 0) > 0 && (
+                            <> • <span className="font-medium">{taskHoursMap[task.id]}h</span></>
+                          )}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Badge
+                          variant={statusVariant[task.task_status ?? "NS"] ?? "default"}
+                          className="shrink-0"
+                        >
+                          {statusLabel[task.task_status ?? "NS"] ?? task.task_status ?? "NS"}
+                        </Badge>
+                        <Link href={`/tasks/${task.id}`}>
+                          <Button variant="ghost" size="icon-sm">
+                            <Eye className="h-3 w-3" />
+                          </Button>
+                        </Link>
+                        {isMember && (
+                          <>
+                            <Link href={`/tasks/${task.id}/edit`}>
+                              <Button variant="ghost" size="icon-sm">
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              onClick={() => setDeleteId(task.id)}
+                            >
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )
         )
       )}
 
@@ -909,6 +1125,13 @@ export function TasksClient({
                         <Select
                           value={task.task_status || "NS"}
                           onValueChange={(val) => handleStatusChange(task.id, val)}
+                          disabled={
+                            !(taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
+                              projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||
+                              task.created_by === currentUserId ||
+                              projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
+                              isSuperUser)
+                          }
                         >
                           <SelectTrigger className="h-8 text-[11px] w-[120px] px-2 py-0">
                             <SelectValue placeholder="Restore status" />

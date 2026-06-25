@@ -27,14 +27,14 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { team_user_ids, ...projectData } = body
 
-    const project = await ProjectRepository.create(projectData, session.user_id)
+    const project = await ProjectRepository.create(projectData, session.real_user_id ?? session.user_id)
 
     // Create ProjectTeam entries
     if (team_user_ids && Array.isArray(team_user_ids)) {
-      const senderName = session.name || session.email || 'Someone'
+      const senderName = session.real_name ?? session.name ?? session.email ?? 'Someone'
       for (const userId of team_user_ids) {
-        await ProjectTeamRepository.create(project.project_id, userId, session.user_id)
-        if (userId !== session.user_id) {
+        await ProjectTeamRepository.create(project.project_id, userId, session.real_user_id ?? session.user_id)
+        if (userId !== (session.real_user_id ?? session.user_id)) {
           await NotificationRepository.create({
             user_id: userId,
             type: 'project_created',

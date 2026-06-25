@@ -45,7 +45,7 @@ export async function PUT(
     }
 
     const body = await request.json()
-    const report = await DailyReportRepository.update(id, body, session.user_id)
+    const report = await DailyReportRepository.update(id, body, session.real_user_id ?? session.user_id)
     return NextResponse.json(report)
   } catch (error) {
     console.error('PUT /api/reports/[id] error:', error)
@@ -73,7 +73,7 @@ export async function DELETE(
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
     }
 
-    await DailyReportRepository.softDelete(id, session.user_id)
+    await DailyReportRepository.softDelete(id, session.real_user_id ?? session.user_id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('DELETE /api/reports/[id] error:', error)

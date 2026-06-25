@@ -16,6 +16,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ProjectBrowseModal } from "@/components/project-browse-modal"
+import { ProjectCreateModal } from "@/components/project-create-modal"
 import type { Task, Project, Status } from "@/lib/types"
 import { revalidatePathsAndTags } from "@/app/actions"
 import { SearchableUserSelect } from "@/components/ui/searchable-user-select"
@@ -54,42 +56,8 @@ export function TaskForm({
   )
 
   const [showProjectModal, setShowProjectModal] = useState(false)
-  const [projectSearch, setProjectSearch] = useState("")
-
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false)
-  const [newProjectName, setNewProjectName] = useState("")
-  const [newProjectDesc, setNewProjectDesc] = useState("")
-  const [newProjectCategory, setNewProjectCategory] = useState("")
-  const [newProjectStart, setNewProjectStart] = useState("")
-  const [newProjectEnd, setNewProjectEnd] = useState("")
-  const [projectCreating, setProjectCreating] = useState(false)
-  const [projectCreateError, setProjectCreateError] = useState<string | null>(null)
-
-  const filteredProjects = localProjects.filter((p) => {
-    const q = projectSearch.toLowerCase()
-    return (
-      p.project_id.toLowerCase().includes(q) ||
-      (p.project_name || "").toLowerCase().includes(q) ||
-      (p.project_description || "").toLowerCase().includes(q)
-    )
-  })
-
-  const getStatusBadge = (status: string | null) => {
-    switch (status) {
-      case "NS":
-        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground">Not Started</span>
-      case "OP":
-        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-blue-500/10 text-blue-500">On Progress</span>
-      case "D":
-        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-emerald-500/10 text-emerald-500">Done</span>
-      case "H":
-        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-amber-500/10 text-amber-500">Hold</span>
-      case "CC":
-        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-rose-500/10 text-rose-500">Cancel</span>
-      default:
-        return <span className="px-2 py-0.5 rounded text-[10px] font-semibold bg-muted text-muted-foreground">{status || "Unknown"}</span>
-    }
-  }
+  
   const [saving, setSaving] = useState(false)
   const [teamUserIds, setTeamUserIds] = useState<string[]>(defaultTeamUserIds ?? [])
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -231,33 +199,24 @@ export function TaskForm({
             <div className="space-y-2">
               <Label htmlFor="project">Project *</Label>
               <div className="flex gap-2">
-                <div className="flex-1">
-                  <Select value={projectId} onValueChange={setProjectId} required>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {localProjects.map((p) => (
-                        <SelectItem key={p.project_id} value={p.project_id}>
-                          {p.project_id} - {p.project_name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
                 <Button
                   type="button"
                   variant="outline"
+                  className="flex-1 justify-between text-left font-normal h-10 bg-background"
                   onClick={() => setShowProjectModal(true)}
-                  className="shrink-0 rounded-lg"
                 >
-                  Browse...
+                  <span className="truncate">
+                    {projectId 
+                      ? `${projectId} - ${localProjects.find((p) => p.project_id === projectId)?.project_name || ""}` 
+                      : "Select project..."}
+                  </span>
+                  <span className="text-xs text-muted-foreground shrink-0 opacity-60">▼</span>
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
                   onClick={() => setShowCreateProjectModal(true)}
-                  className="shrink-0 rounded-lg bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 hover:text-primary"
+                  className="shrink-0 rounded-lg bg-primary/5 border-primary/20 text-primary hover:bg-primary/10 hover:text-primary h-10"
                 >
                   + Project
                 </Button>
@@ -422,246 +381,25 @@ export function TaskForm({
         </div>
       </form>
 
-      {/* Browse Project Modal */}
-      {showProjectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-card text-card-foreground w-full max-w-2xl rounded-2xl border shadow-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[85vh]">
-            <div className="flex justify-between items-center px-6 py-4 border-b shrink-0">
-              <div>
-                <h3 className="font-bold text-lg text-foreground">Browse Projects</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Search and preview projects before selecting</p>
-              </div>
-              <Button type="button" variant="ghost" size="icon-sm" onClick={() => {
-                setShowProjectModal(false)
-                setProjectSearch("")
-              }} className="h-8 w-8 rounded-lg">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <div className="p-4 border-b shrink-0">
-              <Input
-                placeholder="Search projects by ID, name, or description..."
-                value={projectSearch}
-                onChange={(e) => setProjectSearch(e.target.value)}
-                className="w-full"
-                autoFocus
-              />
-            </div>
-            
-            <div className="flex-1 overflow-y-auto p-4 space-y-3 custom-scrollbar">
-              {filteredProjects.length === 0 ? (
-                <div className="text-center py-8 text-sm text-muted-foreground">
-                  No projects found matching &quot;{projectSearch}&quot;
-                </div>
-              ) : (
-                filteredProjects.map((p) => (
-                  <div key={p.project_id} className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-xl border hover:bg-muted/30 transition-colors gap-4">
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-xs font-semibold text-primary font-mono bg-primary/10 px-1.5 py-0.5 rounded">
-                          {p.project_id}
-                        </span>
-                        <h4 className="text-sm font-bold truncate text-foreground">{p.project_name}</h4>
-                        {getStatusBadge(p.project_status)}
-                      </div>
-                      {p.project_description && (
-                        <p className="text-xs text-muted-foreground line-clamp-2 leading-relaxed">
-                          {p.project_description}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-3 text-[10px] text-muted-foreground pt-1">
-                        <span>Start: {p.project_start_date_plan || "-"}</span>
-                        <span>•</span>
-                        <span>End: {p.project_end_date_plan || "-"}</span>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
-                      <a
-                        href={`/projects/${p.project_id}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center justify-center rounded-lg border h-8 px-3 text-xs font-medium hover:bg-muted transition-colors text-muted-foreground"
-                      >
-                        View Detail ↗
-                      </a>
-                      <Button
-                        type="button"
-                        size="sm"
-                        onClick={() => {
-                          setProjectId(p.project_id)
-                          setShowProjectModal(false)
-                          setProjectSearch("")
-                        }}
-                        className="h-8 rounded-lg"
-                      >
-                        Select
-                      </Button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-      )}
+      <ProjectBrowseModal
+        isOpen={showProjectModal}
+        onClose={() => setShowProjectModal(false)}
+        projects={localProjects}
+        onSelect={(id) => setProjectId(id)}
+      />
 
-      {/* Create Project Modal */}
-      {showCreateProjectModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-card text-card-foreground w-full max-w-lg rounded-2xl border shadow-lg overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col">
-            <div className="flex justify-between items-center px-6 py-4 border-b shrink-0">
-              <div>
-                <h3 className="font-bold text-lg text-foreground">Create New Project</h3>
-                <p className="text-xs text-muted-foreground mt-0.5">Define project settings inline</p>
-              </div>
-              <Button type="button" variant="ghost" size="icon-sm" onClick={() => {
-                setShowCreateProjectModal(false)
-                setProjectCreateError(null)
-              }} className="h-8 w-8 rounded-lg">
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-            
-            <form 
-              onSubmit={async (e) => {
-                e.preventDefault()
-                if (!newProjectName.trim() || projectCreating) return
-                setProjectCreating(true)
-                setProjectCreateError(null)
-
-                try {
-                  const res = await fetch("/api/projects", {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({
-                      project_name: newProjectName.trim(),
-                      project_description: newProjectDesc.trim() || undefined,
-                      project_start_date_plan: newProjectStart || undefined,
-                      project_end_date_plan: newProjectEnd || undefined,
-                      project_status: "NS",
-                      category: newProjectCategory.trim() || undefined,
-                      team_user_ids: [currentUserId],
-                    }),
-                  })
-
-                  if (!res.ok) {
-                    const err = await res.json().catch(() => ({ error: "Failed to create project" }))
-                    throw new Error(err.error || "Failed to create project")
-                  }
-
-                  const newProject = await res.json()
-                  setLocalProjects((prev) => [...prev, newProject])
-                  setProjectId(newProject.project_id)
-                  
-                  // Reset form
-                  setNewProjectName("")
-                  setNewProjectDesc("")
-                  setNewProjectCategory("")
-                  setNewProjectStart("")
-                  setNewProjectEnd("")
-                  setShowCreateProjectModal(false)
-                } catch (error: unknown) {
-                  const msg = error instanceof Error ? error.message : "Failed to create project"
-                  setProjectCreateError(msg)
-                } finally {
-                  setProjectCreating(false)
-                }
-              }} 
-              className="p-6 space-y-4"
-            >
-              {projectCreateError && (
-                <div className="p-3 text-xs bg-destructive/10 text-destructive rounded-lg font-medium">
-                  {projectCreateError}
-                </div>
-              )}
-              
-              <div className="space-y-2">
-                <Label htmlFor="newProjName">Project Name *</Label>
-                <Input
-                  id="newProjName"
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="e.g. Project Apollo"
-                  required
-                  autoFocus
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="newProjDesc">Description</Label>
-                <Textarea
-                  id="newProjDesc"
-                  value={newProjectDesc}
-                  onChange={(e) => setNewProjectDesc(e.target.value)}
-                  placeholder="Enter project description..."
-                  rows={3}
-                />
-              </div>
-              
-              <div className="space-y-2">
-                <Label htmlFor="newProjCategory">Category</Label>
-                <Input
-                  id="newProjCategory"
-                  value={newProjectCategory}
-                  onChange={(e) => setNewProjectCategory(e.target.value)}
-                  placeholder="e.g. Frontend, Backend, Design, Marketing"
-                  list="modal-project-categories"
-                />
-                <datalist id="modal-project-categories">
-                  {uniqueCategories.map((cat) => (
-                    <option key={cat} value={cat} />
-                  ))}
-                </datalist>
-              </div>
-              
-              <div className="grid gap-4 grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="newProjStart">Start Date</Label>
-                  <Input
-                    id="newProjStart"
-                    type="date"
-                    value={newProjectStart}
-                    onChange={(e) => setNewProjectStart(e.target.value)}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="newProjEnd">End Date</Label>
-                  <Input
-                    id="newProjEnd"
-                    type="date"
-                    value={newProjectEnd}
-                    onChange={(e) => setNewProjectEnd(e.target.value)}
-                  />
-                </div>
-              </div>
-              
-              <div className="flex justify-end gap-3 pt-2">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    setShowCreateProjectModal(false)
-                    setProjectCreateError(null)
-                  }}
-                >
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={projectCreating || !newProjectName.trim()}>
-                  {projectCreating ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin text-muted-foreground" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Project"
-                  )}
-                </Button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      <ProjectCreateModal
+        isOpen={showCreateProjectModal}
+        onClose={() => setShowCreateProjectModal(false)}
+        onSuccess={(newProject) => {
+          setLocalProjects((prev) => [...prev, newProject])
+          setProjectId(newProject.project_id)
+        }}
+        statuses={statuses}
+        users={allUsers}
+        currentUserId={currentUserId}
+        uniqueCategories={uniqueCategories}
+      />
     </div>
   )
 }

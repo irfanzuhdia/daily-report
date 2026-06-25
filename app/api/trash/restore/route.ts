@@ -19,10 +19,10 @@ export async function POST(request: NextRequest) {
         let success = false;
         switch (item.type) {
           case 'project':
-            success = await restoreProject(item.id, session.user_id);
+            success = await restoreProject(item.id, session.real_user_id ?? session.user_id);
             break;
           case 'task':
-            success = await restoreTask(item.id, session.user_id);
+            success = await restoreTask(item.id, session.real_user_id ?? session.user_id);
             break;
           case 'report':
             success = await restoreReport(item.id);
@@ -42,10 +42,10 @@ export async function POST(request: NextRequest) {
     let success = false;
     switch (type) {
       case 'project':
-        success = await restoreProject(id, session.user_id);
+        success = await restoreProject(id, session.real_user_id ?? session.user_id);
         break;
       case 'task':
-        success = await restoreTask(id, session.user_id);
+        success = await restoreTask(id, session.real_user_id ?? session.user_id);
         break;
       case 'report':
         success = await restoreReport(id);

@@ -11,9 +11,10 @@ interface CommentsSectionProps {
   projectId?: string
   taskId?: string
   allUsers: { user_id: string; user_name: string; user_email: string }[]
+  teamMembers?: { user_id: string; user_name: string; user_email: string }[]
 }
 
-export function CommentsSection({ projectId, taskId, allUsers }: CommentsSectionProps) {
+export function CommentsSection({ projectId, taskId, allUsers, teamMembers }: CommentsSectionProps) {
   const [comments, setComments] = useState<(Comment & { created_by_name?: string })[]>([])
   const [content, setContent] = useState("")
   const [loading, setLoading] = useState(true)
@@ -21,6 +22,142 @@ export function CommentsSection({ projectId, taskId, allUsers }: CommentsSection
   const [refreshTrigger, setRefreshTrigger] = useState(0)
   const [activeReplyId, setActiveReplyId] = useState<string | null>(null)
   const [replyContent, setReplyContent] = useState("")
+
+  // Mention Autocomplete States
+  const [mentionQuery, setMentionQuery] = useState("")
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const [activeInput, setActiveInput] = useState<"main" | "reply" | null>(null)
+  const [mentionStartIndex, setMentionStartIndex] = useState(-1)
+  const [highlightedIndex, setHighlightedIndex] = useState(0)
+
+  const suggestions = useMemo(() => {
+    if (!showSuggestions) return []
+    const query = mentionQuery.toLowerCase()
+    
+    const matching = allUsers.filter((u) => {
+      const name = (u.user_name || "").toLowerCase()
+      const email = u.user_email.toLowerCase()
+      return name.includes(query) || email.includes(query)
+    })
+
+    return [...matching].sort((a, b) => {
+      const aIsTeam = (teamMembers || []).some((tm) => tm.user_id === a.user_id)
+      const bIsTeam = (teamMembers || []).some((tm) => tm.user_id === b.user_id)
+      if (aIsTeam && !bIsTeam) return -1
+      if (!aIsTeam && bIsTeam) return 1
+      return 0
+    })
+  }, [showSuggestions, mentionQuery, allUsers, teamMembers])
+
+  useEffect(() => {
+    setHighlightedIndex(0)
+  }, [suggestions])
+
+  const handleSelectUser = (user: typeof allUsers[0]) => {
+    const isMain = activeInput === "main"
+    const currentText = isMain ? content : replyContent
+    const setVal = isMain ? setContent : setReplyContent
+    
+    const before = currentText.slice(0, mentionStartIndex)
+    const after = currentText.slice(mentionStartIndex + mentionQuery.length + 1)
+    
+    setVal(before + `@${user.user_name || user.user_email} ` + after)
+    setShowSuggestions(false)
+    setActiveInput(null)
+    setMentionQuery("")
+
+    setTimeout(() => {
+      const id = isMain ? "main-comment-textarea" : `reply-textarea-${activeReplyId}`
+      const el = document.getElementById(id) as HTMLTextAreaElement
+      if (el) {
+        el.focus()
+        const newPos = before.length + (user.user_name || user.user_email).length + 2
+        el.setSelectionRange(newPos, newPos)
+      }
+    }, 50)
+  }
+
+  const handleTextareaChange = (
+    val: string,
+    setVal: (v: string) => void,
+    inputType: "main" | "reply",
+    selectionStart: number
+  ) => {
+    setVal(val)
+
+    const textBeforeCursor = val.slice(0, selectionStart)
+    const lastAtSymbolIndex = textBeforeCursor.lastIndexOf("@")
+
+    if (lastAtSymbolIndex !== -1) {
+      const textAfterAt = textBeforeCursor.slice(lastAtSymbolIndex + 1)
+      if (!textAfterAt.includes(" ") && !textAfterAt.includes("\n")) {
+        setMentionQuery(textAfterAt)
+        setShowSuggestions(true)
+        setActiveInput(inputType)
+        setMentionStartIndex(lastAtSymbolIndex)
+        return
+      }
+    }
+
+    setShowSuggestions(false)
+    setActiveInput(null)
+    setMentionQuery("")
+  }
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (!showSuggestions || suggestions.length === 0) return
+
+    if (e.key === "ArrowDown") {
+      e.preventDefault()
+      setHighlightedIndex((prev) => (prev + 1) % suggestions.length)
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault()
+      setHighlightedIndex((prev) => (prev - 1 + suggestions.length) % suggestions.length)
+    } else if (e.key === "Enter") {
+      e.preventDefault()
+      handleSelectUser(suggestions[highlightedIndex])
+    } else if (e.key === "Escape") {
+      e.preventDefault()
+      setShowSuggestions(false)
+      setActiveInput(null)
+    }
+  }
+
+  const renderSuggestionsDropdown = (inputType: "main" | "reply") => {
+    if (!showSuggestions || activeInput !== inputType || suggestions.length === 0) return null
+
+    return (
+      <div className="absolute z-50 mt-1 w-full max-h-48 overflow-y-auto rounded-lg border bg-popover text-popover-foreground shadow-lg p-1 space-y-0.5 animate-in fade-in slide-in-from-top-1 duration-100">
+        <div className="text-[10px] text-muted-foreground font-semibold px-2 py-1 border-b mb-1">
+          Suggestions (Task/Project Team first)
+        </div>
+        {suggestions.map((u, i) => {
+          const isTeam = (teamMembers || []).some((tm) => tm.user_id === u.user_id)
+          return (
+            <button
+              key={u.user_id}
+              type="button"
+              onClick={() => handleSelectUser(u)}
+              onMouseEnter={() => setHighlightedIndex(i)}
+              className={`w-full text-left px-2 py-1.5 rounded text-xs transition-colors flex items-center justify-between ${
+                highlightedIndex === i ? "bg-primary/10 text-primary" : "hover:bg-muted"
+              }`}
+            >
+              <div>
+                <div className="font-semibold">{u.user_name}</div>
+                <div className="text-[10px] text-muted-foreground">{u.user_email}</div>
+              </div>
+              {isTeam && (
+                <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 bg-indigo-500/10 text-indigo-700 dark:text-indigo-400 rounded">
+                  Team Member
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+    )
+  }
 
   useEffect(() => {
     let active = true
@@ -175,13 +312,18 @@ export function CommentsSection({ projectId, taskId, allUsers }: CommentsSection
       <CardContent className="pt-6 space-y-6">
         {/* Comment Input */}
         <form onSubmit={handleSubmit} className="space-y-3">
-          <Textarea
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            placeholder="Write a comment or update... Use the dropdown to tag someone."
-            rows={3}
-            className="resize-none"
-          />
+          <div className="relative">
+            <Textarea
+              id="main-comment-textarea"
+              value={content}
+              onChange={(e) => handleTextareaChange(e.target.value, setContent, "main", e.target.selectionStart)}
+              onKeyDown={handleKeyDown}
+              placeholder="Write a comment or update... Type @ to search and tag team members."
+              rows={3}
+              className="resize-none"
+            />
+            {renderSuggestionsDropdown("main")}
+          </div>
           <div className="flex justify-between items-center">
             {/* Tag selector helper */}
             <div className="flex items-center gap-2">
@@ -197,7 +339,7 @@ export function CommentsSection({ projectId, taskId, allUsers }: CommentsSection
                 }}
                 className="h-8 rounded-lg border border-input bg-card px-2.5 py-1 text-xs shadow-sm focus:outline-none focus:ring-1 focus:ring-primary"
               >
-                <option value="">Tag team member...</option>
+                <option value="">Tag person...</option>
                 {allUsers.map((u) => (
                   <option key={u.user_id} value={u.user_id}>
                     {u.user_name || u.user_email}
@@ -271,14 +413,19 @@ export function CommentsSection({ projectId, taskId, allUsers }: CommentsSection
                     {/* Parent Inline Reply Form */}
                     {activeReplyId === rootComment.id && (
                       <form onSubmit={(e) => handleReplySubmit(e, rootComment.id)} className="ml-11 mt-2 space-y-2 border p-3 rounded-xl bg-muted/20">
-                        <Textarea
-                          autoFocus
-                          value={replyContent}
-                          onChange={(e) => setReplyContent(e.target.value)}
-                          placeholder={`Reply to ${rootComment.created_by_name || rootComment.created_by}...`}
-                          rows={2}
-                          className="resize-none text-sm"
-                        />
+                        <div className="relative w-full">
+                          <Textarea
+                            id={`reply-textarea-${rootComment.id}`}
+                            autoFocus
+                            value={replyContent}
+                            onChange={(e) => handleTextareaChange(e.target.value, setReplyContent, "reply", e.target.selectionStart)}
+                            onKeyDown={handleKeyDown}
+                            placeholder={`Reply to ${rootComment.created_by_name || rootComment.created_by}...`}
+                            rows={2}
+                            className="resize-none text-sm"
+                          />
+                          {renderSuggestionsDropdown("reply")}
+                        </div>
                         <div className="flex justify-between items-center">
                           <div className="flex items-center gap-2">
                             <AtSign className="h-3.5 w-3.5 text-muted-foreground" />
@@ -380,14 +527,19 @@ export function CommentsSection({ projectId, taskId, allUsers }: CommentsSection
                               {/* Reply Inline Reply Form */}
                               {activeReplyId === reply.id && (
                                 <form onSubmit={(e) => handleReplySubmit(e, reply.id)} className="ml-9 space-y-2 border p-3 rounded-xl bg-muted/20">
-                                  <Textarea
-                                    autoFocus
-                                    value={replyContent}
-                                    onChange={(e) => setReplyContent(e.target.value)}
-                                    placeholder={`Reply to ${reply.created_by_name || reply.created_by}...`}
-                                    rows={2}
-                                    className="resize-none text-sm"
-                                  />
+                                  <div className="relative w-full">
+                                    <Textarea
+                                      id={`reply-textarea-${reply.id}`}
+                                      autoFocus
+                                      value={replyContent}
+                                      onChange={(e) => handleTextareaChange(e.target.value, setReplyContent, "reply", e.target.selectionStart)}
+                                      onKeyDown={handleKeyDown}
+                                      placeholder={`Reply to ${reply.created_by_name || reply.created_by}...`}
+                                      rows={2}
+                                      className="resize-none text-sm"
+                                    />
+                                    {renderSuggestionsDropdown("reply")}
+                                  </div>
                                   <div className="flex justify-between items-center">
                                     <div className="flex items-center gap-2">
                                       <AtSign className="h-3.5 w-3.5 text-muted-foreground" />

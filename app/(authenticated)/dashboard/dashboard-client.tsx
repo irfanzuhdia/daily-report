@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 
 import Link from "next/link"
+import { useViewDensity } from "@/lib/view-density"
 import {
   FolderKanban,
   ListTodo,
@@ -36,6 +37,18 @@ const statusVariant: Record<string, "default" | "success" | "warning" | "destruc
   Cancel: "destructive",
 }
 
+interface UserSelectItem {
+  user_id: string
+  user_email: string
+  user_name: string | null
+  user_occupation?: string | null
+  user_departement?: string | null
+  user_division?: string | null
+  user_site?: string | null
+  user_team?: string | null
+  level?: number
+}
+
 export function DashboardClient({
   stats,
   viewMode,
@@ -43,21 +56,50 @@ export function DashboardClient({
   currentCreatedBy = "",
   currentStartDate = "",
   currentEndDate = "",
+  currentDept = "",
+  currentSite = "",
+  currentDiv = "",
+  currentTeam = "",
+  currentUserId = "",
 }: {
   stats: DashboardStats
   viewMode: "my" | "team"
-  users?: { user_id: string; user_email: string; user_name: string | null }[]
+  users?: UserSelectItem[]
   currentCreatedBy?: string
   currentStartDate?: string
   currentEndDate?: string
+  currentDept?: string
+  currentSite?: string
+  currentDiv?: string
+  currentTeam?: string
+  currentUserId?: string
 }) {
+  const { density } = useViewDensity()
   const router = useRouter()
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
+  const currentUser = users.find((u) => u.user_id === currentUserId)
+  const userLevel = currentUser?.level || 1
+
+  const isDeptDisabled = userLevel < 6
+  const isSiteDisabled = userLevel < 5
+  const isDivDisabled = userLevel < 3
+  const isTeamDisabled = userLevel < 2
+
+  const defaultDept = isDeptDisabled ? (currentUser?.user_departement || "") : ""
+  const defaultSite = isSiteDisabled ? (currentUser?.user_site || "") : ""
+  const defaultDiv = isDivDisabled ? (currentUser?.user_division || "") : ""
+  const defaultTeam = isTeamDisabled ? (currentUser?.user_team || "") : ""
+
   const [createdBy, setCreatedBy] = useState(currentCreatedBy)
   const [startDate, setStartDate] = useState(currentStartDate)
   const [endDate, setEndDate] = useState(currentEndDate)
+
+  const [dept, setDept] = useState(currentDept || defaultDept)
+  const [site, setSite] = useState(currentSite || defaultSite)
+  const [division, setDivision] = useState(currentDiv || defaultDiv)
+  const [team, setTeam] = useState(currentTeam || defaultTeam)
 
   const [inputStart, setInputStart] = useState(currentStartDate)
   const [inputEnd, setInputEnd] = useState(currentEndDate)
@@ -70,18 +112,43 @@ export function DashboardClient({
       isFirstMount.current = false
       return
     }
-    const params = new URLSearchParams(searchParams.toString())
+    
+    const currentParams = new URLSearchParams(searchParams.toString())
+    const nextParams = new URLSearchParams(searchParams.toString())
+    
     if (viewMode === "team") {
-      if (createdBy) params.set("created_by", createdBy)
-      else params.delete("created_by")
-    }
-    if (startDate) params.set("start_date", startDate)
-    else params.delete("start_date")
-    if (endDate) params.set("end_date", endDate)
-    else params.delete("end_date")
+      if (createdBy) nextParams.set("created_by", createdBy)
+      else nextParams.delete("created_by")
 
-    router.push(`${pathname}?${params.toString()}`)
-  }, [createdBy, startDate, endDate, viewMode, pathname, router, searchParams])
+      if (dept) nextParams.set("dept_filter", dept)
+      else nextParams.delete("dept_filter")
+
+      if (site) nextParams.set("site_filter", site)
+      else nextParams.delete("site_filter")
+
+      if (division) nextParams.set("div_filter", division)
+      else nextParams.delete("div_filter")
+
+      if (team) nextParams.set("team_filter", team)
+      else nextParams.delete("team_filter")
+    } else {
+      nextParams.delete("created_by")
+      nextParams.delete("dept_filter")
+      nextParams.delete("site_filter")
+      nextParams.delete("div_filter")
+      nextParams.delete("team_filter")
+    }
+    
+    if (startDate) nextParams.set("start_date", startDate)
+    else nextParams.delete("start_date")
+    
+    if (endDate) nextParams.set("end_date", endDate)
+    else nextParams.delete("end_date")
+
+    if (currentParams.toString() !== nextParams.toString()) {
+      router.push(`${pathname}?${nextParams.toString()}`)
+    }
+  }, [createdBy, startDate, endDate, viewMode, pathname, router, searchParams, dept, site, division, team])
 
   const handleApplyDates = useCallback(() => {
     setStartDate(inputStart)
@@ -94,10 +161,25 @@ export function DashboardClient({
     setEndDate("")
     setInputStart("")
     setInputEnd("")
-  }, [])
+    setDept(defaultDept)
+    setSite(defaultSite)
+    setDivision(defaultDiv)
+    setTeam(defaultTeam)
+  }, [defaultDept, defaultSite, defaultDiv, defaultTeam])
+
+  const uniqueDepts = Array.from(new Set(users.map((u) => u.user_departement).filter(Boolean))) as string[]
+  const uniqueSites = Array.from(new Set(users.map((u) => u.user_site).filter(Boolean))) as string[]
+  const uniqueDivs = Array.from(new Set(users.map((u) => u.user_division).filter(Boolean))) as string[]
+  const uniqueTeams = Array.from(new Set(users.map((u) => u.user_team).filter(Boolean))) as string[]
+
+  const hasActiveFilters = createdBy || startDate || endDate || 
+    (dept !== defaultDept) || 
+    (site !== defaultSite) || 
+    (division !== defaultDiv) || 
+    (team !== defaultTeam)
 
   return (
-    <div className="space-y-8">
+    <div className={density === "compact" ? "space-y-4" : "space-y-8"}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
@@ -114,7 +196,8 @@ export function DashboardClient({
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-wrap">
-              <div className="w-full sm:w-[220px]">
+              {/* Created by Filter */}
+              <div className="w-full sm:w-[200px]">
                 <Label className="text-xs text-muted-foreground mb-1 block">Created by</Label>
                 <Select value={createdBy} onValueChange={setCreatedBy}>
                   <SelectTrigger className="w-full">
@@ -132,6 +215,79 @@ export function DashboardClient({
                 </Select>
               </div>
 
+              {/* Department Filter */}
+              <div className="w-full sm:w-[180px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Department</Label>
+                <Select value={dept} onValueChange={setDept} disabled={isDeptDisabled}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Departments</SelectItem>
+                    {uniqueDepts.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Site Filter */}
+              <div className="w-full sm:w-[180px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Site</Label>
+                <Select value={site} onValueChange={setSite} disabled={isSiteDisabled}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Sites" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Sites</SelectItem>
+                    {uniqueSites.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Division Filter */}
+              <div className="w-full sm:w-[180px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Division</Label>
+                <Select value={division} onValueChange={setDivision} disabled={isDivDisabled}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Divisions" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Divisions</SelectItem>
+                    {uniqueDivs.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Team Filter */}
+              <div className="w-full sm:w-[180px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Team</Label>
+                <Select value={team} onValueChange={setTeam} disabled={isTeamDisabled}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Teams" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Teams</SelectItem>
+                    {uniqueTeams.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Start Date */}
               <div className="w-full sm:w-auto">
                 <Label className="text-xs text-muted-foreground mb-1 block">Start Date</Label>
                 <Input
@@ -142,6 +298,7 @@ export function DashboardClient({
                 />
               </div>
 
+              {/* End Date */}
               <div className="w-full sm:w-auto">
                 <Label className="text-xs text-muted-foreground mb-1 block">End Date</Label>
                 <Input
@@ -152,11 +309,12 @@ export function DashboardClient({
                 />
               </div>
 
+              {/* Buttons */}
               <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
                 <Button type="button" onClick={handleApplyDates} className="w-full sm:w-auto">
                   Apply Date
                 </Button>
-                {(createdBy || startDate || endDate) && (
+                {hasActiveFilters && (
                   <Button type="button" variant="ghost" onClick={handleReset} className="w-full sm:w-auto text-destructive hover:text-destructive">
                     Reset
                   </Button>
@@ -168,72 +326,72 @@ export function DashboardClient({
       )}
 
       {/* Stats Grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+      <div className={`grid sm:grid-cols-2 lg:grid-cols-5 ${density === "compact" ? "gap-3" : "gap-4"}`}>
+        <Card className={density === "compact" ? "shadow-sm" : ""}>
+          <CardHeader className={`flex flex-row items-center justify-between ${density === "compact" ? "p-3 pb-1.5" : "pb-2"}`}>
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Projects
             </CardTitle>
             <FolderKanban className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalProjects}</div>
+          <CardContent className={density === "compact" ? "p-3 pt-0" : ""}>
+            <div className={`font-bold ${density === "compact" ? "text-xl" : "text-2xl"}`}>{stats.totalProjects}</div>
             <p className="text-xs text-muted-foreground">
               {stats.activeProjects} active
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card className={density === "compact" ? "shadow-sm" : ""}>
+          <CardHeader className={`flex flex-row items-center justify-between ${density === "compact" ? "p-3 pb-1.5" : "pb-2"}`}>
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Tasks
             </CardTitle>
             <ListTodo className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalTasks}</div>
+          <CardContent className={density === "compact" ? "p-3 pt-0" : ""}>
+            <div className={`font-bold ${density === "compact" ? "text-xl" : "text-2xl"}`}>{stats.totalTasks}</div>
             <p className="text-xs text-muted-foreground">
               {stats.completedTasks} completed
             </p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card className={density === "compact" ? "shadow-sm" : ""}>
+          <CardHeader className={`flex flex-row items-center justify-between ${density === "compact" ? "p-3 pb-1.5" : "pb-2"}`}>
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Reports
             </CardTitle>
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalReports}</div>
+          <CardContent className={density === "compact" ? "p-3 pt-0" : ""}>
+            <div className={`font-bold ${density === "compact" ? "text-xl" : "text-2xl"}`}>{stats.totalReports}</div>
             <p className="text-xs text-muted-foreground">Total submitted</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card className={density === "compact" ? "shadow-sm" : ""}>
+          <CardHeader className={`flex flex-row items-center justify-between ${density === "compact" ? "p-3 pb-1.5" : "pb-2"}`}>
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Total Hours
             </CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalHours}</div>
+          <CardContent className={density === "compact" ? "p-3 pt-0" : ""}>
+            <div className={`font-bold ${density === "compact" ? "text-xl" : "text-2xl"}`}>{stats.totalHours}</div>
             <p className="text-xs text-muted-foreground">Hours logged</p>
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
+        <Card className={density === "compact" ? "shadow-sm" : ""}>
+          <CardHeader className={`flex flex-row items-center justify-between ${density === "compact" ? "p-3 pb-1.5" : "pb-2"}`}>
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Completion Rate
             </CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className={density === "compact" ? "p-3 pt-0" : ""}>
+            <div className={`font-bold ${density === "compact" ? "text-xl" : "text-2xl"}`}>
               {stats.totalTasks > 0
                 ? Math.round((stats.completedTasks / stats.totalTasks) * 100)
                 : 0}
@@ -244,17 +402,17 @@ export function DashboardClient({
         </Card>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className={`grid lg:grid-cols-2 ${density === "compact" ? "gap-4" : "gap-6"}`}>
         {/* Projects by Status */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Projects by Status</CardTitle>
+        <Card className={density === "compact" ? "shadow-sm" : ""}>
+          <CardHeader className={density === "compact" ? "p-3 pb-1.5" : ""}>
+            <CardTitle className={density === "compact" ? "text-sm" : ""}>Projects by Status</CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className={density === "compact" ? "p-3 pt-0" : ""}>
             {stats.projectsByStatus.length === 0 ? (
               <p className="text-sm text-muted-foreground">No projects yet</p>
             ) : (
-              <div className="space-y-3">
+              <div className={density === "compact" ? "space-y-2" : "space-y-3"}>
                 {stats.projectsByStatus.map((item) => (
                   <div
                     key={item.status}
@@ -262,10 +420,11 @@ export function DashboardClient({
                   >
                     <Badge
                       variant={statusVariant[item.status] ?? "default"}
+                      className={density === "compact" ? "text-[10px] py-0 px-1.5" : ""}
                     >
                       {item.status}
                     </Badge>
-                    <span className="text-sm font-medium">{item.count}</span>
+                    <span className={`font-medium ${density === "compact" ? "text-xs" : "text-sm"}`}>{item.count}</span>
                   </div>
                 ))}
               </div>
@@ -274,27 +433,27 @@ export function DashboardClient({
         </Card>
 
         {/* Recent Reports */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle>Recent Reports</CardTitle>
+        <Card className={density === "compact" ? "shadow-sm" : ""}>
+          <CardHeader className={`flex flex-row items-center justify-between ${density === "compact" ? "p-3 pb-1.5" : ""}`}>
+            <CardTitle className={density === "compact" ? "text-sm" : ""}>Recent Reports</CardTitle>
             <Link href="/reports">
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className={density === "compact" ? "h-7 text-xs px-2" : ""}>
                 View all <ArrowRight className="ml-1 h-3 w-3" />
               </Button>
             </Link>
           </CardHeader>
-          <CardContent>
+          <CardContent className={density === "compact" ? "p-3 pt-0" : ""}>
             {stats.recentReports.length === 0 ? (
               <p className="text-sm text-muted-foreground">No reports yet</p>
             ) : (
-              <div className="space-y-3">
+              <div className={density === "compact" ? "space-y-2" : "space-y-3"}>
                 {stats.recentReports.map((report) => (
                   <div
                     key={report.report_id}
-                    className="flex items-center justify-between rounded-xl border p-3"
+                    className={`flex items-center justify-between rounded-xl border ${density === "compact" ? "p-2" : "p-3"}`}
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium">
+                      <p className={`truncate font-medium ${density === "compact" ? "text-xs" : "text-sm"}`}>
                         {report.task_description ?? report.task_id}
                       </p>
                       <p className="text-xs text-muted-foreground">
@@ -303,7 +462,7 @@ export function DashboardClient({
                         {report.user_name && ` • ${report.user_name}`}
                       </p>
                     </div>
-                    <Badge variant="outline" className="ml-2 shrink-0">
+                    <Badge variant="outline" className={`ml-2 shrink-0 ${density === "compact" ? "text-[9px] py-0 px-1" : ""}`}>
                       {report.progress_percentage ?? 0}%
                     </Badge>
                   </div>
@@ -379,6 +538,7 @@ function ContributionHeatmapPreview({
   startDate?: string
   endDate?: string
 }) {
+  const { density } = useViewDensity()
   const days: { date: string; hours: number }[] = []
 
   if (startDate && endDate) {
@@ -412,23 +572,23 @@ function ContributionHeatmapPreview({
   const activeDays = days.filter((d) => d.hours > 0).length
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
+    <Card className={density === "compact" ? "shadow-sm" : ""}>
+      <CardHeader className={`flex flex-row items-center justify-between ${density === "compact" ? "p-3 pb-1.5" : ""}`}>
         <div className="flex items-center gap-2">
           <BarChart3 className="h-4 w-4 text-muted-foreground" />
-          <CardTitle>Contribution Activity</CardTitle>
+          <CardTitle className={density === "compact" ? "text-sm" : ""}>Contribution Activity</CardTitle>
           <span className="text-xs text-muted-foreground">
             {startDate && endDate ? `${startDate} to ${endDate}` : "Last 30 days"}
           </span>
         </div>
         <Link href="/analytics">
-          <Button variant="ghost" size="sm">
+          <Button variant="ghost" size="sm" className={density === "compact" ? "h-7 text-xs px-2" : ""}>
             View all <ArrowRight className="ml-1 h-3 w-3" />
           </Button>
         </Link>
       </CardHeader>
-      <CardContent>
-        <div className="flex gap-[3px] mb-3">
+      <CardContent className={density === "compact" ? "p-3 pt-0" : ""}>
+        <div className={`flex mb-3 ${density === "compact" ? "gap-[2px] mb-2" : "gap-[3px]"}`}>
           {days.map((day) => (
             <div
               key={day.date}
@@ -437,7 +597,7 @@ function ContributionHeatmapPreview({
             />
           ))}
         </div>
-        <div className="flex items-center justify-between text-xs text-muted-foreground">
+        <div className={`flex items-center justify-between text-muted-foreground ${density === "compact" ? "text-[10px]" : "text-xs"}`}>
           <span>{totalHours}h total</span>
           <span>{activeDays} active days</span>
           <div className="flex items-center gap-1">

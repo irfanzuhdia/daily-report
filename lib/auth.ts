@@ -14,7 +14,13 @@ export interface SessionPayload {
   user_occupation: string | null;
   user_division: string | null;
   user_departement: string | null;
+  user_site: string | null;
+  user_team: string | null;
+  user_unit: string | null;
   exp: number;
+  real_user_id?: string;
+  real_email?: string;
+  real_name?: string;
 }
 
 export async function createSession(payload: Omit<SessionPayload, 'exp'>): Promise<string> {

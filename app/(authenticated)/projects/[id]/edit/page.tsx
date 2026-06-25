@@ -5,6 +5,7 @@ import {
   StatusRepository,
   UserRepository,
   ProjectTeamRepository,
+  hasProjectWritePermission,
 } from "@/lib/repositories"
 import { ProjectForm } from "../../project-form"
 
@@ -29,6 +30,11 @@ export default async function EditProjectPage({
   // Get current team members
   const projectTeam = await ProjectTeamRepository.findByProjectId(id)
   const initialTeamUserIds = projectTeam.map((pt) => pt.user_id)
+
+  const hasWrite = await hasProjectWritePermission(id, session.user_id)
+  if (!hasWrite) {
+    redirect(`/projects/${id}`)
+  }
 
   return (
     <ProjectForm

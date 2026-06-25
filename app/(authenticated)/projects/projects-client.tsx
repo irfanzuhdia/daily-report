@@ -40,7 +40,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import type { Project, Status } from "@/lib/types"
+import type { Project, Status, ProjectTeam } from "@/lib/types"
+import { useViewDensity } from "@/lib/view-density"
 import { revalidatePathsAndTags } from "@/app/actions"
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -73,6 +74,8 @@ function SortableProjectCard({
   onDelete,
   isPinned,
   onTogglePin,
+  isProjectTeamMember,
+  density,
 }: {
   project: Project
   projectHoursMap: Record<string, number>
@@ -83,6 +86,8 @@ function SortableProjectCard({
   onDelete: (projectId: string) => void
   isPinned: boolean
   onTogglePin: (projectId: string) => void
+  isProjectTeamMember: boolean
+  density: "comfortable" | "compact"
 }) {
   const {
     attributes,
@@ -99,6 +104,8 @@ function SortableProjectCard({
     opacity: isDragging ? 0.4 : 1,
   }
 
+  const isCompact = density === "compact"
+
   return (
     <div ref={setNodeRef} style={style} {...attributes}>
       <Card className={`shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isDragging ? "ring-2 ring-primary" : ""}`}>
@@ -107,22 +114,26 @@ function SortableProjectCard({
             <Loader2 className="h-5 w-5 animate-spin text-primary" />
           </div>
         )}
-        <CardContent className="p-4 space-y-3">
+        <CardContent className={isCompact ? "p-3 space-y-2" : "p-4 space-y-3"}>
           <div className="flex items-start gap-2">
-            <button
-              {...listeners}
-              className="mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
-              tabIndex={-1}
-            >
-              <GripVertical className="h-4 w-4" />
-            </button>
+            {isProjectTeamMember && (
+              <button
+                {...listeners}
+                className="mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
+                tabIndex={-1}
+              >
+                <GripVertical className="h-4 w-4" />
+              </button>
+            )}
             <div className="space-y-1 min-w-0 flex-1">
               <Link href={`/projects/${project.project_id}`} className="font-medium text-sm hover:text-primary leading-snug line-clamp-2">
                 {project.project_name}
               </Link>
-              <p className="text-[11px] text-muted-foreground line-clamp-2">
-                {project.project_description || "No description"}
-              </p>
+              {!isCompact && project.project_description && (
+                <p className="text-[11px] text-muted-foreground line-clamp-2">
+                  {project.project_description}
+                </p>
+              )}
             </div>
             <Button
               variant="ghost"
@@ -135,7 +146,7 @@ function SortableProjectCard({
           </div>
 
           {/* Dates */}
-          {(project.project_start_date_plan || project.project_end_date_plan) && (
+          {!isCompact && (project.project_start_date_plan || project.project_end_date_plan) && (
             <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
               {project.project_start_date_plan && <span>📅 Start: {project.project_start_date_plan}</span>}
               {project.project_end_date_plan && <span>🏁 End: {project.project_end_date_plan}</span>}
@@ -143,17 +154,24 @@ function SortableProjectCard({
           )}
 
           {/* Metrics */}
-          <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t">
-            {(projectProgressMap[project.project_id] ?? 0) > 0 && (
-              <Badge variant="outline" className="text-[10px] py-0">
-                {projectProgressMap[project.project_id]}% done
+          <div className={`flex items-center justify-between text-xs text-muted-foreground pt-1 border-t ${isCompact ? "border-t-muted/30" : ""}`}>
+            {project.category && (
+              <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-primary/5 text-primary border-primary/10">
+                {project.category}
               </Badge>
             )}
-            {(projectHoursMap[project.project_id] ?? 0) > 0 && (
-              <Badge variant="secondary" className="text-[10px] py-0">
-                {projectHoursMap[project.project_id]}h logged
-              </Badge>
-            )}
+            <div className="flex gap-1">
+              {(projectProgressMap[project.project_id] ?? 0) > 0 && (
+                <Badge variant="outline" className="text-[9px] py-0">
+                  {projectProgressMap[project.project_id]}% done
+                </Badge>
+              )}
+              {(projectHoursMap[project.project_id] ?? 0) > 0 && (
+                <Badge variant="secondary" className="text-[9px] py-0">
+                  {projectHoursMap[project.project_id]}h logged
+                </Badge>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center justify-between gap-1 pt-1">
@@ -161,8 +179,9 @@ function SortableProjectCard({
             <Select
               value={project.project_status || "NS"}
               onValueChange={(val) => onStatusChange(project.project_id, val)}
+              disabled={!isProjectTeamMember}
             >
-              <SelectTrigger className="h-7 text-[10px] w-[110px] px-2 py-0">
+              <SelectTrigger className={`text-[10px] px-2 py-0 ${isCompact ? "h-6 w-[95px]" : "h-7 w-[110px]"}`}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -176,23 +195,27 @@ function SortableProjectCard({
 
             <div className="flex items-center gap-0.5">
               <Link href={`/projects/${project.project_id}`}>
-                <Button variant="ghost" size="icon-sm" className="h-7 w-7">
+                <Button variant="ghost" size="icon-sm" className={isCompact ? "h-6 w-6" : "h-7 w-7"}>
                   <Eye className="h-3 w-3" />
                 </Button>
               </Link>
-              <Link href={`/projects/${project.project_id}/edit`}>
-                <Button variant="ghost" size="icon-sm" className="h-7 w-7">
-                  <Pencil className="h-3 w-3" />
-                </Button>
-              </Link>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                className="h-7 w-7"
-                onClick={() => onDelete(project.project_id)}
-              >
-                <Trash2 className="h-3 w-3 text-destructive" />
-              </Button>
+              {isProjectTeamMember && (
+                <>
+                  <Link href={`/projects/${project.project_id}/edit`}>
+                    <Button variant="ghost" size="icon-sm" className={isCompact ? "h-6 w-6" : "h-7 w-7"}>
+                      <Pencil className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className={`text-destructive hover:text-destructive ${isCompact ? "h-6 w-6" : "h-7 w-7"}`}
+                    onClick={() => onDelete(project.project_id)}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         </CardContent>
@@ -278,7 +301,25 @@ function DroppableColumn({
   )
 }
 
-/* ─────────────────────── Main Component ─────────────────────── */
+/* ─────────────────────── Folder Icon (Fallback) ─────────────────────── */
+function FolderIcon(props: React.SVGProps<SVGSVGElement>) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      fill="none"
+      viewBox="0 0 24 24"
+      strokeWidth={1.5}
+      stroke="currentColor"
+      {...props}
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-19.5 0A2.25 2.25 0 004.5 15h15a2.25 2.25 0 002.25-2.25m-19.5 0v.25A2.25 2.25 0 004.5 15.25h15a2.25 2.25 0 002.25-2.25v-.25"
+      />
+    </svg>
+  )
+}
 
 export function ProjectsClient({
   projects,
@@ -291,10 +332,16 @@ export function ProjectsClient({
   projectHoursMap,
   projectProgressMap,
   viewMode,
+  projectTeams = [],
+  currentUserId = "",
+  currentDept = "",
+  currentSite = "",
+  currentDiv = "",
+  currentTeam = "",
 }: {
   projects: Project[]
   statuses: Status[]
-  users?: { user_id: string; user_name: string | null; user_email: string }[]
+  users?: any[]
   projectHoursMap: Record<string, number>
   projectProgressMap: Record<string, number>
   currentStatus?: string
@@ -302,12 +349,39 @@ export function ProjectsClient({
   currentCreatedBy?: string
   currentMemberId?: string
   viewMode: "my" | "team"
+  projectTeams?: ProjectTeam[]
+  currentUserId?: string
+  currentDept?: string
+  currentSite?: string
+  currentDiv?: string
+  currentTeam?: string
 }) {
+  const { density } = useViewDensity()
+  const currentUser = users.find(u => u.user_id === currentUserId)
+  const isSuperUser = currentUser?.user_occupation?.toLowerCase() === 'super user'
+  const userLevel = currentUser?.level || 1
+
+  const isDeptDisabled = userLevel < 6
+  const isSiteDisabled = userLevel < 5
+  const isDivDisabled = userLevel < 3
+  const isTeamDisabled = userLevel < 2
+
+  const defaultDept = isDeptDisabled ? (currentUser?.user_departement || "") : ""
+  const defaultSite = isSiteDisabled ? (currentUser?.user_site || "") : ""
+  const defaultDiv = isDivDisabled ? (currentUser?.user_division || "") : ""
+  const defaultTeam = isTeamDisabled ? (currentUser?.user_team || "") : ""
+
   const router = useRouter()
   const [search, setSearch] = useState(currentSearch ?? "")
   const [statusFilter, setStatusFilter] = useState(currentStatus ?? "")
   const [createdByFilter, setCreatedByFilter] = useState(currentCreatedBy ?? "")
   const [memberFilter, setMemberFilter] = useState(currentMemberId ?? "")
+
+  const [dept, setDept] = useState(currentDept || defaultDept)
+  const [site, setSite] = useState(currentSite || defaultSite)
+  const [division, setDivision] = useState(currentDiv || defaultDiv)
+  const [team, setTeam] = useState(currentTeam || defaultTeam)
+
   const [deleteId, setDeleteId] = useState<string | null>(null)
   
   const [layout, setLayout] = useState<"kanban" | "list">("kanban")
@@ -359,10 +433,14 @@ export function ProjectsClient({
     if (viewMode === "team") {
       if (createdByFilter) params.set("created_by", createdByFilter)
       if (memberFilter) params.set("member_id", memberFilter)
+      if (dept) params.set("dept_filter", dept)
+      if (site) params.set("site_filter", site)
+      if (division) params.set("div_filter", division)
+      if (team) params.set("team_filter", team)
     }
     const query = params.toString()
     router.push(`/projects${query ? "?" + query : ""}`)
-  }, [debouncedSearch, statusFilter, createdByFilter, memberFilter, viewMode, router])
+  }, [debouncedSearch, statusFilter, createdByFilter, memberFilter, viewMode, router, dept, site, division, team])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -628,6 +706,19 @@ export function ProjectsClient({
     }
   }
 
+  const uniqueDepts = Array.from(new Set(users.map((u) => u.user_departement).filter(Boolean))) as string[]
+  const uniqueSites = Array.from(new Set(users.map((u) => u.user_site).filter(Boolean))) as string[]
+  const uniqueDivs = Array.from(new Set(users.map((u) => u.user_division).filter(Boolean))) as string[]
+  const uniqueTeams = Array.from(new Set(users.map((u) => u.user_team).filter(Boolean))) as string[]
+
+  // Only show users who have actually created a project
+  const creatorIds = new Set(projects.map((p) => p.created_by).filter(Boolean))
+  const uniqueCreators = users.filter((u) => creatorIds.has(u.user_id))
+
+  // Only show users who are actually a team member on some project
+  const memberIds = new Set(projectTeams.map((pt) => pt.user_id).filter(Boolean))
+  const uniqueMembers = users.filter((u) => memberIds.has(u.user_id))
+
   const activeProject = activeId ? activeProjects.find(p => p.project_id === activeId) : null
 
   return (
@@ -730,7 +821,7 @@ export function ProjectsClient({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All creators</SelectItem>
-                    {users.map((u) => (
+                    {uniqueCreators.map((u) => (
                       <SelectItem key={u.user_id} value={u.user_id}>
                         {u.user_name || u.user_email}
                       </SelectItem>
@@ -745,9 +836,69 @@ export function ProjectsClient({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="">All members</SelectItem>
-                    {users.map((u) => (
+                    {uniqueMembers.map((u) => (
                       <SelectItem key={u.user_id} value={u.user_id}>
                         {u.user_name || u.user_email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={dept} onValueChange={setDept} disabled={isDeptDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Department" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Departments</SelectItem>
+                    {uniqueDepts.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={site} onValueChange={setSite} disabled={isSiteDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Site" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Sites</SelectItem>
+                    {uniqueSites.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {s}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={division} onValueChange={setDivision} disabled={isDivDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Division" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Divisions</SelectItem>
+                    {uniqueDivs.map((d) => (
+                      <SelectItem key={d} value={d}>
+                        {d}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
+                <Select value={team} onValueChange={setTeam} disabled={isTeamDisabled}>
+                  <SelectTrigger className="w-full sm:w-[180px]">
+                    <Filter className="mr-2 h-4 w-4" />
+                    <SelectValue placeholder="Team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All Teams</SelectItem>
+                    {uniqueTeams.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -774,20 +925,25 @@ export function ProjectsClient({
               const colProjects = getSortedColumnProjects(col.id)
               return (
                 <DroppableColumn key={col.id} column={col} projects={colProjects}>
-                  {colProjects.map((project) => (
-                    <SortableProjectCard
-                      key={project.project_id}
-                      project={project}
-                      projectHoursMap={projectHoursMap}
-                      projectProgressMap={projectProgressMap}
-                      statuses={statuses}
-                      updatingId={updatingId}
-                      onStatusChange={handleStatusChange}
-                      onDelete={setDeleteId}
-                      isPinned={pinnedIds.includes(project.project_id)}
-                      onTogglePin={togglePin}
-                    />
-                  ))}
+                  {colProjects.map((project) => {
+                    const isMember = projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId) || project.created_by === currentUserId || isSuperUser
+                    return (
+                      <SortableProjectCard
+                        key={project.project_id}
+                        project={project}
+                        projectHoursMap={projectHoursMap}
+                        projectProgressMap={projectProgressMap}
+                        statuses={statuses}
+                        updatingId={updatingId}
+                        onStatusChange={handleStatusChange}
+                        onDelete={setDeleteId}
+                        isPinned={pinnedIds.includes(project.project_id)}
+                        onTogglePin={togglePin}
+                        isProjectTeamMember={isMember}
+                        density={density}
+                      />
+                    )
+                  })}
                 </DroppableColumn>
               )
             })}
@@ -823,72 +979,155 @@ export function ProjectsClient({
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {localProjects.map((project) => (
-              <Card key={project.project_id} className="transition-shadow hover:shadow-md">
-                <CardContent className="p-4">
-                  <div className="mb-3 flex items-start justify-between gap-2">
-                    <h3 className="line-clamp-1 text-sm font-semibold">{project.project_name}</h3>
-                    <Badge
-                      variant={statusVariant[project.project_status ?? "NS"] ?? "default"}
-                      className="shrink-0 text-xs"
-                    >
-                      {statusLabel[project.project_status ?? "NS"] ?? project.project_status ?? "NS"}
-                    </Badge>
-                  </div>
-                  <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
-                    {project.project_description || "No description"}
-                  </p>
-                  <div className="mb-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
-                    {project.project_start_date_plan && (
-                      <span>Start: {project.project_start_date_plan}</span>
-                    )}
-                    {project.project_end_date_plan && (
-                      <span>End: {project.project_end_date_plan}</span>
-                    )}
-                  </div>
-                  <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
-                    {project.category && (
-                      <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10">
-                        {project.category}
+          density === "compact" ? (
+            <div className="flex flex-col border rounded-xl divide-y divide-border/55 bg-card overflow-hidden">
+              {localProjects.map((project) => {
+                const isMember = projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId) || project.created_by === currentUserId || isSuperUser
+                return (
+                  <div key={project.project_id} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 gap-2.5 hover:bg-muted/30 transition-colors">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      <Badge variant="outline" className="shrink-0 text-[10px] font-mono py-0 px-1 bg-muted">
+                        {project.project_id.substring(0, 6)}
                       </Badge>
-                    )}
-                    {(projectProgressMap[project.project_id] ?? 0) > 0 && (
-                      <Badge variant="outline">
-                        {projectProgressMap[project.project_id]}% done
+                      <div className="min-w-0 flex-1">
+                        <Link href={`/projects/${project.project_id}`} className="font-medium text-xs hover:text-primary leading-none block truncate">
+                          {project.project_name}
+                        </Link>
+                        {project.project_description && (
+                          <p className="text-[10px] text-muted-foreground truncate mt-0.5 max-w-xl">
+                            {project.project_description}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 text-xs">
+                      <Badge
+                        variant={statusVariant[project.project_status ?? "NS"] ?? "default"}
+                        className="text-[9px] py-0 px-1.5 shrink-0"
+                      >
+                        {statusLabel[project.project_status ?? "NS"] ?? project.project_status ?? "NS"}
                       </Badge>
-                    )}
-                    {(projectHoursMap[project.project_id] ?? 0) > 0 && (
-                      <Badge variant="secondary">
-                        {projectHoursMap[project.project_id]}h logged
-                      </Badge>
-                    )}
+
+                      {project.category && (
+                        <Badge variant="outline" className="text-[9px] py-0 px-1 bg-primary/5 text-primary border-primary/10 shrink-0">
+                          {project.category}
+                        </Badge>
+                      )}
+
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground min-w-[100px] justify-end">
+                        {(projectProgressMap[project.project_id] ?? 0) > 0 && (
+                          <span className="shrink-0">{projectProgressMap[project.project_id]}% done</span>
+                        )}
+                        {(projectHoursMap[project.project_id] ?? 0) > 0 && (
+                          <span className="shrink-0 font-medium text-foreground">{projectHoursMap[project.project_id]}h</span>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-0.5">
+                        <Link href={`/projects/${project.project_id}`}>
+                          <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                            <Eye className="h-3 w-3" />
+                          </Button>
+                        </Link>
+                        {isMember && (
+                          <>
+                            <Link href={`/projects/${project.project_id}/edit`}>
+                              <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                                <Pencil className="h-3 w-3" />
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="ghost"
+                              size="icon-sm"
+                              className="text-destructive hover:text-destructive h-6 w-6"
+                              onClick={() => setDeleteId(project.project_id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Link href={`/projects/${project.project_id}`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full">
-                        <Eye className="mr-1 h-3 w-3" />
-                        View
-                      </Button>
-                    </Link>
-                    <Link href={`/projects/${project.project_id}/edit`} className="flex-1">
-                      <Button variant="outline" size="sm" className="w-full">
-                        <Pencil className="mr-1 h-3 w-3" />
-                        Edit
-                      </Button>
-                    </Link>
-                    <Button
-                      variant="destructive"
-                      size="sm"
-                      onClick={() => setDeleteId(project.project_id)}
-                    >
-                      <Trash2 className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                )
+              })}
+            </div>
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {localProjects.map((project) => {
+                const isMember = projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId) || project.created_by === currentUserId || isSuperUser
+                return (
+                  <Card key={project.project_id} className="transition-shadow hover:shadow-md">
+                    <CardContent className="p-4">
+                      <div className="mb-3 flex items-start justify-between gap-2">
+                        <h3 className="line-clamp-1 text-sm font-semibold">{project.project_name}</h3>
+                        <Badge
+                          variant={statusVariant[project.project_status ?? "NS"] ?? "default"}
+                          className="shrink-0 text-xs"
+                        >
+                          {statusLabel[project.project_status ?? "NS"] ?? project.project_status ?? "NS"}
+                        </Badge>
+                      </div>
+                      <p className="mb-3 line-clamp-2 text-xs text-muted-foreground">
+                        {project.project_description || "No description"}
+                      </p>
+                      <div className="mb-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
+                        {project.project_start_date_plan && (
+                          <span>Start: {project.project_start_date_plan}</span>
+                        )}
+                        {project.project_end_date_plan && (
+                          <span>End: {project.project_end_date_plan}</span>
+                        )}
+                      </div>
+                      <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
+                        {project.category && (
+                          <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10">
+                            {project.category}
+                          </Badge>
+                        )}
+                        {(projectProgressMap[project.project_id] ?? 0) > 0 && (
+                          <Badge variant="outline">
+                            {projectProgressMap[project.project_id]}% done
+                          </Badge>
+                        )}
+                        {(projectHoursMap[project.project_id] ?? 0) > 0 && (
+                          <Badge variant="secondary">
+                            {projectHoursMap[project.project_id]}h logged
+                          </Badge>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Link href={`/projects/${project.project_id}`} className="flex-1">
+                          <Button variant="outline" size="sm" className="w-full">
+                            <Eye className="mr-1 h-3 w-3" />
+                            View
+                          </Button>
+                        </Link>
+                        {isMember && (
+                          <>
+                            <Link href={`/projects/${project.project_id}/edit`} className="flex-1">
+                              <Button variant="outline" size="sm" className="w-full">
+                                <Pencil className="mr-1 h-3 w-3" />
+                                Edit
+                              </Button>
+                            </Link>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => setDeleteId(project.project_id)}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )
+              })}
+            </div>
+          )
         )
       )}
 
@@ -931,6 +1170,7 @@ export function ProjectsClient({
                         <Select
                           value={project.project_status || "NS"}
                           onValueChange={(val) => handleStatusChange(project.project_id, val)}
+                          disabled={!projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId)}
                         >
                           <SelectTrigger className="h-8 text-[11px] w-[120px] px-2 py-0">
                             <SelectValue placeholder="Restore status" />
@@ -981,10 +1221,3 @@ export function ProjectsClient({
   )
 }
 
-function FolderIcon({ className }: { className?: string }) {
-  return (
-    <svg className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-      <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
-    </svg>
-  )
-}

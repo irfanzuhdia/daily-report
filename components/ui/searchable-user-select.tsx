@@ -11,6 +11,11 @@ export interface UserSelectItem {
   user_name: string | null
   user_email: string
   user_occupation?: string | null
+  user_departement?: string | null
+  user_division?: string | null
+  user_site?: string | null
+  user_team?: string | null
+  level?: number
 }
 
 interface SearchableUserSelectProps {
@@ -19,6 +24,13 @@ interface SearchableUserSelectProps {
   onAddUser: (userId: string) => void
   onRemoveUser: (userId: string) => void
   placeholder?: string
+}
+
+export function getSelectableUsers(
+  currentUserId: string,
+  allUsers: UserSelectItem[]
+): UserSelectItem[] {
+  return allUsers
 }
 
 export function SearchableUserSelect({

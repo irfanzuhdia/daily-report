@@ -19,7 +19,7 @@ import { formatDate, formatDateTime } from "@/lib/format"
 import { revalidatePathsAndTags } from "@/app/actions"
 import { FileSection } from "@/components/file-section"
 import { CommentsSection } from "@/components/comments-section"
-import { SearchableUserSelect } from "@/components/ui/searchable-user-select"
+import { SearchableUserSelect, getSelectableUsers, type UserSelectItem } from "@/components/ui/searchable-user-select"
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
   NS: "secondary",
@@ -60,7 +60,7 @@ export function ProjectDetailClient({
   updatedByName: string
   teamMembers: { user_id: string; user_name: string; user_email: string; user_occupation: string | null }[]
   projectLogs: EnrichedProjectLog[]
-  allUsers: { user_id: string; user_name: string; user_email: string; user_occupation: string | null }[]
+  allUsers: UserSelectItem[]
   currentUserId: string
 }) {
   const router = useRouter()
@@ -71,9 +71,14 @@ export function ProjectDetailClient({
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [currentStatus, setCurrentStatus] = useState(autoProjectStatus)
 
+  const currentUser = allUsers.find((u) => u.user_id === currentUserId)
+  const normOcc = currentUser?.user_occupation?.toLowerCase().replace(/\s+/g, "") ?? ""
+  const isSUOrCOSU = ["superuser", "cosuperuser", "co-superuser"].includes(normOcc)
+  const isHRIS = currentUser?.user_division?.toLowerCase().trim() === "hris"
+
   const isProjectCreator = project.created_by === currentUserId
   const isProjectTeamMember = teamMembers.some((m) => m.user_id === currentUserId)
-  const hasEditPermission = isProjectCreator || isProjectTeamMember
+  const hasEditPermission = isProjectTeamMember || isProjectCreator || isSUOrCOSU || isHRIS
 
   const availableUsers = allUsers.filter(
     (u) => !teamMembers.some((m) => m.user_id === u.user_id)
@@ -331,11 +336,11 @@ export function ProjectDetailClient({
           {hasEditPermission && availableUsers.length > 0 && (
             <div className="space-y-3 p-3 rounded-xl border bg-muted/20">
               <SearchableUserSelect
-                allUsers={availableUsers}
+                allUsers={getSelectableUsers(currentUserId, availableUsers)}
                 selectedUserIds={selectedNewUserIds}
                 onAddUser={(uid) => setSelectedNewUserIds([...selectedNewUserIds, uid])}
                 onRemoveUser={(uid) => setSelectedNewUserIds(selectedNewUserIds.filter(id => id !== uid))}
-                placeholder="Assign project team members..."
+                placeholder="Assign project team person..."
               />
               {selectedNewUserIds.length > 0 && (
                 <div className="flex justify-end gap-2 pt-2 border-t border-muted animate-in fade-in duration-200">
@@ -366,7 +371,7 @@ export function ProjectDetailClient({
           )}
 
           {teamMembers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No team members assigned yet.</p>
+            <p className="text-sm text-muted-foreground">No team person assigned yet.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {teamMembers.map((member) => (
@@ -468,8 +473,19 @@ export function ProjectDetailClient({
       {/* Files Attachments */}
       <FileSection projectId={project.project_id} />
 
-      {/* Comments Section */}
-      <CommentsSection projectId={project.project_id} allUsers={allUsers} />
+      <CommentsSection 
+        projectId={project.project_id} 
+        allUsers={allUsers.map((u) => ({
+          user_id: u.user_id,
+          user_name: u.user_name || "No Name",
+          user_email: u.user_email,
+        }))} 
+        teamMembers={teamMembers.map((m) => ({
+          user_id: m.user_id,
+          user_name: m.user_name || "No Name",
+          user_email: m.user_email,
+        }))}
+      />
 
       {/* Project Activity Log */}
       <Card>

@@ -6,6 +6,7 @@ import {
   StatusRepository,
   UserRepository,
   TaskTeamRepository,
+  hasTaskWritePermission,
 } from "@/lib/repositories"
 import { TaskForm } from "../../task-form"
 
@@ -32,6 +33,11 @@ export default async function EditTaskPage({
   const taskTeam = await TaskTeamRepository.findByTaskId(id)
   const defaultTeamUserIds = taskTeam.map((tt) => tt.user_id)
 
+  const hasWrite = await hasTaskWritePermission(id, session.user_id)
+  if (!hasWrite) {
+    redirect(`/tasks/${id}`)
+  }
+
   return (
     <TaskForm
       task={task}
@@ -44,6 +50,11 @@ export default async function EditTaskPage({
         user_name: u.user_name || u.user_email,
         user_email: u.user_email,
         user_occupation: u.user_occupation,
+        user_division: u.user_division,
+        user_departement: u.user_departement,
+        user_site: u.user_site,
+        user_team: u.user_team,
+        level: u.level,
       }))}
       uniqueCategories={uniqueCategories}
     />

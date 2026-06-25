@@ -5,17 +5,15 @@ import {
   ProjectTeamRepository,
   TaskRepository,
   DailyReportRepository,
+  hasProjectWritePermission,
 } from '@/lib/repositories'
 
 async function checkProjectPermission(projectId: string, userId: string) {
   const project = await ProjectRepository.findById(projectId)
   if (!project) return { error: 'Not found', status: 404 }
 
-  const projectTeam = await ProjectTeamRepository.findByProjectId(projectId)
-  const isProjectCreator = project.created_by === userId
-  const isProjectTeamMember = projectTeam.some((pt) => pt.user_id === userId)
-
-  if (!isProjectCreator && !isProjectTeamMember) {
+  const hasWrite = await hasProjectWritePermission(projectId, userId)
+  if (!hasWrite) {
     return { error: 'Forbidden', status: 403 }
   }
 
@@ -63,7 +61,7 @@ export async function PUT(
     const body = await request.json()
     const { team_user_ids, ...projectData } = body
 
-    const updatedProject = await ProjectRepository.update(id, projectData, session.user_id)
+    const updatedProject = await ProjectRepository.update(id, projectData, session.real_user_id ?? session.user_id)
     if (!updatedProject) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
@@ -77,14 +75,14 @@ export async function PUT(
       // Remove users no longer in team
       for (const pt of currentTeam) {
         if (!newUserIds.has(pt.user_id)) {
-          await ProjectTeamRepository.softDelete(pt.id, session.user_id)
+          await ProjectTeamRepository.softDelete(pt.id, session.real_user_id ?? session.user_id)
         }
       }
 
       // Add new users
       for (const userId of team_user_ids || []) {
         if (!currentUserIds.has(userId)) {
-          await ProjectTeamRepository.create(id, userId, session.user_id)
+          await ProjectTeamRepository.create(id, userId, session.real_user_id ?? session.user_id)
         }
       }
     }
@@ -124,7 +122,7 @@ export async function DELETE(
       }
     }
 
-    await ProjectRepository.softDelete(id, session.user_id)
+    await ProjectRepository.softDelete(id, session.real_user_id ?? session.user_id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('DELETE /api/projects/[id] error:', error)

@@ -4,6 +4,7 @@ import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter, usePathname } from "next/navigation"
 import { ArrowLeft, Calendar, BarChart3, Clock, TrendingUp, Award } from "lucide-react"
+import { useViewDensity } from "@/lib/view-density"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -141,6 +142,9 @@ const PRESETS: { key: PresetKey; label: string }[] = [
 ]
 
 export function CategoryPieChart({ data }: { data: { category: string | null; hours: number }[] }) {
+  const { density } = useViewDensity()
+  const isCompact = density === "compact"
+
   const activeData = useMemo(() => {
     return data
       .filter((item) => item.hours > 0)
@@ -187,13 +191,13 @@ export function CategoryPieChart({ data }: { data: { category: string | null; ho
     )
   }
 
-  const size = 180
-  const radius = 60
-  const strokeWidth = 20
+  const size = isCompact ? 140 : 180
+  const radius = isCompact ? 48 : 60
+  const strokeWidth = isCompact ? 16 : 20
   const circumference = 2 * Math.PI * radius
 
   return (
-    <div className="grid gap-6 md:grid-cols-12 items-center">
+    <div className={`grid ${isCompact ? "gap-4 md:grid-cols-12" : "gap-6 md:grid-cols-12"} items-center`}>
       {/* Chart Section */}
       <div className="md:col-span-5 flex justify-center relative">
         <svg
@@ -204,7 +208,7 @@ export function CategoryPieChart({ data }: { data: { category: string | null; ho
         >
           {chartData.map((item, index) => {
             const strokeDasharray = `${(item.percent / 100) * circumference} ${circumference}`
-            const strokeDashoffset = `${circumference - (item.startPercent / 100) * circumference}`
+            const strokeDashoffset = - (item.startPercent / 100) * circumference
             const isHovered = hoveredIndex === index
             const c = colors[index % colors.length]
 
@@ -237,7 +241,7 @@ export function CategoryPieChart({ data }: { data: { category: string | null; ho
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider max-w-[100px] truncate text-center px-1">
                 {chartData[hoveredIndex].name}
               </span>
-              <span className="text-xl font-bold text-foreground">
+              <span className={`${isCompact ? "text-base" : "text-xl"} font-bold text-foreground`}>
                 {Math.round(chartData[hoveredIndex].percent * 10) / 10}%
               </span>
               <span className="text-[10px] text-muted-foreground font-mono">
@@ -249,7 +253,7 @@ export function CategoryPieChart({ data }: { data: { category: string | null; ho
               <span className="text-[10px] text-muted-foreground font-semibold uppercase tracking-wider">
                 Total Hours
               </span>
-              <span className="text-2xl font-extrabold text-foreground">
+              <span className={`${isCompact ? "text-lg" : "text-2xl"} font-extrabold text-foreground`}>
                 {Math.round(totalHours * 10) / 10}h
               </span>
               <span className="text-[10px] text-muted-foreground">
@@ -262,14 +266,16 @@ export function CategoryPieChart({ data }: { data: { category: string | null; ho
 
       {/* Legend Section */}
       <div className="md:col-span-7">
-        <div className="max-h-[180px] overflow-y-auto pr-1 space-y-1.5">
+        <div className={`max-h-[180px] overflow-y-auto pr-1 ${isCompact ? "space-y-1" : "space-y-1.5"}`}>
           {chartData.map((item, index) => {
             const isHovered = hoveredIndex === index
             const c = colors[index % colors.length]
             return (
               <div
                 key={index}
-                className={`flex items-center justify-between p-1.5 rounded-xl transition-colors cursor-pointer ${
+                className={`flex items-center justify-between rounded-xl transition-colors cursor-pointer ${
+                  isCompact ? "p-1 px-2" : "p-1.5"
+                } ${
                   isHovered ? "bg-muted/80" : "hover:bg-muted/30"
                 }`}
                 onMouseEnter={() => setHoveredIndex(index)}
@@ -277,13 +283,13 @@ export function CategoryPieChart({ data }: { data: { category: string | null; ho
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <div className={`h-2.5 w-2.5 rounded-full shrink-0 ${c.bg}`} />
-                  <span className="text-xs font-semibold text-foreground truncate">
+                  <span className={`font-semibold text-foreground truncate ${isCompact ? "text-[11px]" : "text-xs"}`}>
                     {item.name}
                   </span>
                 </div>
-                <div className="flex items-center gap-2 text-xs shrink-0">
-                  <span className="text-muted-foreground font-mono font-medium">{item.hours}h</span>
-                  <span className="font-bold font-mono text-right w-10">
+                <div className={`flex items-center gap-2 font-mono shrink-0 ${isCompact ? "text-[11px]" : "text-xs"}`}>
+                  <span className="text-muted-foreground font-medium">{item.hours}h</span>
+                  <span className="font-bold text-right w-10">
                     {Math.round(item.percent * 10) / 10}%
                   </span>
                 </div>
@@ -309,6 +315,8 @@ export function ContributionCalendar({
   currentProjectId = "",
   currentUserId = "",
 }: ContributionCalendarProps) {
+  const { density } = useViewDensity()
+  const isCompact = density === "compact"
   const router = useRouter()
   const pathname = usePathname()
 
@@ -506,84 +514,89 @@ export function ContributionCalendar({
     return `${formatDate(startDate)} — ${formatDate(endDate)}`
   }, [startDate, endDate, preset])
 
+  const cellSize = isCompact ? 10 : 12
+  const cellGap = isCompact ? 1.5 : 2
+  const colWidth = cellSize + cellGap
+
   return (
-    <div className="space-y-6">
+    <div className={isCompact ? "space-y-4" : "space-y-6"}>
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/dashboard">
-          <Button variant="ghost" size="sm">
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <Button variant="ghost" size="sm" className={isCompact ? "h-8 px-2 text-xs" : ""}>
+            <ArrowLeft className={`mr-2 h-4 w-4 ${isCompact ? "h-3.5 w-3.5 mr-1" : ""}`} />
             Back
           </Button>
         </Link>
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Contribution Calendar</h1>
-          <p className="text-muted-foreground">Visualize daily work hours across your team</p>
+          <h1 className={`${isCompact ? "text-xl" : "text-2xl"} font-bold tracking-tight`}>Contribution Calendar</h1>
+          <p className={`${isCompact ? "text-xs" : "text-sm"} text-muted-foreground`}>Visualize daily work hours across your team</p>
         </div>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Total Hours</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+      <div className={`grid ${isCompact ? "gap-2 sm:grid-cols-2 lg:grid-cols-4" : "gap-4 sm:grid-cols-2 lg:grid-cols-4"}`}>
+        <Card className={isCompact ? "shadow-sm" : ""}>
+          <CardHeader className={`flex flex-row items-center justify-between ${isCompact ? "p-3 pb-1.5 space-y-0" : "pb-2"}`}>
+            <CardTitle className={`font-medium text-muted-foreground ${isCompact ? "text-xs" : "text-sm"}`}>Total Hours</CardTitle>
+            <Clock className={`${isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} text-muted-foreground`} />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalHours}</div>
-            <p className="text-xs text-muted-foreground">{stats.activeDays} active days</p>
+          <CardContent className={isCompact ? "p-3 pt-0" : ""}>
+            <div className={`font-bold ${isCompact ? "text-lg" : "text-2xl"}`}>{stats.totalHours}</div>
+            <p className={`text-muted-foreground ${isCompact ? "text-[10px] mt-0.5" : "text-xs"}`}>{stats.activeDays} active days</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Avg Hours/Day</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+        <Card className={isCompact ? "shadow-sm" : ""}>
+          <CardHeader className={`flex flex-row items-center justify-between ${isCompact ? "p-3 pb-1.5 space-y-0" : "pb-2"}`}>
+            <CardTitle className={`font-medium text-muted-foreground ${isCompact ? "text-xs" : "text-sm"}`}>Avg Hours/Day</CardTitle>
+            <TrendingUp className={`${isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} text-muted-foreground`} />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.avgHours}</div>
-            <p className="text-xs text-muted-foreground">On active days</p>
+          <CardContent className={isCompact ? "p-3 pt-0" : ""}>
+            <div className={`font-bold ${isCompact ? "text-lg" : "text-2xl"}`}>{stats.avgHours}</div>
+            <p className={`text-muted-foreground ${isCompact ? "text-[10px] mt-0.5" : "text-xs"}`}>On active days</p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Most Active Day</CardTitle>
-            <Award className="h-4 w-4 text-muted-foreground" />
+        <Card className={isCompact ? "shadow-sm" : ""}>
+          <CardHeader className={`flex flex-row items-center justify-between ${isCompact ? "p-3 pb-1.5 space-y-0" : "pb-2"}`}>
+            <CardTitle className={`font-medium text-muted-foreground ${isCompact ? "text-xs" : "text-sm"}`}>Most Active Day</CardTitle>
+            <Award className={`${isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} text-muted-foreground`} />
           </CardHeader>
-          <CardContent>
-            <div className="text-lg font-bold">{stats.maxDay.hours}h</div>
-            <p className="text-xs text-muted-foreground">
+          <CardContent className={isCompact ? "p-3 pt-0" : ""}>
+            <div className={`font-bold ${isCompact ? "text-lg" : "text-2xl"}`}>{stats.maxDay.hours}h</div>
+            <p className={`text-muted-foreground ${isCompact ? "text-[10px] mt-0.5" : "text-xs"}`}>
               {stats.maxDay.date !== "—" ? formatDate(stats.maxDay.date) : "—"}
             </p>
           </CardContent>
         </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">Active Days</CardTitle>
-            <Calendar className="h-4 w-4 text-muted-foreground" />
+        <Card className={isCompact ? "shadow-sm" : ""}>
+          <CardHeader className={`flex flex-row items-center justify-between ${isCompact ? "p-3 pb-1.5 space-y-0" : "pb-2"}`}>
+            <CardTitle className={`font-medium text-muted-foreground ${isCompact ? "text-xs" : "text-sm"}`}>Active Days</CardTitle>
+            <Calendar className={`${isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} text-muted-foreground`} />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.activeDays}</div>
-            <p className="text-xs text-muted-foreground">Days with reports</p>
+          <CardContent className={isCompact ? "p-3 pt-0" : ""}>
+            <div className={`font-bold ${isCompact ? "text-lg" : "text-2xl"}`}>{stats.activeDays}</div>
+            <p className={`text-muted-foreground ${isCompact ? "text-[10px] mt-0.5" : "text-xs"}`}>Days with reports</p>
           </CardContent>
         </Card>
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Filters</CardTitle>
+      <Card className={isCompact ? "shadow-sm" : ""}>
+        <CardHeader className={isCompact ? "p-3.5 pb-2" : ""}>
+          <CardTitle className={isCompact ? "text-sm" : "text-base"}>Filters</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className={isCompact ? "p-3.5 pt-0 space-y-3" : "space-y-4"}>
           {/* Quick presets */}
           <div>
-            <Label className="text-xs text-muted-foreground mb-2 block">Quick Presets</Label>
-            <div className="flex flex-wrap gap-2">
+            <Label className={`text-muted-foreground mb-1.5 block ${isCompact ? "text-[10px]" : "text-xs"}`}>Quick Presets</Label>
+            <div className="flex flex-wrap gap-1.5">
               {PRESETS.map((p) => (
                 <Button
                   key={p.key}
                   size="sm"
                   variant={preset === p.key ? "default" : "outline"}
                   onClick={() => applyPreset(p.key)}
+                  className={isCompact ? "h-7 text-xs px-2.5 rounded-md" : ""}
                 >
                   {p.label}
                 </Button>
@@ -592,12 +605,12 @@ export function ContributionCalendar({
           </div>
 
           {/* Filters dropdowns & date range */}
-          <div className="flex flex-wrap gap-3">
+          <div className={`flex flex-wrap ${isCompact ? "gap-2" : "gap-3"}`}>
             {globalViewMode === "team" && (
               <div className="w-full sm:w-auto">
-                <Label className="text-xs text-muted-foreground mb-1 block">Created by</Label>
+                <Label className={`text-muted-foreground mb-1 block ${isCompact ? "text-[10px]" : "text-xs"}`}>Created by</Label>
                 <Select value={selectedUser} onValueChange={setSelectedUser}>
-                  <SelectTrigger className="w-full sm:w-[200px]">
+                  <SelectTrigger className={`w-full sm:w-[200px] ${isCompact ? "h-8 text-xs rounded-md" : ""}`}>
                     <SelectValue placeholder="All users" />
                   </SelectTrigger>
                   <SelectContent>
@@ -613,9 +626,9 @@ export function ContributionCalendar({
             )}
 
             <div className="w-full sm:w-auto">
-              <Label className="text-xs text-muted-foreground mb-1 block">Project</Label>
+              <Label className={`text-muted-foreground mb-1 block ${isCompact ? "text-[10px]" : "text-xs"}`}>Project</Label>
               <Select value={selectedProject} onValueChange={setSelectedProject}>
-                <SelectTrigger className="w-full sm:w-[200px]">
+                <SelectTrigger className={`w-full sm:w-[200px] ${isCompact ? "h-8 text-xs rounded-md" : ""}`}>
                   <SelectValue placeholder="All projects" />
                 </SelectTrigger>
                 <SelectContent>
@@ -631,28 +644,28 @@ export function ContributionCalendar({
 
             {/* Custom date inputs — always visible so user can fine-tune */}
             <div className="w-full sm:w-auto">
-              <Label className="text-xs text-muted-foreground mb-1 block">Start Date</Label>
+              <Label className={`text-muted-foreground mb-1 block ${isCompact ? "text-[10px]" : "text-xs"}`}>Start Date</Label>
               <Input
                 type="date"
                 value={inputStart}
                 onChange={(e) => { setInputStart(e.target.value); setPreset("custom") }}
-                className="w-full sm:w-[160px]"
+                className={`w-full sm:w-[160px] ${isCompact ? "h-8 text-xs rounded-md" : ""}`}
               />
             </div>
             <div className="w-full sm:w-auto">
-              <Label className="text-xs text-muted-foreground mb-1 block">End Date</Label>
+              <Label className={`text-muted-foreground mb-1 block ${isCompact ? "text-[10px]" : "text-xs"}`}>End Date</Label>
               <Input
                 type="date"
                 value={inputEnd}
                 onChange={(e) => { setInputEnd(e.target.value); setPreset("custom") }}
-                className="w-full sm:w-[160px]"
+                className={`w-full sm:w-[160px] ${isCompact ? "h-8 text-xs rounded-md" : ""}`}
               />
             </div>
             <div className="w-full sm:w-auto flex items-end">
               <Button
                 type="button"
                 onClick={handleApplyCustomRange}
-                className="w-full sm:w-auto"
+                className={`w-full sm:w-auto ${isCompact ? "h-8 text-xs px-3 rounded-md" : ""}`}
               >
                 Apply
               </Button>
@@ -665,7 +678,7 @@ export function ContributionCalendar({
 
           {/* Active range summary */}
           {startDate && endDate && (
-            <div className="text-xs text-muted-foreground">
+            <div className="text-[11px] text-muted-foreground">
               Showing: <span className="font-medium text-foreground">{rangeLabel}</span>
               {" · "}{allDays.length} days
             </div>
@@ -674,27 +687,27 @@ export function ContributionCalendar({
       </Card>
 
       {/* Category Contribution Pie Chart */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
+      <Card className={isCompact ? "shadow-sm" : ""}>
+        <CardHeader className={isCompact ? "p-3.5 pb-2" : ""}>
+          <CardTitle className={`flex items-center gap-2 ${isCompact ? "text-sm" : "text-base"}`}>
+            <BarChart3 className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             Time Distribution by Category
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className={isCompact ? "p-3.5 pt-0" : ""}>
           <CategoryPieChart data={categoryData} />
         </CardContent>
       </Card>
 
       {/* Heatmap */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
+      <Card className={isCompact ? "shadow-sm" : ""}>
+        <CardHeader className={isCompact ? "p-3.5 pb-2" : ""}>
+          <CardTitle className={`flex items-center gap-2 ${isCompact ? "text-sm" : "text-base"}`}>
+            <BarChart3 className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
             Contribution Heatmap
           </CardTitle>
         </CardHeader>
-        <CardContent>
+        <CardContent className={isCompact ? "p-3.5 pt-0" : ""}>
           {allDays.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
               <Calendar className="mb-3 h-10 w-10 opacity-40" />
@@ -702,14 +715,14 @@ export function ContributionCalendar({
             </div>
           ) : (
             <div className="overflow-x-auto">
-              <div style={{ minWidth: `${Math.max(weeks.length * 14 + 40, 300)}px` }}>
+              <div style={{ minWidth: `${Math.max(weeks.length * colWidth + 40, 300)}px` }}>
                 {/* Month labels */}
-                <div className="flex ml-10 mb-1 relative h-4">
+                <div className={`flex mb-1 relative h-4 ${isCompact ? "ml-8" : "ml-10"}`}>
                   {monthLabels.map((m, i) => (
                     <span
                       key={i}
                       className="text-[10px] text-muted-foreground absolute"
-                      style={{ left: `${m.index * 14}px` }}
+                      style={{ left: `${m.index * colWidth}px` }}
                     >
                       {m.label}
                     </span>
@@ -718,12 +731,12 @@ export function ContributionCalendar({
 
                 <div className="flex gap-0">
                   {/* Day labels */}
-                  <div className="flex flex-col gap-[2px] mr-2 pt-0">
+                  <div className="flex flex-col mr-2 pt-0" style={{ gap: `${cellGap}px` }}>
                     {dayLabels.map((label, i) => (
                       <div
                         key={label}
-                        className="h-[12px] text-[10px] text-muted-foreground flex items-center justify-end pr-1"
-                        style={{ lineHeight: "12px" }}
+                        className="text-[10px] text-muted-foreground flex items-center justify-end pr-1"
+                        style={{ height: `${cellSize}px`, lineHeight: `${cellSize}px` }}
                       >
                         {i % 2 === 1 ? label : ""}
                       </div>
@@ -731,14 +744,15 @@ export function ContributionCalendar({
                   </div>
 
                   {/* Weeks */}
-                  <div className="flex gap-[2px]">
+                  <div className="flex" style={{ gap: `${cellGap}px` }}>
                     {weeks.map((week, wi) => (
-                      <div key={wi} className="flex flex-col gap-[2px]">
+                      <div key={wi} className="flex flex-col" style={{ gap: `${cellGap}px` }}>
                         {week.map((day, di) => (
                           <div
                             key={di}
-                            className={`w-[12px] h-[12px] rounded-sm transition-colors ${day.date ? getColor(day.hours) : "bg-transparent"
+                            className={`rounded-sm transition-colors ${day.date ? getColor(day.hours) : "bg-transparent"
                               } ${day.hours > 0 ? "hover:ring-1 hover:ring-primary cursor-pointer" : ""}`}
+                            style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
                             onMouseEnter={() => day.date && setHoveredDay(day)}
                             onMouseLeave={() => setHoveredDay(null)}
                             title={day.date ? `${formatDate(day.date)}: ${day.hours}h` : ""}
@@ -750,10 +764,14 @@ export function ContributionCalendar({
                 </div>
 
                 {/* Legend */}
-                <div className="flex items-center gap-2 mt-4 justify-end">
+                <div className={`flex items-center gap-2 justify-end ${isCompact ? "mt-2" : "mt-4"}`}>
                   <span className="text-xs text-muted-foreground">Less</span>
                   {GITHUB_COLORS.map((color, i) => (
-                    <div key={i} className={`w-[12px] h-[12px] rounded-sm ${color}`} />
+                    <div
+                      key={i}
+                      className={`rounded-sm ${color}`}
+                      style={{ width: `${cellSize}px`, height: `${cellSize}px` }}
+                    />
                   ))}
                   <span className="text-xs text-muted-foreground">More</span>
                 </div>

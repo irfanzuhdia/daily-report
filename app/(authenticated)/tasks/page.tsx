@@ -7,6 +7,7 @@ import {
   DailyReportRepository,
   UserRepository,
   TaskTeamRepository,
+  ProjectTeamRepository,
   filterTasksByUser,
 } from "@/lib/repositories"
 import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
@@ -15,7 +16,17 @@ import { TasksClient } from "./tasks-client"
 export default async function TasksPage({
   searchParams,
 }: {
-  searchParams: Promise<{ project_id?: string; status?: string; search?: string; created_by?: string; member_id?: string }>
+  searchParams: Promise<{
+    project_id?: string
+    status?: string
+    search?: string
+    created_by?: string
+    member_id?: string
+    dept_filter?: string
+    site_filter?: string
+    div_filter?: string
+    team_filter?: string
+  }>
 }) {
   const session = await getSession()
   if (!session) redirect("/login")
@@ -24,21 +35,45 @@ export default async function TasksPage({
   const userId = session.user_id
   const params = await searchParams
 
-  const [allTasks, statuses, allProjects, allReports, allUsers, allTaskTeams] = await Promise.all([
+  const [allTasks, statuses, allProjects, allReports, allUsers, allTaskTeams, allProjectTeams] = await Promise.all([
     TaskRepository.findAll(),
     StatusRepository.findAll(),
     ProjectRepository.findAll(),
     DailyReportRepository.findAll(),
     UserRepository.findAll(),
     TaskTeamRepository.findAll(),
+    ProjectTeamRepository.findAll(),
   ])
 
-  // Filter by user when in "my" view
-  let tasks = viewMode === "my"
-    ? await filterTasksByUser(allTasks, userId)
-    : allTasks
+  const currentUser = allUsers.find((u) => u.user_id === userId)
+  const userLevel = currentUser?.level || 1
+  const effectiveViewMode = userLevel === 1 ? "my" : viewMode
+
+  // Filter by user based on visibility levels
+  let tasks = await filterTasksByUser(allTasks, userId)
+
+  if (effectiveViewMode === "my") {
+    const myTaskIds = new Set(
+      allTaskTeams.filter((tt) => tt.user_id === userId).map((tt) => tt.task_id)
+    )
+    tasks = tasks.filter((t) => t.created_by === userId || myTaskIds.has(t.id))
+  }
 
   const userMap = new Map(allUsers.map((u) => [u.user_id, (u.user_name || u.user_email || "").toLowerCase()]))
+
+  // Apply enterprise filters
+  if (params.dept_filter) {
+    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_departement === params.dept_filter)
+  }
+  if (params.site_filter) {
+    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_site === params.site_filter)
+  }
+  if (params.div_filter) {
+    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_division === params.div_filter)
+  }
+  if (params.team_filter) {
+    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_team === params.team_filter)
+  }
 
   if (params.project_id) {
     tasks = tasks.filter((t) => t.project_id === params.project_id)
@@ -101,7 +136,14 @@ export default async function TasksPage({
       currentSearch={params.search}
       currentCreatedBy={params.created_by}
       currentMemberId={params.member_id}
-      viewMode={viewMode}
+      viewMode={effectiveViewMode}
+      taskTeams={allTaskTeams}
+      projectTeams={allProjectTeams}
+      currentUserId={userId}
+      currentDept={params.dept_filter}
+      currentSite={params.site_filter}
+      currentDiv={params.div_filter}
+      currentTeam={params.team_filter}
     />
   )
 }

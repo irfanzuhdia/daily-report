@@ -5,23 +5,16 @@ import {
   TaskTeamRepository,
   ProjectRepository,
   ProjectTeamRepository,
-  DailyReportRepository
+  DailyReportRepository,
+  hasTaskWritePermission,
 } from '@/lib/repositories'
 
 async function checkTaskPermission(taskId: string, userId: string) {
   const task = await TaskRepository.findById(taskId)
   if (!task) return { error: 'Not found', status: 404 }
 
-  const project = await ProjectRepository.findById(task.project_id)
-  const taskTeam = await TaskTeamRepository.findByTaskId(taskId)
-  const projectTeam = project ? await ProjectTeamRepository.findByProjectId(task.project_id) : []
-
-  const isTaskCreator = task.created_by === userId
-  const isProjectCreator = project?.created_by === userId
-  const isTaskTeamMember = taskTeam.some((tt) => tt.user_id === userId)
-  const isProjectTeamMember = projectTeam.some((pt) => pt.user_id === userId)
-
-  if (!isTaskCreator && !isProjectCreator && !isTaskTeamMember && !isProjectTeamMember) {
+  const hasWrite = await hasTaskWritePermission(taskId, userId)
+  if (!hasWrite) {
     return { error: 'Forbidden', status: 403 }
   }
 
@@ -69,7 +62,7 @@ export async function PUT(
     const body = await request.json()
     const { task_user_ids, ...taskData } = body
 
-    const updatedTask = await TaskRepository.update(id, taskData, session.user_id)
+    const updatedTask = await TaskRepository.update(id, taskData, session.real_user_id ?? session.user_id)
     if (!updatedTask) {
       return NextResponse.json({ error: 'Not found' }, { status: 404 })
     }
@@ -83,14 +76,14 @@ export async function PUT(
       // Remove users no longer in team
       for (const tt of currentTeam) {
         if (!newUserIds.has(tt.user_id)) {
-          await TaskTeamRepository.softDelete(tt.id, session.user_id)
+          await TaskTeamRepository.softDelete(tt.id, session.real_user_id ?? session.user_id)
         }
       }
 
       // Add new users
       for (const userId of task_user_ids || []) {
         if (!currentUserIds.has(userId)) {
-          await TaskTeamRepository.create(id, userId, session.user_id)
+          await TaskTeamRepository.create(id, userId, session.real_user_id ?? session.user_id)
         }
       }
     }
@@ -127,7 +120,7 @@ export async function DELETE(
       )
     }
 
-    await TaskRepository.softDelete(id, session.user_id)
+    await TaskRepository.softDelete(id, session.real_user_id ?? session.user_id)
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error('DELETE /api/tasks/[id] error:', error)

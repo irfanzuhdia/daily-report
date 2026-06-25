@@ -12,7 +12,7 @@ import { formatDate, formatDateTime } from "@/lib/format"
 import { revalidatePathsAndTags } from "@/app/actions"
 import { FileSection } from "@/components/file-section"
 import { CommentsSection } from "@/components/comments-section"
-import { SearchableUserSelect } from "@/components/ui/searchable-user-select"
+import { SearchableUserSelect, getSelectableUsers, type UserSelectItem } from "@/components/ui/searchable-user-select"
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
   NS: "secondary",
@@ -46,7 +46,7 @@ export function TaskDetailClient({
   userMap: Record<string, string>
   teamMembers: { user_id: string; user_name: string; user_email: string; user_occupation: string | null }[]
   taskLogs: EnrichedTaskLog[]
-  allUsers: { user_id: string; user_name: string; user_email: string; user_occupation: string | null }[]
+  allUsers: UserSelectItem[]
   currentUserId: string
   projectTeamUserIds: string[]
 }) {
@@ -57,11 +57,16 @@ export function TaskDetailClient({
   const [adding, setAdding] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
 
+  const currentUser = allUsers.find((u) => u.user_id === currentUserId)
+  const normOcc = currentUser?.user_occupation?.toLowerCase().replace(/\s+/g, "") ?? ""
+  const isSUOrCOSU = ["superuser", "cosuperuser", "co-superuser"].includes(normOcc)
+  const isHRIS = currentUser?.user_division?.toLowerCase().trim() === "hris"
+
   const isTaskCreator = task.created_by === currentUserId
   const isProjectCreator = project?.created_by === currentUserId
   const isTaskTeamMember = teamMembers.some((m) => m.user_id === currentUserId)
   const isProjectTeamMember = projectTeamUserIds.includes(currentUserId)
-  const hasEditPermission = isTaskCreator || isProjectCreator || isTaskTeamMember || isProjectTeamMember
+  const hasEditPermission = isTaskTeamMember || isProjectTeamMember || isTaskCreator || isProjectCreator || isSUOrCOSU || isHRIS
 
   const availableUsers = allUsers.filter(
     (u) => !teamMembers.some((m) => m.user_id === u.user_id)
@@ -257,11 +262,11 @@ export function TaskDetailClient({
           {hasEditPermission && availableUsers.length > 0 && (
             <div className="space-y-3 p-3 rounded-xl border bg-muted/20">
               <SearchableUserSelect
-                allUsers={availableUsers}
+                allUsers={getSelectableUsers(currentUserId, availableUsers)}
                 selectedUserIds={selectedNewUserIds}
                 onAddUser={(uid) => setSelectedNewUserIds([...selectedNewUserIds, uid])}
                 onRemoveUser={(uid) => setSelectedNewUserIds(selectedNewUserIds.filter(id => id !== uid))}
-                placeholder="Assign task team members..."
+                placeholder="Assign task team person..."
               />
               {selectedNewUserIds.length > 0 && (
                 <div className="flex justify-end gap-2 pt-2 border-t border-muted animate-in fade-in duration-200">
@@ -292,7 +297,7 @@ export function TaskDetailClient({
           )}
 
           {teamMembers.length === 0 ? (
-            <p className="text-sm text-muted-foreground">No team members assigned yet.</p>
+            <p className="text-sm text-muted-foreground">No team person assigned yet.</p>
           ) : (
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {teamMembers.map((member) => (
@@ -335,12 +340,14 @@ export function TaskDetailClient({
       {/* Reports */}
       <div className="flex items-center justify-between">
         <h2 className="text-xl font-semibold">Daily Reports</h2>
-        <Link href={`/reports/new?task_id=${task.id}`}>
-          <Button size="sm">
-            <Plus className="mr-2 h-4 w-4" />
-            New Report
-          </Button>
-        </Link>
+        {hasEditPermission && (
+          <Link href={`/reports/new?task_id=${task.id}`}>
+            <Button size="sm">
+              <Plus className="mr-2 h-4 w-4" />
+              New Report
+            </Button>
+          </Link>
+        )}
       </div>
 
       {reports.length === 0 ? (
@@ -348,12 +355,14 @@ export function TaskDetailClient({
           <CardContent className="flex flex-col items-center justify-center py-12">
             <FileText className="mb-4 h-12 w-12 text-muted-foreground/50" />
             <p className="text-muted-foreground">No reports yet</p>
-            <Link href={`/reports/new?task_id=${task.id}`} className="mt-4">
-              <Button variant="outline" size="sm">
-                <Plus className="mr-2 h-4 w-4" />
-                Create first report
-              </Button>
-            </Link>
+            {hasEditPermission && (
+              <Link href={`/reports/new?task_id=${task.id}`} className="mt-4">
+                <Button variant="outline" size="sm">
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create first report
+                </Button>
+              </Link>
+            )}
           </CardContent>
         </Card>
       ) : (
@@ -396,8 +405,19 @@ export function TaskDetailClient({
       {/* Files Attachments */}
       <FileSection taskId={task.id} />
 
-      {/* Comments Section */}
-      <CommentsSection taskId={task.id} allUsers={allUsers} />
+      <CommentsSection 
+        taskId={task.id} 
+        allUsers={allUsers.map((u) => ({
+          user_id: u.user_id,
+          user_name: u.user_name || "No Name",
+          user_email: u.user_email,
+        }))} 
+        teamMembers={teamMembers.map((m) => ({
+          user_id: m.user_id,
+          user_name: m.user_name || "No Name",
+          user_email: m.user_email,
+        }))}
+      />
 
       {/* Task Activity Log */}
       <Card>

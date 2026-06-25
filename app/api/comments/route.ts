@@ -66,16 +66,16 @@ export async function POST(request: NextRequest) {
         parent_id: parent_id || null,
         content: content.trim()
       },
-      session.user_id
+      session.real_user_id ?? session.user_id
     )
 
     const parent = parent_id ? await CommentRepository.findById(parent_id) : null
-    const senderName = session.name || session.email || 'Someone'
+    const senderName = session.real_name ?? session.name ?? session.email ?? 'Someone'
     const truncatedComment = content.length > 80 ? content.substring(0, 80) + '...' : content
     const link = task_id ? `/tasks/${task_id}` : `/projects/${project_id}`
 
     // Notify parent commenter if someone replies
-    if (parent && parent.created_by && parent.created_by !== session.user_id) {
+    if (parent && parent.created_by && parent.created_by !== (session.real_user_id ?? session.user_id)) {
       const title = task_id ? 'Replied to Task Comment' : 'Replied to Project Comment'
       await NotificationRepository.create({
         user_id: parent.created_by,
@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
     // Find mentioned users
     const mentionedUsers = users.filter(u => {
       // Don't notify the user who made the comment
-      if (u.user_id === session.user_id) return false
+      if (u.user_id === (session.real_user_id ?? session.user_id)) return false
       // Avoid double notification if this user was already notified as the parent commenter
       if (parent && u.user_id === parent.created_by) return false
 

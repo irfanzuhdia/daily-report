@@ -26,8 +26,8 @@ export async function POST(request: NextRequest) {
 
     const body = await request.json()
     const report = await DailyReportRepository.create(
-      { ...body, user_id: session.user_id },
-      session.user_id
+      { ...body, user_id: session.real_user_id ?? session.user_id },
+      session.real_user_id ?? session.user_id
     )
     return NextResponse.json(report, { status: 201 })
   } catch (error) {

@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useViewDensity } from "@/lib/view-density"
 import Link from "next/link"
 import { Bell, Check, CheckCheck, Inbox, Loader2, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -8,6 +9,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import type { Notification } from "@/lib/types"
 
 export default function InboxPage() {
+  const { density } = useViewDensity()
+  const isCompact = density === "compact"
   const [notifications, setNotifications] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
@@ -139,10 +142,10 @@ export default function InboxPage() {
         )}
       </div>
 
-      <Card>
-        <CardHeader className="flex flex-row items-center gap-2 border-b pb-4">
-          <Inbox className="h-5 w-5 text-primary" />
-          <CardTitle className="text-lg font-bold">
+      <Card className={isCompact ? "shadow-sm" : ""}>
+        <CardHeader className={`flex flex-row items-center gap-2 border-b ${isCompact ? "p-3 pb-2" : "pb-4"}`}>
+          <Inbox className="h-4 w-4 text-primary" />
+          <CardTitle className={`font-bold ${isCompact ? "text-base" : "text-lg"}`}>
             All Messages {unreadCount > 0 && `(${unreadCount} unread)`}
           </CardTitle>
         </CardHeader>
@@ -164,46 +167,49 @@ export default function InboxPage() {
               {notifications.map((n) => (
                 <div
                   key={n.id}
-                  className={`flex flex-col sm:flex-row sm:items-center sm:justify-between p-4 gap-4 transition-colors hover:bg-muted/30 ${
+                  className={`flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 transition-colors hover:bg-muted/30 ${
+                    isCompact ? "p-2.5 px-3" : "p-4"
+                  } ${
                     !n.is_read ? "bg-primary/[0.03] border-l-2 border-primary" : ""
                   }`}
                 >
-                  <div className="min-w-0 flex-1 space-y-1">
+                  <div className="min-w-0 flex-1 space-y-0.5">
                     <div className="flex items-center gap-2">
                       <span
-                        className={`inline-block h-2 w-2 rounded-full ${
+                        className={`inline-block h-1.5 w-1.5 rounded-full ${
                           !n.is_read ? "bg-primary animate-pulse" : "bg-transparent"
                         }`}
                       />
-                      <span className="text-xs font-semibold text-primary uppercase tracking-wide">
+                      <span className="text-[10px] font-bold text-primary uppercase tracking-wide">
                         {n.type}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-[10px] text-muted-foreground">
                         {formatTime(n.created_at)}
                       </span>
                     </div>
-                    <h4 className="text-sm font-bold text-foreground">
+                    <h4 className={`font-bold text-foreground leading-snug ${isCompact ? "text-xs" : "text-sm"}`}>
                       {n.title}
                     </h4>
-                    <p className="text-sm text-muted-foreground line-clamp-2 leading-relaxed">
+                    <p className={`text-muted-foreground leading-relaxed ${isCompact ? "text-[11px] line-clamp-1" : "text-sm line-clamp-2"}`}>
                       {n.content}
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0 self-end sm:self-center">
+                  <div className="flex items-center gap-1.5 shrink-0 self-end sm:self-center">
                     {!n.is_read && (
                       <Button
                         variant="ghost"
                         size="icon-sm"
+                        className={isCompact ? "h-6 w-6" : ""}
                         onClick={() => markAsRead(n.id)}
                         title="Mark as read"
                       >
-                        <Check className="h-4 w-4 text-emerald-500" />
+                        <Check className="h-3.5 w-3.5 text-emerald-500" />
                       </Button>
                     )}
                     <Link href={n.link} onClick={() => !n.is_read && markAsRead(n.id)}>
-                      <Button size="sm" className="h-8 rounded-lg">
+                      <Button size="sm" className={isCompact ? "h-7 text-[10px] px-2.5 rounded-md" : "h-8 rounded-lg"}>
                         Go to item
-                        <ArrowRight className="ml-1.5 h-3.5 w-3.5" />
+                        <ArrowRight className="ml-1 h-3.5 w-3.5" />
                       </Button>
                     </Link>
                   </div>

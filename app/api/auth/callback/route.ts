@@ -81,6 +81,9 @@ export async function GET(request: NextRequest) {
       user_occupation: user.user_occupation,
       user_division: user.user_division,
       user_departement: user.user_departement,
+      user_site: user.user_site,
+      user_team: user.user_team,
+      user_unit: user.user_unit,
     });
 
     // Set cookie and redirect

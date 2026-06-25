@@ -5,6 +5,7 @@ import {
   TaskRepository,
   ProjectRepository,
   UserRepository,
+  TaskTeamRepository,
   filterReportsByUser,
   filterTasksByUser,
   getUserMap,
@@ -15,7 +16,15 @@ import { ReportsClient } from "./reports-client"
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ task_id?: string; search?: string; created_by?: string }>
+  searchParams: Promise<{
+    task_id?: string
+    search?: string
+    created_by?: string
+    dept_filter?: string
+    site_filter?: string
+    div_filter?: string
+    team_filter?: string
+  }>
 }) {
   const session = await getSession()
   if (!session) redirect("/login")
@@ -32,10 +41,30 @@ export default async function ReportsPage({
     UserRepository.findAll(),
   ])
 
-  // Filter by user when in "my" view
-  let reports = viewMode === "my"
-    ? await filterReportsByUser(allReports, userId)
-    : allReports
+  const currentUser = allUsers.find((u) => u.user_id === userId)
+  const userLevel = currentUser?.level || 1
+  const effectiveViewMode = userLevel === 1 ? "my" : viewMode
+
+  // Filter by user based on visibility levels
+  let reports = await filterReportsByUser(allReports, userId)
+
+  if (effectiveViewMode === "my") {
+    reports = reports.filter((r) => r.user_id === userId || r.created_by === userId)
+  }
+
+  // Apply enterprise filters
+  if (params.dept_filter) {
+    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_departement === params.dept_filter)
+  }
+  if (params.site_filter) {
+    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_site === params.site_filter)
+  }
+  if (params.div_filter) {
+    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_division === params.div_filter)
+  }
+  if (params.team_filter) {
+    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_team === params.team_filter)
+  }
 
   if (params.task_id) {
     reports = reports.filter((r) => r.task_id === params.task_id)
@@ -82,10 +111,12 @@ export default async function ReportsPage({
       created_by_name: (r.user_id && userMap[r.user_id]) ?? r.user_id ?? "Unknown",
     }))
 
-  // Filter tasks for the dropdown
-  const filteredTasks = viewMode === "my"
-    ? await filterTasksByUser(allTasks, userId)
-    : allTasks
+  let filteredTasks = await filterTasksByUser(allTasks, userId)
+  if (effectiveViewMode === "my") {
+    const taskTeams = await TaskTeamRepository.findByUserId(userId)
+    const myTaskIds = new Set(taskTeams.map((tt) => tt.task_id))
+    filteredTasks = filteredTasks.filter((t) => t.created_by === userId || myTaskIds.has(t.id))
+  }
 
   return (
     <ReportsClient
@@ -95,8 +126,12 @@ export default async function ReportsPage({
       currentTaskId={params.task_id}
       currentSearch={params.search}
       currentCreatedBy={params.created_by}
-      viewMode={viewMode}
+      viewMode={effectiveViewMode}
       currentUserId={userId}
+      currentDept={params.dept_filter}
+      currentSite={params.site_filter}
+      currentDiv={params.div_filter}
+      currentTeam={params.team_filter}
     />
   )
 }

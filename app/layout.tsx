@@ -3,6 +3,7 @@ import { Geist_Mono, Inter } from "next/font/google"
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
 import { ViewModeProvider } from "@/lib/view-mode"
+import { ViewDensityProvider } from "@/lib/view-density"
 import { cn } from "@/lib/utils"
 
 const inter = Inter({ subsets: ["latin"], variable: "--font-sans" })
@@ -25,7 +26,11 @@ export default function RootLayout({
     >
       <body>
         <ThemeProvider>
-          <ViewModeProvider>{children}</ViewModeProvider>
+          <ViewModeProvider>
+            <ViewDensityProvider>
+              {children}
+            </ViewDensityProvider>
+          </ViewModeProvider>
         </ThemeProvider>
       </body>
     </html>

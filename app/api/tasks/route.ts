@@ -27,16 +27,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { task_user_ids, ...taskData } = body
 
-    const task = await TaskRepository.create(taskData, session.user_id)
+    const task = await TaskRepository.create(taskData, session.real_user_id ?? session.user_id)
 
     // Create TaskTeam entries
     if (task_user_ids && Array.isArray(task_user_ids)) {
-      const senderName = session.name || session.email || 'Someone'
+      const senderName = session.real_name ?? session.name ?? session.email ?? 'Someone'
       const desc = task.task_description || ''
       const truncatedDesc = desc.length > 60 ? desc.substring(0, 60) + '...' : desc
       for (const userId of task_user_ids) {
-        await TaskTeamRepository.create(task.id, userId, session.user_id)
-        if (userId !== session.user_id) {
+        await TaskTeamRepository.create(task.id, userId, session.real_user_id ?? session.user_id)
+        if (userId !== (session.real_user_id ?? session.user_id)) {
           await NotificationRepository.create({
             user_id: userId,
             type: 'task_created',

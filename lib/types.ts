@@ -7,6 +7,10 @@ export interface User {
   user_occupation: string | null;
   user_division: string | null;
   user_departement: string | null;
+  user_site: string | null;
+  user_team: string | null;
+  user_unit: string | null;
+  level?: number;
   created_by: string | null;
   created_at: string | null;
   updated_by: string | null;
@@ -120,6 +124,9 @@ export interface AuthUser {
   user_occupation: string | null;
   user_division: string | null;
   user_departement: string | null;
+  user_site: string | null;
+  user_team: string | null;
+  user_unit: string | null;
 }
 
 // Dashboard types
@@ -188,4 +195,18 @@ export interface Notification {
   is_read: boolean;
   created_at: string;
 }
+
+export interface UserLog {
+  id: string;
+  user_id: string;
+  action: string;
+  details: string | null;
+  created_by: string;
+  created_at: string;
+  target_name?: string | null;
+  target_email?: string | null;
+  actor_name?: string | null;
+  actor_email?: string | null;
+}
+
 

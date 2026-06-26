@@ -677,8 +677,63 @@ export async function hasProjectWritePermission(projectId: string, userId: strin
   return isProjectTeamMember || isCreatedBy;
 }
 
-export async function findAllProjectsIncludingDeleted(): Promise<Project[]> {
-  return getCachedAllProjectsIncludingDeleted();
+export async function findAllProjectsIncludingDeleted(userId?: string): Promise<Project[]> {
+  if (!userId) {
+    return getCachedAllProjectsIncludingDeleted();
+  }
+
+  const user = await UserRepository.findById(userId);
+  if (!user) return [];
+
+  const level = await getUserLevel(user.user_occupation);
+  if (level >= 6) {
+    return (sql as any).query(`SELECT * FROM projects ORDER BY created_at DESC`) as unknown as Project[];
+  }
+
+  let scopeCondition = '';
+  const params: any[] = [userId];
+
+  const viewerOcc = (user.user_occupation || '').toLowerCase().trim();
+  if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
+    params.push(user.user_departement || '');
+    scopeCondition = `(LOWER(u.user_departement) = LOWER($2) OR LOWER(mu.user_departement) = LOWER($2))`;
+  } else if (viewerOcc === 'site manager' || viewerOcc === 'site admin' || level === 5) {
+    params.push(user.user_site || '');
+    scopeCondition = `(LOWER(u.user_site) = LOWER($2) OR LOWER(mu.user_site) = LOWER($2))`;
+  } else if (
+    viewerOcc === 'divisi manager' || 
+    viewerOcc === 'divisi admin' || 
+    viewerOcc === 'div manager' || 
+    viewerOcc === 'div admin' || 
+    level === 4 || 
+    level === 3
+  ) {
+    params.push(user.user_division || '');
+    scopeCondition = `(LOWER(u.user_division) = LOWER($2) OR LOWER(mu.user_division) = LOWER($2))`;
+  } else if (viewerOcc === 'team leader' || level === 2) {
+    params.push(user.user_team || '');
+    scopeCondition = `(LOWER(u.user_team) = LOWER($2) OR LOWER(mu.user_team) = LOWER($2))`;
+  }
+
+  let query = `
+    SELECT DISTINCT p.* 
+    FROM projects p
+    LEFT JOIN users u ON p.created_by = u.user_id
+    LEFT JOIN project_teams pt ON p.project_id = pt.project_id AND pt.deleted_at IS NULL
+    LEFT JOIN users mu ON pt.user_id = mu.user_id
+    WHERE (
+        p.created_by = $1
+        OR pt.user_id = $1
+  `;
+
+  if (scopeCondition) {
+    query += ` OR ${scopeCondition}`;
+  }
+
+  query += `) ORDER BY p.created_at DESC`;
+
+  const rows = await (sql as any).query(query, params);
+  return rows as unknown as Project[];
 }
 
 /** Restore a soft-deleted project */

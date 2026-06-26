@@ -585,8 +585,63 @@ export async function hasTaskWritePermission(taskId: string, userId: string): Pr
   return isTaskTeamMember || isProjectTeamMember || isCreatedBy || isProjectCreator;
 }
 
-export async function findAllTasksIncludingDeleted(): Promise<Task[]> {
-  return getCachedAllTasksIncludingDeleted();
+export async function findAllTasksIncludingDeleted(userId?: string): Promise<Task[]> {
+  if (!userId) {
+    return getCachedAllTasksIncludingDeleted();
+  }
+
+  const user = await UserRepository.findById(userId);
+  if (!user) return [];
+
+  const level = await getUserLevel(user.user_occupation);
+  if (level >= 6) {
+    return (sql as any).query(`SELECT * FROM tasks ORDER BY created_at DESC`) as unknown as Task[];
+  }
+
+  let scopeCondition = '';
+  const params: any[] = [userId];
+
+  const viewerOcc = (user.user_occupation || '').toLowerCase().trim();
+  if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
+    params.push(user.user_departement || '');
+    scopeCondition = `(LOWER(u.user_departement) = LOWER($2) OR LOWER(mu.user_departement) = LOWER($2))`;
+  } else if (viewerOcc === 'site manager' || viewerOcc === 'site admin' || level === 5) {
+    params.push(user.user_site || '');
+    scopeCondition = `(LOWER(u.user_site) = LOWER($2) OR LOWER(mu.user_site) = LOWER($2))`;
+  } else if (
+    viewerOcc === 'divisi manager' || 
+    viewerOcc === 'divisi admin' || 
+    viewerOcc === 'div manager' || 
+    viewerOcc === 'div admin' || 
+    level === 4 || 
+    level === 3
+  ) {
+    params.push(user.user_division || '');
+    scopeCondition = `(LOWER(u.user_division) = LOWER($2) OR LOWER(mu.user_division) = LOWER($2))`;
+  } else if (viewerOcc === 'team leader' || level === 2) {
+    params.push(user.user_team || '');
+    scopeCondition = `(LOWER(u.user_team) = LOWER($2) OR LOWER(mu.user_team) = LOWER($2))`;
+  }
+
+  let query = `
+    SELECT DISTINCT t.* 
+    FROM tasks t
+    LEFT JOIN users u ON t.created_by = u.user_id
+    LEFT JOIN task_teams tt ON t.id = tt.task_id AND tt.deleted_at IS NULL
+    LEFT JOIN users mu ON tt.user_id = mu.user_id
+    WHERE (
+        t.created_by = $1
+        OR tt.user_id = $1
+  `;
+
+  if (scopeCondition) {
+    query += ` OR ${scopeCondition}`;
+  }
+
+  query += `) ORDER BY t.created_at DESC`;
+
+  const rows = await (sql as any).query(query, params);
+  return rows as unknown as Task[];
 }
 
 /** Restore a soft-deleted task */

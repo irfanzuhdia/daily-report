@@ -571,8 +571,62 @@ export async function filterReportsByUser(
   });
 }
 
-export async function findAllReportsIncludingDeleted(): Promise<DailyReport[]> {
-  return getCachedAllReportsIncludingDeleted();
+export async function findAllReportsIncludingDeleted(userId?: string): Promise<DailyReport[]> {
+  if (!userId) {
+    return getCachedAllReportsIncludingDeleted();
+  }
+
+  const user = await UserRepository.findById(userId);
+  if (!user) return [];
+
+  const level = await getUserLevel(user.user_occupation);
+  if (level >= 6) {
+    return (sql as any).query(`SELECT * FROM daily_reports ORDER BY created_at DESC`) as unknown as DailyReport[];
+  }
+
+  let scopeCondition = '';
+  const params: any[] = [userId];
+
+  const viewerOcc = (user.user_occupation || '').toLowerCase().trim();
+  if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
+    params.push(user.user_departement || '');
+    scopeCondition = `(LOWER(u.user_departement) = LOWER($2) OR LOWER(cu.user_departement) = LOWER($2))`;
+  } else if (viewerOcc === 'site manager' || viewerOcc === 'site admin' || level === 5) {
+    params.push(user.user_site || '');
+    scopeCondition = `(LOWER(u.user_site) = LOWER($2) OR LOWER(cu.user_site) = LOWER($2))`;
+  } else if (
+    viewerOcc === 'divisi manager' || 
+    viewerOcc === 'divisi admin' || 
+    viewerOcc === 'div manager' || 
+    viewerOcc === 'div admin' || 
+    level === 4 || 
+    level === 3
+  ) {
+    params.push(user.user_division || '');
+    scopeCondition = `(LOWER(u.user_division) = LOWER($2) OR LOWER(cu.user_division) = LOWER($2))`;
+  } else if (viewerOcc === 'team leader' || level === 2) {
+    params.push(user.user_team || '');
+    scopeCondition = `(LOWER(u.user_team) = LOWER($2) OR LOWER(cu.user_team) = LOWER($2))`;
+  }
+
+  let query = `
+    SELECT DISTINCT dr.* 
+    FROM daily_reports dr
+    LEFT JOIN users u ON dr.user_id = u.user_id
+    LEFT JOIN users cu ON dr.created_by = cu.user_id
+    WHERE (
+        dr.user_id = $1
+        OR dr.created_by = $1
+  `;
+
+  if (scopeCondition) {
+    query += ` OR ${scopeCondition}`;
+  }
+
+  query += `) ORDER BY dr.created_at DESC`;
+
+  const rows = await (sql as any).query(query, params);
+  return rows as unknown as DailyReport[];
 }
 
 /** Restore a soft-deleted report */

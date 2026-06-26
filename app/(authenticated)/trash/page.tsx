@@ -19,9 +19,9 @@ export default async function TrashPage() {
   let allReports
 
   const [initProjects, initTasks, initReports, userMap] = await Promise.all([
-    findAllProjectsIncludingDeleted(),
-    findAllTasksIncludingDeleted(),
-    findAllReportsIncludingDeleted(),
+    findAllProjectsIncludingDeleted(session.user_id),
+    findAllTasksIncludingDeleted(session.user_id),
+    findAllReportsIncludingDeleted(session.user_id),
     getUserMap(),
   ])
 
@@ -71,9 +71,9 @@ export default async function TrashPage() {
 
     // Re-fetch clean data
     ;[allProjects, allTasks, allReports] = await Promise.all([
-      findAllProjectsIncludingDeleted(),
-      findAllTasksIncludingDeleted(),
-      findAllReportsIncludingDeleted(),
+      findAllProjectsIncludingDeleted(session.user_id),
+      findAllTasksIncludingDeleted(session.user_id),
+      findAllReportsIncludingDeleted(session.user_id),
     ])
   }
 

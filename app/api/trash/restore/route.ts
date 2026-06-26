@@ -1,6 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
-import { restoreProject, restoreTask, restoreReport } from '@/lib/repositories';
+import { 
+  restoreProject, 
+  restoreTask, 
+  restoreReport,
+  findAllProjectsIncludingDeleted,
+  findAllTasksIncludingDeleted,
+  findAllReportsIncludingDeleted
+} from '@/lib/repositories';
 
 export async function POST(request: NextRequest) {
   const session = await getSession();
@@ -18,15 +25,27 @@ export async function POST(request: NextRequest) {
       for (const item of items) {
         let success = false;
         switch (item.type) {
-          case 'project':
-            success = await restoreProject(item.id, session.real_user_id ?? session.user_id);
+          case 'project': {
+            const projects = await findAllProjectsIncludingDeleted(session.user_id);
+            if (projects.some((p) => p.project_id === item.id && p.deleted_at)) {
+              success = await restoreProject(item.id, session.real_user_id ?? session.user_id);
+            }
             break;
-          case 'task':
-            success = await restoreTask(item.id, session.real_user_id ?? session.user_id);
+          }
+          case 'task': {
+            const tasks = await findAllTasksIncludingDeleted(session.user_id);
+            if (tasks.some((t) => t.id === item.id && t.deleted_at)) {
+              success = await restoreTask(item.id, session.real_user_id ?? session.user_id);
+            }
             break;
-          case 'report':
-            success = await restoreReport(item.id);
+          }
+          case 'report': {
+            const reports = await findAllReportsIncludingDeleted(session.user_id);
+            if (reports.some((r) => r.report_id === item.id && r.deleted_at)) {
+              success = await restoreReport(item.id);
+            }
             break;
+          }
         }
         if (success) successCount++;
       }
@@ -41,15 +60,30 @@ export async function POST(request: NextRequest) {
 
     let success = false;
     switch (type) {
-      case 'project':
+      case 'project': {
+        const projects = await findAllProjectsIncludingDeleted(session.user_id);
+        if (!projects.some((p) => p.project_id === id && p.deleted_at)) {
+          return NextResponse.json({ error: 'Unauthorized or not found' }, { status: 403 });
+        }
         success = await restoreProject(id, session.real_user_id ?? session.user_id);
         break;
-      case 'task':
+      }
+      case 'task': {
+        const tasks = await findAllTasksIncludingDeleted(session.user_id);
+        if (!tasks.some((t) => t.id === id && t.deleted_at)) {
+          return NextResponse.json({ error: 'Unauthorized or not found' }, { status: 403 });
+        }
         success = await restoreTask(id, session.real_user_id ?? session.user_id);
         break;
-      case 'report':
+      }
+      case 'report': {
+        const reports = await findAllReportsIncludingDeleted(session.user_id);
+        if (!reports.some((r) => r.report_id === id && r.deleted_at)) {
+          return NextResponse.json({ error: 'Unauthorized or not found' }, { status: 403 });
+        }
         success = await restoreReport(id);
         break;
+      }
       default:
         return NextResponse.json({ error: 'Invalid type' }, { status: 400 });
     }

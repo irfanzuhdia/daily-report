@@ -20,6 +20,7 @@ import {
   Moon,
   Settings,
   LifeBuoy,
+  ChevronDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -53,18 +54,34 @@ export function Sidebar({
   const isRealSuperUser = realEmail === 'gadmin@multidayamitra.co.id' || (!isImpersonating && userEmail === 'gadmin@multidayamitra.co.id');
   const normOcc = userOccupation?.toLowerCase().replace(/\s+/g, "") ?? "";
   const isAdmin = ["superuser", "cosuperuser", "co-superuser"].includes(normOcc) || isRealSuperUser;
-  const navItems = [
+  const monitoringItems = [
     { href: "/reports/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/projects", label: "Projects", icon: FolderKanban },
     { href: "/tasks", label: "Tasks", icon: ListTodo },
     { href: "/reports", label: "Daily Reports", icon: FileText },
     { href: "/reports/analytics", label: "Analytics", icon: BarChart3 },
+  ]
+
+  const otherItems = [
     { href: "/ticketing", label: "Ticketing", icon: LifeBuoy },
     { href: "/inbox", label: "Inbox", icon: Inbox },
     ...(isAdmin ? [{ href: "/users", label: "Users & Roles", icon: Users }] : []),
     { href: "/trash", label: "Trash", icon: Trash2 },
   ]
+
   const pathname = usePathname()
+  const isProjectMonitoringActive = React.useMemo(() => {
+    return pathname.startsWith("/reports") || pathname.startsWith("/projects") || pathname.startsWith("/tasks");
+  }, [pathname])
+
+  const [projectMonitoringExpanded, setProjectMonitoringExpanded] = React.useState(isProjectMonitoringActive)
+
+  React.useEffect(() => {
+    if (isProjectMonitoringActive) {
+      setProjectMonitoringExpanded(true)
+    }
+  }, [pathname, isProjectMonitoringActive])
+
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [logoutConfirm, setLogoutConfirm] = React.useState(false)
   const [settingsOpen, setSettingsOpen] = React.useState(false)
@@ -154,44 +171,100 @@ export function Sidebar({
           <span className="text-lg font-semibold">Daily Report</span>
         </div>
 
-        {/* View Mode Toggle */}
-        {userLevel > 1 && (
-          <div className="px-4 pt-4">
-            <div className="flex rounded-xl border p-1 gap-1">
-              <button
-                onClick={() => setViewMode("my")}
+        <nav className="flex-1 space-y-1 p-4 overflow-y-auto">
+          {/* Project Monitoring Expandable Group */}
+          <div className="space-y-1">
+            <Link
+              href="/reports/dashboard"
+              onClick={() => {
+                setProjectMonitoringExpanded(!projectMonitoringExpanded)
+                setMobileOpen(false)
+              }}
+              className={cn(
+                "flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold transition-colors",
+                isProjectMonitoringActive
+                  ? "bg-primary/10 text-primary"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
+              )}
+            >
+              <div className="flex items-center gap-3">
+                <FolderKanban className="h-4.5 w-4.5 shrink-0" />
+                <span>Project Monitoring</span>
+              </div>
+              <ChevronDown
                 className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
-                  viewMode === "my"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+                  "h-4 w-4 transition-transform duration-200",
+                  projectMonitoringExpanded ? "transform rotate-0" : "transform -rotate-90"
                 )}
-              >
-                <User className="h-3 w-3" />
-                My View
-              </button>
-              <button
-                onClick={() => setViewMode("team")}
-                className={cn(
-                  "flex flex-1 items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
-                  viewMode === "team"
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:text-foreground"
+              />
+            </Link>
+
+            {projectMonitoringExpanded && (
+              <div className="ml-3 pl-3 border-l border-muted/50 space-y-1 pt-1 pb-2">
+                {/* View Mode Toggle inside Project Monitoring */}
+                {userLevel > 1 && (
+                  <div className="pb-2">
+                    <div className="flex rounded-lg border bg-muted/10 p-0.5 gap-0.5">
+                      <button
+                        onClick={() => setViewMode("my")}
+                        className={cn(
+                          "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-[10px] font-semibold transition-colors",
+                          viewMode === "my"
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <User className="h-2.5 w-2.5" />
+                        My View
+                      </button>
+                      <button
+                        onClick={() => setViewMode("team")}
+                        className={cn(
+                          "flex flex-1 items-center justify-center gap-1.5 rounded-md py-1 text-[10px] font-semibold transition-colors",
+                          viewMode === "team"
+                            ? "bg-primary text-primary-foreground"
+                            : "text-muted-foreground hover:text-foreground"
+                        )}
+                      >
+                        <Users className="h-2.5 w-2.5" />
+                        Team
+                      </button>
+                    </div>
+                  </div>
                 )}
-              >
-                <Users className="h-3 w-3" />
-                Team
-              </button>
-            </div>
+
+                {/* Sub-menu Items */}
+                {monitoringItems.map((item) => {
+                  const active = item.href === "/reports"
+                    ? pathname === "/reports" || (pathname.startsWith("/reports/") && !pathname.startsWith("/reports/dashboard") && !pathname.startsWith("/reports/analytics"))
+                    : pathname === item.href || pathname.startsWith(item.href + "/")
+                  return (
+                    <Link
+                      key={item.href}
+                      href={item.href}
+                      onClick={() => setMobileOpen(false)}
+                      className={cn(
+                        "flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-colors",
+                        active
+                          ? "bg-primary/5 text-primary"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      )}
+                    >
+                      <item.icon className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">{item.label}</span>
+                    </Link>
+                  )
+                })}
+              </div>
+            )}
           </div>
-        )}
 
+          {/* Divider */}
+          <div className="h-px bg-muted/40 my-2" />
 
-        <nav className="flex-1 space-y-1 p-4">
-          {navItems.map((item) => {
-            const active = item.href === "/reports"
-              ? pathname === "/reports" || (pathname.startsWith("/reports/") && !pathname.startsWith("/reports/dashboard") && !pathname.startsWith("/reports/analytics"))
-              : pathname === item.href || pathname.startsWith(item.href + "/")
+          {/* Main level items outside Project Monitoring */}
+          {otherItems.map((item) => {
+            const active = pathname === item.href || pathname.startsWith(item.href + "/")
             const isInbox = item.href === "/inbox"
             return (
               <Link

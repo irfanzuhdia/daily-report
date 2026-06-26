@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Plus, ListTodo, Pencil, FileDown, Users, X, History, Loader2, ExternalLink, LifeBuoy } from "lucide-react"
@@ -20,15 +20,7 @@ import { revalidatePathsAndTags } from "@/app/actions"
 import { FileSection } from "@/components/file-section"
 import { CommentsSection } from "@/components/comments-section"
 import { SearchableUserSelect, getSelectableUsers, type UserSelectItem } from "@/components/ui/searchable-user-select"
-
-const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
-  NS: "secondary",
-  OP: "warning",
-  D: "success",
-  C: "success",
-  H: "destructive",
-  CC: "destructive",
-}
+import { statusVariant } from "@/lib/status-helpers"
 
 export function ProjectDetailClient({
   project,
@@ -71,18 +63,19 @@ export function ProjectDetailClient({
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [currentStatus, setCurrentStatus] = useState(autoProjectStatus)
 
-  const currentUser = allUsers.find((u) => u.user_id === currentUserId)
+  const currentUser = useMemo(() => allUsers.find((u) => u.user_id === currentUserId), [allUsers, currentUserId])
   const normOcc = currentUser?.user_occupation?.toLowerCase().replace(/\s+/g, "") ?? ""
   const isSUOrCOSU = ["superuser", "cosuperuser", "co-superuser"].includes(normOcc)
   const isHRIS = currentUser?.user_division?.toLowerCase().trim() === "hris"
 
   const isProjectCreator = project.created_by === currentUserId
-  const isProjectTeamMember = teamMembers.some((m) => m.user_id === currentUserId)
+  const isProjectTeamMember = useMemo(() => teamMembers.some((m) => m.user_id === currentUserId), [teamMembers, currentUserId])
   const hasEditPermission = isProjectTeamMember || isProjectCreator || isSUOrCOSU || isHRIS
 
-  const availableUsers = allUsers.filter(
-    (u) => !teamMembers.some((m) => m.user_id === u.user_id)
-  )
+  const availableUsers = useMemo(() => {
+    const teamSet = new Set(teamMembers.map((m) => m.user_id))
+    return allUsers.filter((u) => !teamSet.has(u.user_id))
+  }, [allUsers, teamMembers])
 
   const handleSaveNewMembers = async () => {
     if (selectedNewUserIds.length === 0) return

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useId, useEffect, useRef } from "react"
+import { useState, useCallback, useMemo, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin, LifeBuoy } from "lucide-react"
@@ -44,23 +44,7 @@ import type { Project, Status, ProjectTeam } from "@/lib/types"
 import { useViewDensity } from "@/lib/view-density"
 import { revalidatePathsAndTags } from "@/app/actions"
 
-const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
-  NS: "secondary",
-  OP: "warning",
-  D: "success",
-  C: "success",
-  H: "destructive",
-  CC: "destructive",
-}
-
-const statusLabel: Record<string, string> = {
-  NS: "Not Started",
-  OP: "On Progress",
-  D: "Completed",
-  C: "Completed",
-  H: "On Hold",
-  CC: "Cancelled",
-}
+import { statusVariant, statusLabel } from "@/lib/status-helpers"
 
 /* ─────────────────────── Sortable Project Card ─────────────────────── */
 
@@ -367,7 +351,7 @@ export function ProjectsClient({
   currentTeam?: string
 }) {
   const { density } = useViewDensity()
-  const currentUser = users.find(u => u.user_id === currentUserId)
+  const currentUser = useMemo(() => users.find(u => u.user_id === currentUserId), [users, currentUserId])
   const isSuperUser = currentUser?.user_occupation?.toLowerCase() === 'super user'
   const userLevel = currentUser?.level || 1
 

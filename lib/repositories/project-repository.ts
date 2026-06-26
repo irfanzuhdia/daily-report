@@ -3,6 +3,7 @@ import type { Project, ProjectTeam, ProjectLog, Task, User } from '../types';
 import { unstable_cache, revalidateTag, calcProjectStatus, STATUS } from './shared';
 import { UserRepository, getUserLevel } from './user-repository';
 import { RoleLevelRepository } from './role-level-repository';
+import { randomUUID } from 'crypto';
 
 // ============ CACHING HELPERS ============
 
@@ -113,8 +114,64 @@ async function syncTicketStatus(ticketId: string | null | undefined, projectStat
 
 // ============ PROJECT REPOSITORY ============
 export const ProjectRepository = {
-  async findAll(): Promise<Project[]> {
-    return getCachedProjects();
+  async findAll(userId?: string): Promise<Project[]> {
+    if (!userId) {
+      return getCachedProjects();
+    }
+
+    const user = await UserRepository.findById(userId);
+    if (!user) return [];
+
+    const level = await getUserLevel(user.user_occupation);
+    if (level >= 6) {
+      return sql`SELECT * FROM projects WHERE deleted_at IS NULL ORDER BY created_at DESC` as unknown as Project[];
+    }
+
+    let scopeCondition = '';
+    const params: any[] = [userId];
+
+    const viewerOcc = (user.user_occupation || '').toLowerCase().trim();
+    if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
+      params.push(user.user_departement || '');
+      scopeCondition = `(LOWER(u.user_departement) = LOWER($2) OR LOWER(mu.user_departement) = LOWER($2))`;
+    } else if (viewerOcc === 'site manager' || viewerOcc === 'site admin' || level === 5) {
+      params.push(user.user_site || '');
+      scopeCondition = `(LOWER(u.user_site) = LOWER($2) OR LOWER(mu.user_site) = LOWER($2))`;
+    } else if (
+      viewerOcc === 'divisi manager' || 
+      viewerOcc === 'divisi admin' || 
+      viewerOcc === 'div manager' || 
+      viewerOcc === 'div admin' || 
+      level === 4 || 
+      level === 3
+    ) {
+      params.push(user.user_division || '');
+      scopeCondition = `(LOWER(u.user_division) = LOWER($2) OR LOWER(mu.user_division) = LOWER($2))`;
+    } else if (viewerOcc === 'team leader' || level === 2) {
+      params.push(user.user_team || '');
+      scopeCondition = `(LOWER(u.user_team) = LOWER($2) OR LOWER(mu.user_team) = LOWER($2))`;
+    }
+
+    let query = `
+      SELECT DISTINCT p.* 
+      FROM projects p
+      LEFT JOIN users u ON p.created_by = u.user_id
+      LEFT JOIN project_teams pt ON p.project_id = pt.project_id AND pt.deleted_at IS NULL
+      LEFT JOIN users mu ON pt.user_id = mu.user_id
+      WHERE p.deleted_at IS NULL 
+        AND (
+          p.created_by = $1
+          OR pt.user_id = $1
+    `;
+
+    if (scopeCondition) {
+      query += ` OR ${scopeCondition}`;
+    }
+
+    query += `) ORDER BY p.created_at DESC`;
+
+    const rows = await (sql as any).query(query, params);
+    return rows as unknown as Project[];
   },
 
   async findById(projectId: string): Promise<Project | null> {
@@ -157,9 +214,10 @@ export const ProjectRepository = {
       }
     }
 
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(project_id, '\\D', '', 'g'), '')::int), 0) as max_val FROM projects`;
-    const maxVal = res[0].max_val || 0;
-    const nextVal = maxVal < 260000 ? 260001 : maxVal + 1;
+    const lastRow = await sql`SELECT project_id FROM projects ORDER BY project_id DESC LIMIT 1`;
+    const lastId = lastRow[0]?.project_id || 'P-260000';
+    const lastNum = parseInt(lastId.replace('P-', ''), 10) || 260000;
+    const nextVal = lastNum < 260000 ? 260001 : lastNum + 1;
     const nextId = 'P-' + String(nextVal);
     const now = new Date().toISOString();
 
@@ -229,10 +287,19 @@ export const ProjectRepository = {
         | 'ticket_reference'
       >
     >,
-    updatedBy: string
+    updatedBy: string,
+    /** Allow internal callers (ticket-sync) to override terminal status lock */
+    forceStatusOverride = false
   ): Promise<Project | null> {
     const existing = await ProjectRepository.findById(projectId);
     if (!existing) return null;
+
+    // ── Terminal status lock ──
+    // Projects in DONE or CANCEL cannot be edited by external callers.
+    const isTerminal = existing.project_status === STATUS.DONE || existing.project_status === STATUS.CANCEL;
+    if (isTerminal && !forceStatusOverride) {
+      throw new Error('This project is locked because its status is final (Done/Cancelled). No further changes are allowed.');
+    }
 
     // Validate 1-to-1 unique active ticket reference on update
     if (updates.ticket_reference !== undefined && updates.ticket_reference !== existing.ticket_reference && updates.ticket_reference) {
@@ -372,8 +439,7 @@ export const ProjectTeamRepository = {
     userId: string,
     createdBy: string
   ): Promise<ProjectTeam> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM project_teams`;
-    const nextId = 'pt-' + String((res[0].max_val || 0) + 1).padStart(3, '0');
+    const nextId = 'pt-' + randomUUID();
     const now = new Date().toISOString();
 
     const newPT: ProjectTeam = {
@@ -453,8 +519,7 @@ export const ProjectLogRepository = {
     },
     createdBy: string
   ): Promise<ProjectLog> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(split_part(id, '-', 2), '')::int), 0) as max_val FROM project_logs`;
-    const nextId = 'pl-' + String((res[0].max_val || 0) + 1).padStart(3, '0') + '-' + Math.random().toString(36).substring(2, 7);
+    const nextId = 'pl-' + randomUUID();
     const now = new Date().toISOString();
 
     const newLog: ProjectLog = {

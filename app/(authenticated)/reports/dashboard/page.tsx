@@ -72,26 +72,29 @@ export default async function DashboardPage({
     reports = reports.filter((r) => r.user_id === userId || r.created_by === userId)
   }
 
+  // Pre-build user lookup map — O(n) once, then O(1) per lookup
+  const userById = new Map(allUsers.map(u => [u.user_id, u]))
+
   // Apply enterprise filters on dashboard
   if (params.dept_filter) {
-    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_departement === params.dept_filter)
-    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_departement === params.dept_filter)
-    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_departement === params.dept_filter)
+    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_departement === params.dept_filter)
+    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_departement === params.dept_filter)
+    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_departement === params.dept_filter)
   }
   if (params.site_filter) {
-    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_site === params.site_filter)
-    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_site === params.site_filter)
-    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_site === params.site_filter)
+    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_site === params.site_filter)
+    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_site === params.site_filter)
+    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_site === params.site_filter)
   }
   if (params.div_filter) {
-    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_division === params.div_filter)
-    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_division === params.div_filter)
-    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_division === params.div_filter)
+    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_division === params.div_filter)
+    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_division === params.div_filter)
+    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_division === params.div_filter)
   }
   if (params.team_filter) {
-    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_team === params.team_filter)
-    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_team === params.team_filter)
-    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_team === params.team_filter)
+    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_team === params.team_filter)
+    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_team === params.team_filter)
+    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_team === params.team_filter)
   }
 
   const userMap = new Map(allUsers.map((u) => [u.user_id, u.user_name || u.user_email || u.user_id]))

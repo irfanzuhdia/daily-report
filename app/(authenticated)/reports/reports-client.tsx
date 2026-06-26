@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback, useId, useEffect, useRef } from "react"
+import { useState, useCallback, useMemo, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, GripVertical, Pin, Loader2 } from "lucide-react"
@@ -305,7 +305,7 @@ export function ReportsClient({
   currentTeam?: string
 }) {
   const { density } = useViewDensity()
-  const currentUser = (users || []).find(u => u.user_id === currentUserId)
+  const currentUser = useMemo(() => (users || []).find(u => u.user_id === currentUserId), [users, currentUserId])
   const isSuperUser = currentUser?.user_occupation?.toLowerCase() === 'super user'
   const userLevel = currentUser?.level || 1
 

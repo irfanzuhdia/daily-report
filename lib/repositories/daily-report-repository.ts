@@ -4,6 +4,7 @@ import { unstable_cache, revalidateTag, calcProjectStatus, STATUS } from './shar
 import { UserRepository, getUserLevel } from './user-repository';
 import { RoleLevelRepository } from './role-level-repository';
 import { isSupervised } from './project-repository';
+import { randomUUID } from 'crypto';
 
 // ============ CACHING HELPERS ============
 
@@ -64,8 +65,63 @@ const getCachedAllReportsIncludingDeleted = unstable_cache(
 // ============ DAILY REPORT REPOSITORY ============
 
 export const DailyReportRepository = {
-  async findAll(): Promise<DailyReport[]> {
-    return getCachedReports();
+  async findAll(userId?: string): Promise<DailyReport[]> {
+    if (!userId) {
+      return getCachedReports();
+    }
+
+    const user = await UserRepository.findById(userId);
+    if (!user) return [];
+
+    const level = await getUserLevel(user.user_occupation);
+    if (level >= 6) {
+      return sql`SELECT * FROM daily_reports WHERE deleted_at IS NULL ORDER BY created_at DESC` as unknown as DailyReport[];
+    }
+
+    let scopeCondition = '';
+    const params: any[] = [userId];
+
+    const viewerOcc = (user.user_occupation || '').toLowerCase().trim();
+    if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
+      params.push(user.user_departement || '');
+      scopeCondition = `(LOWER(u.user_departement) = LOWER($2) OR LOWER(cu.user_departement) = LOWER($2))`;
+    } else if (viewerOcc === 'site manager' || viewerOcc === 'site admin' || level === 5) {
+      params.push(user.user_site || '');
+      scopeCondition = `(LOWER(u.user_site) = LOWER($2) OR LOWER(cu.user_site) = LOWER($2))`;
+    } else if (
+      viewerOcc === 'divisi manager' || 
+      viewerOcc === 'divisi admin' || 
+      viewerOcc === 'div manager' || 
+      viewerOcc === 'div admin' || 
+      level === 4 || 
+      level === 3
+    ) {
+      params.push(user.user_division || '');
+      scopeCondition = `(LOWER(u.user_division) = LOWER($2) OR LOWER(cu.user_division) = LOWER($2))`;
+    } else if (viewerOcc === 'team leader' || level === 2) {
+      params.push(user.user_team || '');
+      scopeCondition = `(LOWER(u.user_team) = LOWER($2) OR LOWER(cu.user_team) = LOWER($2))`;
+    }
+
+    let query = `
+      SELECT DISTINCT dr.* 
+      FROM daily_reports dr
+      LEFT JOIN users u ON dr.user_id = u.user_id
+      LEFT JOIN users cu ON dr.created_by = cu.user_id
+      WHERE dr.deleted_at IS NULL 
+        AND (
+          dr.user_id = $1
+          OR dr.created_by = $1
+    `;
+
+    if (scopeCondition) {
+      query += ` OR ${scopeCondition}`;
+    }
+
+    query += `) ORDER BY dr.created_at DESC`;
+
+    const rows = await (sql as any).query(query, params);
+    return rows as unknown as DailyReport[];
   },
 
   async findById(reportId: string): Promise<DailyReport | null> {
@@ -95,8 +151,10 @@ export const DailyReportRepository = {
     },
     createdBy: string
   ): Promise<DailyReport> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(report_id, '\\D', '', 'g'), '')::int), 0) as max_val FROM daily_reports`;
-    const nextId = 'R-' + String((res[0].max_val || 0) + 1).padStart(4, '0');
+    const lastRow = await sql`SELECT report_id FROM daily_reports ORDER BY report_id DESC LIMIT 1`;
+    const lastId = lastRow[0]?.report_id || 'R-0000';
+    const lastNum = parseInt(lastId.replace('R-', ''), 10) || 0;
+    const nextId = 'R-' + String(lastNum + 1).padStart(4, '0');
     const now = new Date().toISOString();
 
     const newReport: DailyReport = {
@@ -125,8 +183,7 @@ export const DailyReportRepository = {
     `;
 
     // Log report submission (decoupled direct SQL insertion into task_logs)
-    const logRes = await sql`SELECT COALESCE(MAX(NULLIF(split_part(id, '-', 2), '')::int), 0) as max_val FROM task_logs`;
-    const nextLogId = 'tl-' + String((logRes[0].max_val || 0) + 1).padStart(3, '0') + '-' + Math.random().toString(36).substring(2, 7);
+    const nextLogId = 'tl-' + randomUUID();
     await sql`
       INSERT INTO task_logs (
         id, task_id, task_status_old, task_status_new, created_by, created_at

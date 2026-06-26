@@ -1,5 +1,6 @@
 import { sql } from '../db';
 import type { Notification } from '../types';
+import { randomUUID } from 'crypto';
 
 // ============ NOTIFICATION REPOSITORY ============
 
@@ -43,8 +44,7 @@ export const NotificationRepository = {
       link: string;
     }
   ): Promise<Notification> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM notifications`;
-    const nextId = 'n-' + String((res[0].max_val || 0) + 1).padStart(3, '0');
+    const nextId = 'n-' + randomUUID();
     const now = new Date().toISOString();
 
     const newNotification: Notification = {

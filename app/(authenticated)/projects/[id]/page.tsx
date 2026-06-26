@@ -57,8 +57,16 @@ export default async function ProjectDetailPage({
   const taskProgress: Record<string, number> = {}
   let projectTotalHours = 0
 
+  // Pre-index reports by task_id — O(n) once
+  const reportsByTask = new Map<string, typeof allReports>()
+  for (const r of allReports) {
+    const list = reportsByTask.get(r.task_id) || []
+    list.push(r)
+    reportsByTask.set(r.task_id, list)
+  }
+
   for (const task of tasks) {
-    const reports = allReports.filter((r) => r.task_id === task.id)
+    const reports = reportsByTask.get(task.id) || []
     taskReports[task.id] = reports.length
     const hours = reports.reduce((sum, r) => {
       const h = parseFloat(r.total_hours ?? '0')

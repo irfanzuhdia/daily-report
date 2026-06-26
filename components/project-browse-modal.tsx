@@ -14,23 +14,7 @@ interface ProjectBrowseModalProps {
   onSelect: (projectId: string) => void
 }
 
-const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
-  NS: "secondary",
-  OP: "warning",
-  D: "success",
-  C: "success",
-  H: "destructive",
-  CC: "destructive",
-}
-
-const statusLabel: Record<string, string> = {
-  NS: "Not Started",
-  OP: "On Progress",
-  D: "Completed",
-  C: "Completed",
-  H: "On Hold",
-  CC: "Cancelled",
-}
+import { statusVariant, statusLabel } from "@/lib/status-helpers"
 
 export function ProjectBrowseModal({
   isOpen,

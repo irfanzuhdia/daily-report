@@ -3,33 +3,10 @@ import type { Ticket, TicketComment, TicketLog } from '../types';
 import { unstable_cache, revalidateTag, STATUS } from './shared';
 import { NotificationRepository } from './notification-repository';
 import { resolveUserName } from './user-repository';
+import { randomUUID } from 'crypto';
 
 // ============ CACHING HELPERS ============
 
-const getCachedTickets = unstable_cache(
-  async (): Promise<Ticket[]> => {
-    const [tickets, teamRows] = await Promise.all([
-      sql`SELECT * FROM tickets WHERE deleted_at IS NULL ORDER BY created_at DESC`,
-      sql`SELECT * FROM ticket_team`
-    ]);
-
-    const teamMap = new Map<string, string[]>();
-    for (const row of teamRows) {
-      const tId = row.ticket_id;
-      if (!teamMap.has(tId)) {
-        teamMap.set(tId, []);
-      }
-      teamMap.get(tId)!.push(row.user_id);
-    }
-
-    return (tickets as unknown as Ticket[]).map(t => ({
-      ...t,
-      team_user_ids: teamMap.get(t.id) || []
-    }));
-  },
-  ['tickets-all'],
-  { tags: ['tickets'], revalidate: 60 }
-);
 
 const getCachedTicketById = unstable_cache(
   async (id: string): Promise<Ticket | null> => {
@@ -60,45 +37,98 @@ export const TicketRepository = {
     status?: string;
     priority?: string;
     search?: string;
+    tab?: 'my' | 'requested';
+    currentUserId?: string;
+    currentUserDivision?: string;
   }): Promise<Ticket[]> {
-    let list = await getCachedTickets();
+    const params: any[] = [];
+    let query = `
+      SELECT t.* 
+      FROM tickets t
+      WHERE t.deleted_at IS NULL
+    `;
 
-    if (filters) {
-      if (filters.request_by) {
-        list = list.filter((t) => t.request_by === filters.request_by);
-      }
-      if (filters.request_to_division) {
-        list = list.filter(
-          (t) => t.request_to_division ? t.request_to_division.toLowerCase() === filters.request_to_division!.toLowerCase() : false
-        );
-      }
-      if (filters.tag_person) {
-        list = list.filter(
-          (t) =>
-            t.tag_person === filters.tag_person ||
-            t.team_user_ids?.includes(filters.tag_person!)
-        );
-      }
-      if (filters.status) {
-        list = list.filter((t) => t.status.toLowerCase() === filters.status!.toLowerCase());
-      }
-      if (filters.priority) {
-        list = list.filter((t) => t.priority.toLowerCase() === filters.priority!.toLowerCase());
-      }
-      if (filters.search) {
-        const q = filters.search.toLowerCase();
-        list = list.filter(
-          (t) =>
-            t.title.toLowerCase().includes(q) ||
-            t.description.toLowerCase().includes(q) ||
-            t.id.toLowerCase().includes(q) ||
-            t.problem_type.toLowerCase().includes(q) ||
-            (t.division_category && t.division_category.toLowerCase().includes(q))
-        );
-      }
+    // Tab-based database-level filtering
+    if (filters?.tab === 'my' && filters.currentUserId) {
+      params.push(filters.currentUserId);
+      query += ` AND t.request_by = $${params.length}`;
+    } else if (filters?.tab === 'requested' && filters.currentUserId) {
+      const uId = filters.currentUserId;
+      const uDiv = filters.currentUserDivision || '';
+      
+      params.push(uId);
+      const uIdIndex = params.length;
+      
+      params.push(uDiv);
+      const uDivIndex = params.length;
+      
+      query += ` AND (
+        (t.request_to_division IS NOT NULL AND LOWER(t.request_to_division) = LOWER($${uDivIndex}))
+        OR t.tag_person = $${uIdIndex}
+        OR t.id IN (SELECT ticket_id FROM ticket_team WHERE user_id = $${uIdIndex})
+      )`;
     }
 
-    return list;
+    // Individual parameter filters (retained for backward compatibility and API flexibility)
+    if (filters?.request_by && filters.tab !== 'my') {
+      params.push(filters.request_by);
+      query += ` AND t.request_by = $${params.length}`;
+    }
+    if (filters?.request_to_division && filters.tab !== 'requested') {
+      params.push(filters.request_to_division);
+      query += ` AND t.request_to_division IS NOT NULL AND LOWER(t.request_to_division) = LOWER($${params.length})`;
+    }
+    if (filters?.tag_person && filters.tab !== 'requested') {
+      params.push(filters.tag_person);
+      const pIndex = params.length;
+      query += ` AND (t.tag_person = $${pIndex} OR t.id IN (SELECT ticket_id FROM ticket_team WHERE user_id = $${pIndex}))`;
+    }
+    if (filters?.status) {
+      params.push(filters.status);
+      query += ` AND LOWER(t.status) = LOWER($${params.length})`;
+    }
+    if (filters?.priority) {
+      params.push(filters.priority);
+      query += ` AND LOWER(t.priority) = LOWER($${params.length})`;
+    }
+    if (filters?.search) {
+      params.push(`%${filters.search.toLowerCase()}%`);
+      const sIndex = params.length;
+      query += ` AND (
+        LOWER(t.title) LIKE $${sIndex}
+        OR LOWER(t.description) LIKE $${sIndex}
+        OR LOWER(t.id) LIKE $${sIndex}
+        OR LOWER(t.problem_type) LIKE $${sIndex}
+        OR (t.division_category IS NOT NULL AND LOWER(t.division_category) LIKE $${sIndex})
+      )`;
+    }
+
+    query += ` ORDER BY t.created_at DESC`;
+
+    const tickets = await (sql as any).query(query, params) as unknown as Ticket[];
+    if (tickets.length === 0) return [];
+
+    // Optimize: fetch team assignments ONLY for the retrieved tickets
+    const ticketIds = tickets.map(t => t.id);
+    const teamRows = await sql`
+      SELECT ticket_id, user_id 
+      FROM ticket_team 
+      WHERE ticket_id = ANY(${ticketIds})
+    `;
+
+    const teamMap = new Map<string, string[]>();
+    for (const row of teamRows) {
+      const tId = row.ticket_id;
+      if (!teamMap.has(tId)) {
+        teamMap.set(tId, []);
+      }
+      teamMap.get(tId)!.push(row.user_id);
+    }
+
+    return tickets.map(t => ({
+      ...t,
+      team_user_ids: teamMap.get(t.id) || []
+    }));
   },
 
   async findById(id: string): Promise<Ticket | null> {
@@ -130,11 +160,10 @@ export const TicketRepository = {
     }
 
     // Generate next TK ID
-    const res = await sql`
-      SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val 
-      FROM tickets
-    `;
-    const nextId = 'TK-' + String((res[0].max_val || 0) + 1).padStart(4, '0');
+    const lastRow = await sql`SELECT id FROM tickets ORDER BY id DESC LIMIT 1`;
+    const lastId = lastRow[0]?.id || 'TK-0000';
+    const lastNum = parseInt(lastId.replace('TK-', ''), 10) || 0;
+    const nextId = 'TK-' + String(lastNum + 1).padStart(4, '0');
     const now = new Date().toISOString();
 
     const newTicket: Ticket = {
@@ -181,7 +210,7 @@ export const TicketRepository = {
       const senderName = await resolveUserName(createdBy);
       for (let i = 0; i < teamUserIds.length; i++) {
         const userId = teamUserIds[i];
-        const teamId = 'tt-' + String(now).slice(-6) + '-' + Math.random().toString(36).substring(2, 7);
+        const teamId = 'tkt-' + randomUUID();
         await sql`
           INSERT INTO ticket_team (id, ticket_id, user_id, created_by, created_at)
           VALUES (${teamId}, ${nextId}, ${userId}, ${createdBy}, ${now})
@@ -427,7 +456,7 @@ export const TicketRepository = {
 
       // 2. Process additions
       for (const userId of added) {
-        const teamId = 'tt-' + String(now).slice(-6) + '-' + Math.random().toString(36).substring(2, 7);
+        const teamId = 'tkt-' + randomUUID();
         await sql`
           INSERT INTO ticket_team (id, ticket_id, user_id, created_by, created_at)
           VALUES (${teamId}, ${id}, ${userId}, ${updatedBy}, ${now})
@@ -637,8 +666,7 @@ export const TicketRepository = {
   },
 
   async createComment(ticketId: string, content: string, createdBy: string): Promise<TicketComment> {
-    const res = await sql`SELECT COUNT(*)::int as count FROM ticket_comments`;
-    const nextId = 'tc-' + String((res[0].count || 0) + 1).padStart(4, '0') + '-' + Math.random().toString(36).substring(2, 7);
+    const nextId = 'tkc-' + randomUUID();
     const now = new Date().toISOString();
 
     const comment: TicketComment = {
@@ -746,8 +774,7 @@ export const TicketRepository = {
   },
 
   async createLog(ticketId: string, action: string, details: string | null, createdBy: string): Promise<TicketLog> {
-    const res = await sql`SELECT COUNT(*)::int as count FROM ticket_logs`;
-    const nextId = 'tl-' + String((res[0].count || 0) + 1).padStart(4, '0') + '-' + Math.random().toString(36).substring(2, 7);
+    const nextId = 'tkl-' + randomUUID();
     const now = new Date().toISOString();
 
     const log: TicketLog = {

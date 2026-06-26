@@ -113,8 +113,10 @@ export const UserRepository = {
     },
     createdBy: string
   ): Promise<User> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(user_id, '\\D', '', 'g'), '')::int), 0) as max_val FROM users`;
-    const nextId = 'U-' + String((res[0].max_val || 0) + 1).padStart(4, '0');
+    const lastRow = await sql`SELECT user_id FROM users ORDER BY user_id DESC LIMIT 1`;
+    const lastId = lastRow[0]?.user_id || 'U-0000';
+    const lastNum = parseInt(lastId.replace('U-', ''), 10) || 0;
+    const nextId = 'U-' + String(lastNum + 1).padStart(4, '0');
     const now = new Date().toISOString();
 
     const newUser: User = {

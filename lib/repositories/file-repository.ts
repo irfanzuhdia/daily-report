@@ -1,6 +1,7 @@
 import { sql } from '../db';
 import type { FileRecord } from '../types';
 import { unstable_cache, revalidateTag } from './shared';
+import { randomUUID } from 'crypto';
 
 // ============ CACHING HELPERS ============
 
@@ -69,8 +70,7 @@ export const FileRepository = {
     },
     createdBy: string
   ): Promise<FileRecord> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM files`;
-    const nextId = 'f-' + String((res[0].max_val || 0) + 1).padStart(3, '0');
+    const nextId = 'f-' + randomUUID();
     const now = new Date().toISOString();
 
     const newFile: FileRecord = {

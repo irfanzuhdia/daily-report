@@ -34,9 +34,9 @@ export default async function ReportsPage({
   const params = await searchParams
 
   const [allReports, allTasks, allProjects, userMap, allUsers] = await Promise.all([
-    DailyReportRepository.findAll(),
-    TaskRepository.findAll(),
-    ProjectRepository.findAll(),
+    DailyReportRepository.findAll(userId),
+    TaskRepository.findAll(userId),
+    ProjectRepository.findAll(userId),
     getUserMap(),
     UserRepository.findAll(),
   ])
@@ -52,18 +52,21 @@ export default async function ReportsPage({
     reports = reports.filter((r) => r.user_id === userId || r.created_by === userId)
   }
 
+  // Pre-build user lookup map — O(n) once, then O(1) per lookup
+  const userById = new Map(allUsers.map(u => [u.user_id, u]))
+
   // Apply enterprise filters
   if (params.dept_filter) {
-    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_departement === params.dept_filter)
+    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_departement === params.dept_filter)
   }
   if (params.site_filter) {
-    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_site === params.site_filter)
+    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_site === params.site_filter)
   }
   if (params.div_filter) {
-    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_division === params.div_filter)
+    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_division === params.div_filter)
   }
   if (params.team_filter) {
-    reports = reports.filter((r) => r.user_id && allUsers.find(u => u.user_id === r.user_id)?.user_team === params.team_filter)
+    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_team === params.team_filter)
   }
 
   if (params.task_id) {

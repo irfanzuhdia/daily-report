@@ -4,6 +4,7 @@ import { unstable_cache, revalidateTag, calcProjectStatus, STATUS } from './shar
 import { UserRepository, getUserLevel } from './user-repository';
 import { RoleLevelRepository } from './role-level-repository';
 import { isSupervised } from './project-repository';
+import { randomUUID } from 'crypto';
 
 // ============ CACHING HELPERS ============
 
@@ -82,8 +83,64 @@ const getCachedAllTasksIncludingDeleted = unstable_cache(
 // ============ TASK REPOSITORY ============
 
 export const TaskRepository = {
-  async findAll(): Promise<Task[]> {
-    return getCachedTasks();
+  async findAll(userId?: string): Promise<Task[]> {
+    if (!userId) {
+      return getCachedTasks();
+    }
+
+    const user = await UserRepository.findById(userId);
+    if (!user) return [];
+
+    const level = await getUserLevel(user.user_occupation);
+    if (level >= 6) {
+      return sql`SELECT * FROM tasks WHERE deleted_at IS NULL ORDER BY created_at DESC` as unknown as Task[];
+    }
+
+    let scopeCondition = '';
+    const params: any[] = [userId];
+
+    const viewerOcc = (user.user_occupation || '').toLowerCase().trim();
+    if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
+      params.push(user.user_departement || '');
+      scopeCondition = `(LOWER(u.user_departement) = LOWER($2) OR LOWER(mu.user_departement) = LOWER($2))`;
+    } else if (viewerOcc === 'site manager' || viewerOcc === 'site admin' || level === 5) {
+      params.push(user.user_site || '');
+      scopeCondition = `(LOWER(u.user_site) = LOWER($2) OR LOWER(mu.user_site) = LOWER($2))`;
+    } else if (
+      viewerOcc === 'divisi manager' || 
+      viewerOcc === 'divisi admin' || 
+      viewerOcc === 'div manager' || 
+      viewerOcc === 'div admin' || 
+      level === 4 || 
+      level === 3
+    ) {
+      params.push(user.user_division || '');
+      scopeCondition = `(LOWER(u.user_division) = LOWER($2) OR LOWER(mu.user_division) = LOWER($2))`;
+    } else if (viewerOcc === 'team leader' || level === 2) {
+      params.push(user.user_team || '');
+      scopeCondition = `(LOWER(u.user_team) = LOWER($2) OR LOWER(mu.user_team) = LOWER($2))`;
+    }
+
+    let query = `
+      SELECT DISTINCT t.* 
+      FROM tasks t
+      LEFT JOIN users u ON t.created_by = u.user_id
+      LEFT JOIN task_teams tt ON t.id = tt.task_id AND tt.deleted_at IS NULL
+      LEFT JOIN users mu ON tt.user_id = mu.user_id
+      WHERE t.deleted_at IS NULL 
+        AND (
+          t.created_by = $1
+          OR tt.user_id = $1
+    `;
+
+    if (scopeCondition) {
+      query += ` OR ${scopeCondition}`;
+    }
+
+    query += `) ORDER BY t.created_at DESC`;
+
+    const rows = await (sql as any).query(query, params);
+    return rows as unknown as Task[];
   },
 
   async findByProjectId(projectId: string): Promise<Task[]> {
@@ -105,8 +162,10 @@ export const TaskRepository = {
     },
     createdBy: string
   ): Promise<Task> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM tasks`;
-    const nextId = 'T-' + String((res[0].max_val || 0) + 1).padStart(5, '0');
+    const lastRow = await sql`SELECT id FROM tasks ORDER BY id DESC LIMIT 1`;
+    const lastId = lastRow[0]?.id || 'T-00000';
+    const lastNum = parseInt(lastId.replace('T-', ''), 10) || 0;
+    const nextId = 'T-' + String(lastNum + 1).padStart(5, '0');
     const now = new Date().toISOString();
 
     const newTask: Task = {
@@ -280,8 +339,7 @@ export const TaskTeamRepository = {
     userId: string,
     createdBy: string
   ): Promise<TaskTeam> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM task_teams`;
-    const nextId = 'tt-' + String((res[0].max_val || 0) + 1).padStart(3, '0');
+    const nextId = 'tt-' + randomUUID();
     const now = new Date().toISOString();
 
     const newTT: TaskTeam = {
@@ -361,8 +419,7 @@ export const TaskLogRepository = {
     },
     createdBy: string
   ): Promise<TaskLog> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(split_part(id, '-', 2), '')::int), 0) as max_val FROM task_logs`;
-    const nextId = 'tl-' + String((res[0].max_val || 0) + 1).padStart(3, '0') + '-' + Math.random().toString(36).substring(2, 7);
+    const nextId = 'tl-' + randomUUID();
     const now = new Date().toISOString();
 
     const newLog: TaskLog = {
@@ -420,8 +477,7 @@ export const CommentRepository = {
     },
     createdBy: string
   ): Promise<Comment> {
-    const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(id, '\\D', '', 'g'), '')::int), 0) as max_val FROM comments`;
-    const nextId = 'c-' + String((res[0].max_val || 0) + 1).padStart(3, '0');
+    const nextId = 'c-' + randomUUID();
     const now = new Date().toISOString();
 
     const newComment: Comment = {

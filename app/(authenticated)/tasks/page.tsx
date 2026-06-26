@@ -36,10 +36,10 @@ export default async function TasksPage({
   const params = await searchParams
 
   const [allTasks, statuses, allProjects, allReports, allUsers, allTaskTeams, allProjectTeams] = await Promise.all([
-    TaskRepository.findAll(),
+    TaskRepository.findAll(userId),
     StatusRepository.findAll(),
-    ProjectRepository.findAll(),
-    DailyReportRepository.findAll(),
+    ProjectRepository.findAll(userId),
+    DailyReportRepository.findAll(userId),
     UserRepository.findAll(),
     TaskTeamRepository.findAll(),
     ProjectTeamRepository.findAll(),
@@ -59,20 +59,38 @@ export default async function TasksPage({
     tasks = tasks.filter((t) => t.created_by === userId || myTaskIds.has(t.id))
   }
 
+  // Pre-build lookup maps — O(n) once, then O(1) per lookup
+  const userById = new Map(allUsers.map(u => [u.user_id, u]))
   const userMap = new Map(allUsers.map((u) => [u.user_id, (u.user_name || u.user_email || "").toLowerCase()]))
+
+  // Pre-index task teams by task_id — O(n)
+  const teamsByTask = new Map<string, string[]>()
+  for (const tt of allTaskTeams) {
+    const list = teamsByTask.get(tt.task_id) || []
+    list.push(tt.user_id)
+    teamsByTask.set(tt.task_id, list)
+  }
+
+  // Pre-index reports by task_id — O(n)
+  const reportsByTask = new Map<string, typeof allReports>()
+  for (const r of allReports) {
+    const list = reportsByTask.get(r.task_id) || []
+    list.push(r)
+    reportsByTask.set(r.task_id, list)
+  }
 
   // Apply enterprise filters
   if (params.dept_filter) {
-    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_departement === params.dept_filter)
+    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_departement === params.dept_filter)
   }
   if (params.site_filter) {
-    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_site === params.site_filter)
+    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_site === params.site_filter)
   }
   if (params.div_filter) {
-    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_division === params.div_filter)
+    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_division === params.div_filter)
   }
   if (params.team_filter) {
-    tasks = tasks.filter((t) => t.created_by && allUsers.find(u => u.user_id === t.created_by)?.user_team === params.team_filter)
+    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_team === params.team_filter)
   }
 
   if (params.project_id) {
@@ -100,9 +118,9 @@ export default async function TasksPage({
       if (creatorName?.includes(q)) {
         return true
       }
-      const taskTeamUsers = allTaskTeams.filter((tt) => tt.task_id === t.id)
-      for (const tt of taskTeamUsers) {
-        const memberName = userMap.get(tt.user_id)
+      const taskTeamUserIds = teamsByTask.get(t.id) || []
+      for (const uid of taskTeamUserIds) {
+        const memberName = userMap.get(uid)
         if (memberName?.includes(q)) {
           return true
         }
@@ -116,7 +134,7 @@ export default async function TasksPage({
 
   const taskHoursMap: Record<string, number> = {}
   for (const task of tasks) {
-    const reports = allReports.filter((r) => r.task_id === task.id)
+    const reports = reportsByTask.get(task.id) || []
     taskHoursMap[task.id] = reports.reduce((sum, r) => {
       const h = parseFloat(r.total_hours ?? '0')
       return sum + (isNaN(h) ? 0 : h)

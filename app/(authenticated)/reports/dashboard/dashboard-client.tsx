@@ -1,6 +1,6 @@
 "use client"
 import { toDateStr } from "@/lib/format"
-import { useState, useEffect, useRef, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
 
 import Link from "next/link"
@@ -43,8 +43,8 @@ interface UserSelectItem {
   user_name: string | null
   user_occupation?: string | null
   user_departement?: string | null
-  user_division?: string | null
   user_site?: string | null
+  user_division?: string | null
   user_team?: string | null
   level?: number
 }
@@ -79,7 +79,7 @@ export function DashboardClient({
   const pathname = usePathname()
   const searchParams = useSearchParams()
 
-  const currentUser = users.find((u) => u.user_id === currentUserId)
+  const currentUser = useMemo(() => users.find((u) => u.user_id === currentUserId), [users, currentUserId])
   const userLevel = currentUser?.level || 1
 
   const isDeptDisabled = userLevel < 6

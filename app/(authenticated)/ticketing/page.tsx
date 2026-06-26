@@ -15,7 +15,7 @@ export default async function TicketingPage() {
 
   // Fetch tickets, users, and projects
   const [allTickets, allUsers, allProjects] = await Promise.all([
-    TicketRepository.findAll(),
+    TicketRepository.findAll({ tab: 'my', currentUserId: userId }),
     UserRepository.findAll(),
     ProjectRepository.findAll(),
   ]);

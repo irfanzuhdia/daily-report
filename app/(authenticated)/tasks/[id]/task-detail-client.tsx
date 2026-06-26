@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useMemo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Plus, Pencil, FileText, Users, X, History, Loader2, FileDown, ExternalLink } from "lucide-react"
@@ -13,15 +13,7 @@ import { revalidatePathsAndTags } from "@/app/actions"
 import { FileSection } from "@/components/file-section"
 import { CommentsSection } from "@/components/comments-section"
 import { SearchableUserSelect, getSelectableUsers, type UserSelectItem } from "@/components/ui/searchable-user-select"
-
-const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
-  NS: "secondary",
-  OP: "warning",
-  D: "success",
-  C: "success",
-  H: "destructive",
-  CC: "destructive",
-}
+import { statusVariant } from "@/lib/status-helpers"
 
 export function TaskDetailClient({
   task,
@@ -57,20 +49,21 @@ export function TaskDetailClient({
   const [adding, setAdding] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
 
-  const currentUser = allUsers.find((u) => u.user_id === currentUserId)
+  const currentUser = useMemo(() => allUsers.find((u) => u.user_id === currentUserId), [allUsers, currentUserId])
   const normOcc = currentUser?.user_occupation?.toLowerCase().replace(/\s+/g, "") ?? ""
   const isSUOrCOSU = ["superuser", "cosuperuser", "co-superuser"].includes(normOcc)
   const isHRIS = currentUser?.user_division?.toLowerCase().trim() === "hris"
 
   const isTaskCreator = task.created_by === currentUserId
   const isProjectCreator = project?.created_by === currentUserId
-  const isTaskTeamMember = teamMembers.some((m) => m.user_id === currentUserId)
-  const isProjectTeamMember = projectTeamUserIds.includes(currentUserId)
+  const isTaskTeamMember = useMemo(() => teamMembers.some((m) => m.user_id === currentUserId), [teamMembers, currentUserId])
+  const isProjectTeamMember = useMemo(() => projectTeamUserIds.includes(currentUserId), [projectTeamUserIds, currentUserId])
   const hasEditPermission = isTaskTeamMember || isProjectTeamMember || isTaskCreator || isProjectCreator || isSUOrCOSU || isHRIS
 
-  const availableUsers = allUsers.filter(
-    (u) => !teamMembers.some((m) => m.user_id === u.user_id)
-  )
+  const availableUsers = useMemo(() => {
+    const teamSet = new Set(teamMembers.map((m) => m.user_id))
+    return allUsers.filter((u) => !teamSet.has(u.user_id))
+  }, [allUsers, teamMembers])
 
   const handleSaveNewMembers = async () => {
     if (selectedNewUserIds.length === 0) return

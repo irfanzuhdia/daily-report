@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
-import { TicketRepository } from '@/lib/repositories';
+import { TicketRepository, UserRepository } from '@/lib/repositories';
 
 export async function GET(request: NextRequest) {
   try {
@@ -10,12 +10,20 @@ export async function GET(request: NextRequest) {
     }
 
     const { searchParams } = new URL(request.url);
+    const tab = searchParams.get('tab') || undefined;
     const request_by = searchParams.get('request_by') || undefined;
     const request_to_division = searchParams.get('request_to_division') || undefined;
     const tag_person = searchParams.get('tag_person') || undefined;
     const status = searchParams.get('status') || undefined;
     const priority = searchParams.get('priority') || undefined;
     const search = searchParams.get('search') || undefined;
+
+    // Resolve user division on the database level for safety
+    let currentUserDivision = '';
+    if (tab === 'requested') {
+      const user = await UserRepository.findById(session.user_id);
+      currentUserDivision = user?.user_division || '';
+    }
 
     const tickets = await TicketRepository.findAll({
       request_by,
@@ -24,6 +32,9 @@ export async function GET(request: NextRequest) {
       status,
       priority,
       search,
+      tab: tab as 'my' | 'requested' | undefined,
+      currentUserId: session.user_id,
+      currentUserDivision,
     });
 
     return NextResponse.json(tickets);

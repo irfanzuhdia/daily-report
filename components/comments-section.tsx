@@ -40,9 +40,10 @@ export function CommentsSection({ projectId, taskId, allUsers, teamMembers }: Co
       return name.includes(query) || email.includes(query)
     })
 
+    const teamMemberIds = new Set((teamMembers || []).map((tm) => tm.user_id))
     return [...matching].sort((a, b) => {
-      const aIsTeam = (teamMembers || []).some((tm) => tm.user_id === a.user_id)
-      const bIsTeam = (teamMembers || []).some((tm) => tm.user_id === b.user_id)
+      const aIsTeam = teamMemberIds.has(a.user_id)
+      const bIsTeam = teamMemberIds.has(b.user_id)
       if (aIsTeam && !bIsTeam) return -1
       if (!aIsTeam && bIsTeam) return 1
       return 0

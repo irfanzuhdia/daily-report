@@ -34,10 +34,10 @@ export default async function ProjectsPage({
   const params = await searchParams
 
   const [allProjects, statuses, allTasks, allReports, allUsers, allProjectTeams] = await Promise.all([
-    ProjectRepository.findAll(),
+    ProjectRepository.findAll(userId),
     StatusRepository.findAll(),
-    TaskRepository.findAll(),
-    DailyReportRepository.findAll(),
+    TaskRepository.findAll(userId),
+    DailyReportRepository.findAll(userId),
     UserRepository.findAll(),
     ProjectTeamRepository.findAll(),
   ])
@@ -56,20 +56,45 @@ export default async function ProjectsPage({
     projects = projects.filter((p) => p.created_by === userId || myProjectIds.has(p.project_id))
   }
 
+  // Pre-build lookup maps — O(n) once, then O(1) per lookup
+  const userById = new Map(allUsers.map(u => [u.user_id, u]))
   const userMap = new Map(allUsers.map((u) => [u.user_id, (u.user_name || u.user_email || "").toLowerCase()]))
 
   // Apply enterprise filters
   if (params.dept_filter) {
-    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_departement === params.dept_filter)
+    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_departement === params.dept_filter)
   }
   if (params.site_filter) {
-    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_site === params.site_filter)
+    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_site === params.site_filter)
   }
   if (params.div_filter) {
-    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_division === params.div_filter)
+    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_division === params.div_filter)
   }
   if (params.team_filter) {
-    projects = projects.filter((p) => p.created_by && allUsers.find(u => u.user_id === p.created_by)?.user_team === params.team_filter)
+    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_team === params.team_filter)
+  }
+
+  // Pre-index tasks by project and reports by task — O(n) each
+  const tasksByProject = new Map<string, typeof allTasks>()
+  for (const t of allTasks) {
+    if (!t.project_id) continue
+    const list = tasksByProject.get(t.project_id) || []
+    list.push(t)
+    tasksByProject.set(t.project_id, list)
+  }
+  const reportsByTask = new Map<string, typeof allReports>()
+  for (const r of allReports) {
+    const list = reportsByTask.get(r.task_id) || []
+    list.push(r)
+    reportsByTask.set(r.task_id, list)
+  }
+
+  // Pre-index project teams by project_id — O(n)
+  const teamsByProject = new Map<string, string[]>()
+  for (const pt of allProjectTeams) {
+    const list = teamsByProject.get(pt.project_id) || []
+    list.push(pt.user_id)
+    teamsByProject.set(pt.project_id, list)
   }
 
   // Apply search/status/created_by/member_id filters
@@ -95,9 +120,9 @@ export default async function ProjectsPage({
       if (creatorName?.includes(q)) {
         return true
       }
-      const projectTeamUsers = allProjectTeams.filter((pt) => pt.project_id === p.project_id)
-      for (const pt of projectTeamUsers) {
-        const memberName = userMap.get(pt.user_id)
+      const teamUserIds = teamsByProject.get(p.project_id) || []
+      for (const uid of teamUserIds) {
+        const memberName = userMap.get(uid)
         if (memberName?.includes(q)) {
           return true
         }
@@ -110,11 +135,11 @@ export default async function ProjectsPage({
   const projectHoursMap: Record<string, number> = {}
   const projectProgressMap: Record<string, number> = {}
   for (const project of projects) {
-    const projectTasks = allTasks.filter((t) => t.project_id === project.project_id)
+    const projectTasks = tasksByProject.get(project.project_id) || []
     let totalHours = 0
     let totalProgress = 0
     for (const task of projectTasks) {
-      const taskReports = allReports.filter((r) => r.task_id === task.id)
+      const taskReports = reportsByTask.get(task.id) || []
       totalHours += taskReports.reduce((sum, r) => {
           const h = parseFloat(r.total_hours ?? '0')
           return sum + (isNaN(h) ? 0 : h)

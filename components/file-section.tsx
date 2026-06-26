@@ -219,6 +219,24 @@ export function FileSection({ projectId, taskId, reportId }: FileSectionProps) {
     }
   };
 
+  const getFileIdFromUrl = (url: string): string | null => {
+    if (!url) return null;
+    if (url.startsWith("/api/files/")) {
+      return url.replace("/api/files/", "").split("?")[0];
+    }
+    if (url.includes("drive.google.com")) {
+      const fileDMatch = url.match(/\/file\/d\/([a-zA-Z0-9_-]+)/);
+      if (fileDMatch && fileDMatch[1]) {
+        return fileDMatch[1];
+      }
+      const idMatch = url.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      if (idMatch && idMatch[1]) {
+        return idMatch[1];
+      }
+    }
+    return null;
+  };
+
   // Helper to parse filename and description
   const parseFileDescription = (desc: string | null) => {
     if (!desc) return { name: "Attachment", description: "" };
@@ -499,7 +517,7 @@ export function FileSection({ projectId, taskId, reportId }: FileSectionProps) {
 
                   <div className="flex items-center gap-1.5 ml-3 shrink-0">
                     <a
-                      href={file.file_url}
+                      href={getFileIdFromUrl(file.file_url) ? `/api/files/${getFileIdFromUrl(file.file_url)}` : file.file_url}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="inline-flex items-center justify-center"

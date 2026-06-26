@@ -522,7 +522,7 @@ export function ContributionCalendar({
     <div className={isCompact ? "space-y-4" : "space-y-6"}>
       {/* Header */}
       <div className="flex items-center gap-4">
-        <Link href="/dashboard">
+        <Link href="/reports/dashboard">
           <Button variant="ghost" size="sm" className={isCompact ? "h-8 px-2 text-xs" : ""}>
             <ArrowLeft className={`mr-2 h-4 w-4 ${isCompact ? "h-3.5 w-3.5 mr-1" : ""}`} />
             Back

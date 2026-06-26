@@ -96,7 +96,7 @@ export async function GET(request: NextRequest) {
       path: '/',
     });
 
-    return NextResponse.redirect(new URL('/dashboard', request.url));
+    return NextResponse.redirect(new URL('/reports/dashboard', request.url));
   } catch (error) {
     console.error('OAuth callback error:', error);
     return NextResponse.redirect(new URL('/login?error=server', request.url));

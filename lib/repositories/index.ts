@@ -7,3 +7,5 @@ export * from './daily-report-repository';
 export * from './file-repository';
 export * from './notification-repository';
 export * from './status-repository';
+export * from './ticket-repository';
+

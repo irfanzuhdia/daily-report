@@ -3,7 +3,7 @@
 import { useState, useCallback, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin } from "lucide-react"
+import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin, LifeBuoy } from "lucide-react"
 import {
   DndContext,
   DragOverlay,
@@ -155,11 +155,21 @@ function SortableProjectCard({
 
           {/* Metrics */}
           <div className={`flex items-center justify-between text-xs text-muted-foreground pt-1 border-t ${isCompact ? "border-t-muted/30" : ""}`}>
-            {project.category && (
-              <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-primary/5 text-primary border-primary/10">
-                {project.category}
-              </Badge>
-            )}
+            <div className="flex flex-wrap gap-1">
+              {project.category && (
+                <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-primary/5 text-primary border-primary/10">
+                  {project.category}
+                </Badge>
+              )}
+              {project.ticket_reference && (
+                <Link href={`/ticketing?ticketId=${project.ticket_reference}`} onClick={(e) => e.stopPropagation()}>
+                  <Badge variant="outline" className="text-[9px] py-0 px-1.5 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary cursor-pointer transition-all gap-0.5 inline-flex items-center font-medium">
+                    <LifeBuoy className="h-2.5 w-2.5 shrink-0" />
+                    <span>Ref: {project.ticket_reference}</span>
+                  </Badge>
+                </Link>
+              )}
+            </div>
             <div className="flex gap-1">
               {(projectProgressMap[project.project_id] ?? 0) > 0 && (
                 <Badge variant="outline" className="text-[9px] py-0">
@@ -446,7 +456,7 @@ export function ProjectsClient({
     if (!deleteId) return
     await fetch(`/api/projects/${deleteId}`, { method: "DELETE" })
     await revalidatePathsAndTags(
-      ['/projects', '/dashboard'],
+      ['/projects', '/reports/dashboard'],
       ['projects']
     )
     setDeleteId(null)
@@ -466,7 +476,7 @@ export function ProjectsClient({
       })
       if (res.ok) {
         await revalidatePathsAndTags(
-          ['/projects', '/dashboard'],
+          ['/projects', '/reports/dashboard'],
           ['projects']
         )
         router.refresh()
@@ -998,6 +1008,16 @@ export function ProjectsClient({
                             {project.project_description}
                           </p>
                         )}
+                        {project.ticket_reference && (
+                          <div className="mt-1 flex items-center gap-1">
+                            <Link href={`/ticketing?ticketId=${project.ticket_reference}`} onClick={(e) => e.stopPropagation()}>
+                              <Badge variant="outline" className="h-4 gap-0.5 text-[8px] py-0 px-1 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary cursor-pointer transition-all inline-flex items-center font-medium">
+                                <LifeBuoy className="h-2.5 w-2.5 shrink-0" />
+                                <span>Ref: {project.ticket_reference}</span>
+                              </Badge>
+                            </Link>
+                          </div>
+                        )}
                       </div>
                     </div>
                     
@@ -1085,6 +1105,14 @@ export function ProjectsClient({
                           <Badge variant="outline" className="bg-primary/5 text-primary border-primary/10">
                             {project.category}
                           </Badge>
+                        )}
+                        {project.ticket_reference && (
+                          <Link href={`/ticketing?ticketId=${project.ticket_reference}`} onClick={(e) => e.stopPropagation()}>
+                            <Badge variant="outline" className="gap-1 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary cursor-pointer transition-all flex items-center font-medium">
+                              <LifeBuoy className="h-3 w-3 shrink-0" />
+                              <span>Ref: {project.ticket_reference}</span>
+                            </Badge>
+                          </Link>
                         )}
                         {(projectProgressMap[project.project_id] ?? 0) > 0 && (
                           <Badge variant="outline">

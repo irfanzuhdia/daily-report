@@ -392,7 +392,7 @@ export function ReportsClient({
     if (!deleteId) return
     await fetch(`/api/reports/${deleteId}`, { method: "DELETE" })
     await revalidatePathsAndTags(
-      ['/reports', '/dashboard'],
+      ['/reports', '/reports/dashboard'],
       ['reports', 'tasks', 'projects']
     )
     setDeleteId(null)
@@ -412,7 +412,7 @@ export function ReportsClient({
       })
       if (res.ok) {
         await revalidatePathsAndTags(
-          ['/reports', '/tasks', '/dashboard'],
+          ['/reports', '/tasks', '/reports/dashboard'],
           ['reports', 'tasks', 'projects']
         )
         router.refresh()

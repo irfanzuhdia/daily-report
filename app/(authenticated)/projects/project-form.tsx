@@ -29,6 +29,10 @@ export function ProjectForm({
   defaultStartDate,
   defaultEndDate,
   uniqueCategories = [],
+  initialTicketRef = null,
+  initialName = null,
+  initialDescription = null,
+  initialCategory = null,
 }: {
   project?: Project
   statuses: Status[]
@@ -37,17 +41,21 @@ export function ProjectForm({
   defaultStartDate?: string
   defaultEndDate?: string
   uniqueCategories?: string[]
+  initialTicketRef?: string | null
+  initialName?: string | null
+  initialDescription?: string | null
+  initialCategory?: string | null
 }) {
   const router = useRouter()
   const isEdit = !!project
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [name, setName] = useState(project?.project_name ?? "")
-  const [description, setDescription] = useState(project?.project_description ?? "")
+  const [name, setName] = useState(project?.project_name ?? initialName ?? "")
+  const [description, setDescription] = useState(project?.project_description ?? initialDescription ?? "")
   const [startDate, setStartDate] = useState(project?.project_start_date_plan ?? defaultStartDate ?? "")
   const [endDate, setEndDate] = useState(project?.project_end_date_plan ?? defaultEndDate ?? "")
   const [status, setStatus] = useState(project?.project_status ?? "NS")
-  const [category, setCategory] = useState(project?.category ?? "")
+  const [category, setCategory] = useState(project?.category ?? initialCategory ?? "")
   const [projectFile, setProjectFile] = useState<string | null>(project?.project_file ?? null)
   const [additionalLink, setAdditionalLink] = useState(project?.additional_link ?? "")
   const [fileName, setFileName] = useState<string | null>(
@@ -57,6 +65,9 @@ export function ProjectForm({
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [teamUserIds, setTeamUserIds] = useState<string[]>(initialTeamUserIds)
+  const [ticketReference, setTicketReference] = useState<string | null>(
+    project?.ticket_reference ?? initialTicketRef ?? null
+  )
 
   function extractFileName(url: string): string {
     try {
@@ -123,6 +134,7 @@ export function ProjectForm({
         additional_link: additionalLink || undefined,
         category: category.trim() || undefined,
         team_user_ids: teamUserIds,
+        ticket_reference: ticketReference || undefined,
       }
 
       if (isEdit && project) {
@@ -136,7 +148,7 @@ export function ProjectForm({
           throw new Error(err.error || `Update failed (${res.status})`)
         }
         await revalidatePathsAndTags(
-          ['/projects', `/projects/${project.project_id}`, '/dashboard'],
+          ['/projects', `/projects/${project.project_id}`, '/reports/dashboard'],
           ['projects', 'project_log']
         )
         router.push(`/projects/${project.project_id}`)
@@ -152,7 +164,7 @@ export function ProjectForm({
         }
         const data = await res.json()
         await revalidatePathsAndTags(
-          ['/projects', `/projects/${data.project_id}`, '/dashboard'],
+          ['/projects', `/projects/${data.project_id}`, '/reports/dashboard'],
           ['projects', 'project_log']
         )
         router.push(`/projects/${data.project_id}`)
@@ -195,6 +207,21 @@ export function ProjectForm({
                 required
               />
             </div>
+
+            {ticketReference && (
+              <div className="space-y-2">
+                <Label htmlFor="ticketReference">Ticket Reference</Label>
+                <Input
+                  id="ticketReference"
+                  value={ticketReference}
+                  disabled
+                  className="bg-muted text-muted-foreground cursor-not-allowed"
+                />
+                <p className="text-xs text-muted-foreground">
+                  This project is linked to ticket reference {ticketReference}.
+                </p>
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label htmlFor="description">Description</Label>

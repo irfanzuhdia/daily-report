@@ -124,7 +124,7 @@ export function ReportForm({
         }
         const currentTask = tasks.find((t) => t.id === report.task_id)
         const projectId = currentTask?.project_id
-        const paths = ['/reports', `/reports/${report.report_id}`, `/tasks/${report.task_id}`, '/dashboard']
+        const paths = ['/reports', `/reports/${report.report_id}`, `/tasks/${report.task_id}`, '/reports/dashboard']
         if (projectId) {
           paths.push(`/projects/${projectId}`, '/projects')
         }
@@ -152,7 +152,7 @@ export function ReportForm({
         const data = await res.json()
         const currentTask = tasks.find((t) => t.id === taskId)
         const projectId = currentTask?.project_id
-        const paths = ['/reports', `/reports/${data.report_id}`, `/tasks/${taskId}`, '/dashboard']
+        const paths = ['/reports', `/reports/${data.report_id}`, `/tasks/${taskId}`, '/reports/dashboard']
         if (projectId) {
           paths.push(`/projects/${projectId}`, '/projects')
         }

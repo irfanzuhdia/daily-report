@@ -29,6 +29,7 @@ export interface Project {
   project_file: string | null;
   additional_link: string | null;
   category: string | null;
+  ticket_reference?: string | null;
   created_by: string | null;
   created_at: string | null;
   updated_by: string | null;
@@ -207,6 +208,54 @@ export interface UserLog {
   target_email?: string | null;
   actor_name?: string | null;
   actor_email?: string | null;
+}
+
+export interface Ticket {
+  id: string;
+  title: string;
+  description: string;
+  request_by: string;
+  request_to_division: string | null;
+  tag_person: string | null; // Keep for backward compatibility/referencing single handler if needed
+  team_user_ids?: string[]; // Multiple tagged users
+  problem_type: string;
+  division_category: string | null;
+  due_date: string | null;
+  priority: 'Low' | 'Medium' | 'High' | 'Critical';
+  status: 'Open' | 'In Progress' | 'Resolved' | 'Closed' | 'Pending';
+  attachment_link: string | null;
+  attachment_file: string | null;
+  created_by: string | null;
+  created_at: string | null;
+  updated_by: string | null;
+  updated_at: string | null;
+  deleted_by: string | null;
+  deleted_at: string | null;
+}
+
+export interface TicketTeam {
+  id: string;
+  ticket_id: string;
+  user_id: string;
+  created_by: string | null;
+  created_at: string | null;
+}
+
+export interface TicketComment {
+  id: string;
+  ticket_id: string;
+  content: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface TicketLog {
+  id: string;
+  ticket_id: string;
+  action: string;
+  details: string | null;
+  created_by: string;
+  created_at: string;
 }
 
 

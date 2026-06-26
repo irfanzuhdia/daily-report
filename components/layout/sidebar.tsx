@@ -19,6 +19,7 @@ import {
   Sun,
   Moon,
   Settings,
+  LifeBuoy,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -53,11 +54,12 @@ export function Sidebar({
   const normOcc = userOccupation?.toLowerCase().replace(/\s+/g, "") ?? "";
   const isAdmin = ["superuser", "cosuperuser", "co-superuser"].includes(normOcc) || isRealSuperUser;
   const navItems = [
-    { href: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/reports/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { href: "/projects", label: "Projects", icon: FolderKanban },
     { href: "/tasks", label: "Tasks", icon: ListTodo },
     { href: "/reports", label: "Daily Reports", icon: FileText },
-    { href: "/analytics", label: "Analytics", icon: BarChart3 },
+    { href: "/reports/analytics", label: "Analytics", icon: BarChart3 },
+    { href: "/ticketing", label: "Ticketing", icon: LifeBuoy },
     { href: "/inbox", label: "Inbox", icon: Inbox },
     ...(isAdmin ? [{ href: "/users", label: "Users & Roles", icon: Users }] : []),
     { href: "/trash", label: "Trash", icon: Trash2 },
@@ -187,7 +189,9 @@ export function Sidebar({
 
         <nav className="flex-1 space-y-1 p-4">
           {navItems.map((item) => {
-            const active = pathname === item.href || pathname.startsWith(item.href + "/")
+            const active = item.href === "/reports"
+              ? pathname === "/reports" || (pathname.startsWith("/reports/") && !pathname.startsWith("/reports/dashboard") && !pathname.startsWith("/reports/analytics"))
+              : pathname === item.href || pathname.startsWith(item.href + "/")
             const isInbox = item.href === "/inbox"
             return (
               <Link

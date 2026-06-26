@@ -69,8 +69,49 @@ const getCachedAllProjectsIncludingDeleted = unstable_cache(
   { tags: ['projects'], revalidate: 60 }
 );
 
-// ============ PROJECT REPOSITORY ============
+async function syncTicketStatus(ticketId: string | null | undefined, projectStatus: string | null, actorUserId: string) {
+  if (!ticketId) return;
+  
+  let ticketStatus: string | null = null;
+  if (projectStatus === STATUS.NOT_STARTED) {
+    ticketStatus = 'Handled';
+  } else if (projectStatus === STATUS.ON_PROGRESS) {
+    ticketStatus = 'In Progress';
+  } else if (projectStatus === STATUS.HOLD) {
+    ticketStatus = 'On Hold';
+  } else if (projectStatus === STATUS.DONE) {
+    ticketStatus = 'Resolved';
+  }
 
+  if (ticketStatus) {
+    try {
+      // Check if current ticket status is already closed. If closed, we do not change it
+      const ticketRows = await sql`SELECT status FROM tickets WHERE id = ${ticketId} LIMIT 1`;
+      const currentStatus = ticketRows[0]?.status;
+      if (currentStatus && currentStatus !== 'Closed') {
+        console.log(`Syncing ticket ${ticketId} status to ${ticketStatus} due to project status ${projectStatus}...`);
+        await sql`
+          UPDATE tickets 
+          SET status = ${ticketStatus}, 
+              updated_by = ${actorUserId}, 
+              updated_at = ${new Date().toISOString()} 
+          WHERE id = ${ticketId}
+        `;
+        
+        // Write to ticket_logs
+        const logId = 'tl-' + String(Date.now()).slice(-6) + '-' + Math.random().toString(36).substring(2, 7);
+        await sql`
+          INSERT INTO ticket_logs (id, ticket_id, action, details, created_by, created_at)
+          VALUES (${logId}, ${ticketId}, 'STATUS_CHANGE', ${`Changed status to "${ticketStatus}" via project update`}, ${actorUserId}, ${new Date().toISOString()})
+        `;
+      }
+    } catch (e) {
+      console.error(`Failed to sync ticket status for ticket ${ticketId}:`, e);
+    }
+  }
+}
+
+// ============ PROJECT REPOSITORY ============
 export const ProjectRepository = {
   async findAll(): Promise<Project[]> {
     return getCachedProjects();
@@ -100,9 +141,22 @@ export const ProjectRepository = {
       project_file?: string;
       additional_link?: string;
       category?: string;
+      ticket_reference?: string | null;
     },
     createdBy: string
   ): Promise<Project> {
+    // Validate 1-to-1 unique active ticket reference
+    if (project.ticket_reference) {
+      const activeProjects = await sql`
+        SELECT project_id 
+        FROM projects 
+        WHERE ticket_reference = ${project.ticket_reference} AND deleted_at IS NULL
+      `;
+      if (activeProjects.length > 0) {
+        throw new Error('This ticket is already linked to an active project.');
+      }
+    }
+
     const res = await sql`SELECT COALESCE(MAX(NULLIF(regexp_replace(project_id, '\\D', '', 'g'), '')::int), 0) as max_val FROM projects`;
     const maxVal = res[0].max_val || 0;
     const nextVal = maxVal < 260000 ? 260001 : maxVal + 1;
@@ -119,6 +173,7 @@ export const ProjectRepository = {
       project_file: project.project_file ?? null,
       additional_link: project.additional_link ?? null,
       category: project.category ?? null,
+      ticket_reference: project.ticket_reference ?? null,
       created_by: createdBy,
       created_at: now,
       updated_by: null,
@@ -130,14 +185,19 @@ export const ProjectRepository = {
     await sql`
       INSERT INTO projects (
         project_id, project_name, project_description, project_start_date_plan, project_end_date_plan,
-        project_status, project_file, additional_link, category, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
+        project_status, project_file, additional_link, category, ticket_reference, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
       ) VALUES (
         ${newProject.project_id}, ${newProject.project_name}, ${newProject.project_description},
         ${newProject.project_start_date_plan}, ${newProject.project_end_date_plan}, ${newProject.project_status},
-        ${newProject.project_file}, ${newProject.additional_link}, ${newProject.category}, ${newProject.created_by}, ${newProject.created_at},
+        ${newProject.project_file}, ${newProject.additional_link}, ${newProject.category}, ${newProject.ticket_reference}, ${newProject.created_by}, ${newProject.created_at},
         ${newProject.updated_by}, ${newProject.updated_at}, ${newProject.deleted_by}, ${newProject.deleted_at}
       )
     `;
+
+    // Sync status to the linked ticket
+    if (newProject.ticket_reference) {
+      await syncTicketStatus(newProject.ticket_reference, newProject.project_status, createdBy);
+    }
 
     await ProjectLogRepository.create(
       {
@@ -166,12 +226,25 @@ export const ProjectRepository = {
         | 'project_file'
         | 'additional_link'
         | 'category'
+        | 'ticket_reference'
       >
     >,
     updatedBy: string
   ): Promise<Project | null> {
     const existing = await ProjectRepository.findById(projectId);
     if (!existing) return null;
+
+    // Validate 1-to-1 unique active ticket reference on update
+    if (updates.ticket_reference !== undefined && updates.ticket_reference !== existing.ticket_reference && updates.ticket_reference) {
+      const activeProjects = await sql`
+        SELECT project_id 
+        FROM projects 
+        WHERE ticket_reference = ${updates.ticket_reference} AND deleted_at IS NULL AND project_id != ${projectId}
+      `;
+      if (activeProjects.length > 0) {
+        throw new Error('This ticket is already linked to another active project.');
+      }
+    }
 
     const now = new Date().toISOString();
 
@@ -202,10 +275,17 @@ export const ProjectRepository = {
         project_file = ${updated.project_file},
         additional_link = ${updated.additional_link},
         category = ${updated.category},
+        ticket_reference = ${updated.ticket_reference !== undefined ? updated.ticket_reference : existing.ticket_reference},
         updated_by = ${updated.updated_by},
         updated_at = ${updated.updated_at}
       WHERE project_id = ${projectId}
     `;
+
+    // Sync status to the linked ticket on status/reference updates
+    const currentRef = updates.ticket_reference !== undefined ? updates.ticket_reference : existing.ticket_reference;
+    if (currentRef && (existing.project_status !== newStatus || (updates.ticket_reference !== undefined && updates.ticket_reference !== existing.ticket_reference))) {
+      await syncTicketStatus(currentRef, newStatus, updatedBy);
+    }
 
     // Log metadata change
     const isMetadataUpdated =
@@ -538,12 +618,33 @@ export async function findAllProjectsIncludingDeleted(): Promise<Project[]> {
 
 /** Restore a soft-deleted project */
 export async function restoreProject(projectId: string, restoredBy: string): Promise<boolean> {
+  // Validate unique active ticket reference before restoring
+  const projectRows = await sql`SELECT ticket_reference, project_status FROM projects WHERE project_id = ${projectId}`;
+  const ref = projectRows[0]?.ticket_reference;
+  const status = projectRows[0]?.project_status;
+  
+  if (ref) {
+    const activeRows = await sql`
+      SELECT project_id 
+      FROM projects 
+      WHERE ticket_reference = ${ref} AND deleted_at IS NULL
+    `;
+    if (activeRows.length > 0) {
+      throw new Error(`Cannot restore project because another active project is already linked to ticket ${ref}.`);
+    }
+  }
+
   await sql`
     UPDATE projects SET
       deleted_by = NULL,
       deleted_at = NULL
     WHERE project_id = ${projectId}
   `;
+
+  // Sync ticket status to the restored project's status
+  if (ref && status) {
+    await syncTicketStatus(ref, status, restoredBy);
+  }
 
   await ProjectLogRepository.create(
     {

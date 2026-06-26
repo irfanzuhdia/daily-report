@@ -147,7 +147,7 @@ export function TaskForm({
           throw new Error(err.error || `Update failed (${res.status})`)
         }
         await revalidatePathsAndTags(
-          ['/tasks', `/tasks/${task.id}`, `/projects/${task.project_id}`, '/projects', '/dashboard'],
+          ['/tasks', `/tasks/${task.id}`, `/projects/${task.project_id}`, '/projects', '/reports/dashboard'],
           ['tasks', 'task_log', 'projects', 'project_log']
         )
         router.push(`/tasks/${task.id}`)
@@ -163,7 +163,7 @@ export function TaskForm({
         }
         const data = await res.json()
         await revalidatePathsAndTags(
-          ['/tasks', `/tasks/${data.id}`, `/projects/${projectId}`, '/projects', '/dashboard'],
+          ['/tasks', `/tasks/${data.id}`, `/projects/${projectId}`, '/projects', '/reports/dashboard'],
           ['tasks', 'task_log', 'projects', 'project_log']
         )
         router.push(`/tasks/${data.id}`)

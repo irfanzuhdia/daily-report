@@ -44,7 +44,7 @@ export function ViewModeProvider({ children }: { children: React.ReactNode }) {
     setViewModeState(mode)
     setStoredMode(mode)
     try {
-      await revalidatePathsAndTags(['/dashboard', '/projects', '/tasks', '/reports', '/analytics', '/trash'])
+      await revalidatePathsAndTags(['/reports/dashboard', '/projects', '/tasks', '/reports', '/reports/analytics', '/trash'])
     } catch (e) {
       console.error("Failed to revalidate on view mode change:", e)
     }

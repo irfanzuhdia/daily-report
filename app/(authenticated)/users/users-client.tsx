@@ -103,7 +103,13 @@ export function UsersClient({
   const [roleLevels, setRoleLevels] = useState<RoleLevel[]>(initialRoleLevels)
   const [userLogs, setUserLogs] = useState<UserLog[]>(initialUserLogs)
 
+  React.useEffect(() => {
+    setUsers(initialUsers)
+  }, [initialUsers])
 
+  React.useEffect(() => {
+    setRoleLevels(initialRoleLevels)
+  }, [initialRoleLevels])
 
   React.useEffect(() => {
     setUserLogs(initialUserLogs)
@@ -242,7 +248,7 @@ export function UsersClient({
       })
       if (res.ok) {
         triggerNotice("success", "Entering impersonated view...")
-        window.location.href = "/dashboard"
+        window.location.href = "/reports/dashboard"
       } else {
         const err = await res.json()
         triggerNotice("error", err.error || "Impersonation failed")

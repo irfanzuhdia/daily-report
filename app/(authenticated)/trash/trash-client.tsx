@@ -143,7 +143,7 @@ export function TrashClient({ items }: { items: TrashItem[] }) {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
-        <Link href="/dashboard">
+        <Link href="/reports/dashboard">
           <Button variant="ghost" size="sm">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Back

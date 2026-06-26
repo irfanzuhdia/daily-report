@@ -14,7 +14,7 @@ export default async function UsersPage() {
   const level = await getUserLevel(session.user_occupation)
   const isSuperUserImpersonating = session.real_email === 'gadmin@multidayamitra.co.id'
   if (level < 7 && !isSuperUserImpersonating) {
-    redirect("/dashboard")
+    redirect("/reports/dashboard")
   }
 
   const [users, roleLevels, userLogs] = await Promise.all([

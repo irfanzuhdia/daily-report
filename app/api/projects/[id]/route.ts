@@ -88,9 +88,12 @@ export async function PUT(
     }
 
     return NextResponse.json(updatedProject)
-  } catch (error) {
+  } catch (error: any) {
     console.error('PUT /api/projects/[id] error:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return NextResponse.json(
+      { error: error.message || 'Internal Server Error' },
+      { status: error.message ? 400 : 500 }
+    )
   }
 }
 

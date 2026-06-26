@@ -408,7 +408,7 @@ export function TasksClient({
     if (!deleteId) return
     await fetch(`/api/tasks/${deleteId}`, { method: "DELETE" })
     await revalidatePathsAndTags(
-      ['/tasks', '/dashboard'],
+      ['/tasks', '/reports/dashboard'],
       ['tasks', 'projects']
     )
     setDeleteId(null)
@@ -428,7 +428,7 @@ export function TasksClient({
       })
       if (res.ok) {
         await revalidatePathsAndTags(
-          ['/tasks', '/dashboard'],
+          ['/tasks', '/reports/dashboard'],
           ['tasks', 'projects']
         )
         router.refresh()

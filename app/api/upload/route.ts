@@ -112,15 +112,6 @@ export async function POST(request: NextRequest) {
     const fileName = driveResponse.data.name!;
     const webViewLink = driveResponse.data.webViewLink!;
 
-    // Make the file publicly viewable (anyone with link)
-    await drive.permissions.create({
-      fileId,
-      requestBody: {
-        role: 'reader',
-        type: 'anyone',
-      },
-    });
-
     return NextResponse.json({
       fileId,
       fileName,

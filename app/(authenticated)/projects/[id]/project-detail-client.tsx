@@ -3,7 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Plus, ListTodo, Pencil, FileDown, Users, X, History, Loader2, ExternalLink } from "lucide-react"
+import { ArrowLeft, Plus, ListTodo, Pencil, FileDown, Users, X, History, Loader2, ExternalLink, LifeBuoy } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -153,7 +153,7 @@ export function ProjectDetailClient({
       if (res.ok) {
         setCurrentStatus(newStatus)
         await revalidatePathsAndTags(
-          [`/projects/${project.project_id}`, '/projects', '/dashboard'],
+          [`/projects/${project.project_id}`, '/projects', '/reports/dashboard'],
           ['projects', 'project_log']
         )
         router.refresh()
@@ -181,8 +181,16 @@ export function ProjectDetailClient({
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="mb-2 flex items-center gap-2">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold">{project.project_name}</h1>
+                {project.ticket_reference && (
+                  <Link href={`/ticketing?ticketId=${project.ticket_reference}`}>
+                    <Badge variant="outline" className="h-6 gap-1 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary cursor-pointer transition-colors">
+                      <LifeBuoy className="h-3.5 w-3.5" />
+                      <span>Ref: {project.ticket_reference}</span>
+                    </Badge>
+                  </Link>
+                )}
                 <div className="relative">
                   {updatingStatus && (
                     <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md z-10">

@@ -4,9 +4,9 @@ import { createSession, getCookieName } from '@/lib/auth';
 import { UserRepository } from '@/lib/repositories';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
-const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/auth/callback';
-
 export async function GET(request: NextRequest) {
+  const REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || `${request.nextUrl.origin}/api/auth/callback`;
+  
   const { searchParams } = new URL(request.url);
   const code = searchParams.get('code');
 

@@ -2,11 +2,20 @@ import postgres from 'postgres';
 
 const databaseUrl = process.env.DATABASE_URL || '';
 
-export const sql = postgres(databaseUrl, {
+const globalForDb = globalThis as unknown as {
+  sql: postgres.Sql | undefined;
+};
+
+export const sql = globalForDb.sql || postgres(databaseUrl, {
   ssl: 'require',
   max: 10,
-  idle_timeout: 20
+  idle_timeout: 20,
+  prepare: false // Required for Supabase Transaction Pooler (pgbouncer)
 });
+
+if (process.env.NODE_ENV !== 'production') {
+  globalForDb.sql = sql;
+}
 
 // Self-initializing DB schema for role_levels
 if (databaseUrl && typeof window === 'undefined') {

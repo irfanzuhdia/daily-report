@@ -415,7 +415,7 @@ export function ReportsClient({
     if (!deleteId) return
     const idToDelete = deleteId
     setDeleteId(null)
-    setLocalReports(prev => prev.filter(r => r.id !== idToDelete))
+    setLocalReports(prev => prev.filter(r => r.report_id !== idToDelete))
     
     await fetch(`/api/reports/${idToDelete}`, { method: "DELETE" })
     await revalidatePathsAndTags(

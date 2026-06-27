@@ -418,7 +418,7 @@ export const ProjectRepository = {
       ) VALUES (
         ${newProject.project_id}, ${newProject.project_name}, ${newProject.project_description},
         ${newProject.project_start_date_plan}, ${newProject.project_end_date_plan}, ${newProject.project_status},
-        ${newProject.project_file}, ${newProject.additional_link}, ${newProject.category}, ${newProject.ticket_reference}, ${newProject.created_by}, ${newProject.created_at},
+        ${newProject.project_file}, ${newProject.additional_link}, ${newProject.category}, ${newProject.ticket_reference as string | null}, ${newProject.created_by}, ${newProject.created_at},
         ${newProject.updated_by}, ${newProject.updated_at}, ${newProject.deleted_by}, ${newProject.deleted_at}
       )
     `;
@@ -513,7 +513,7 @@ export const ProjectRepository = {
         project_file = ${updated.project_file},
         additional_link = ${updated.additional_link},
         category = ${updated.category},
-        ticket_reference = ${updated.ticket_reference !== undefined ? updated.ticket_reference : existing.ticket_reference},
+        ticket_reference = ${(updated.ticket_reference !== undefined ? updated.ticket_reference : existing.ticket_reference) as string | null},
         updated_by = ${updated.updated_by},
         updated_at = ${updated.updated_at}
       WHERE project_id = ${projectId}

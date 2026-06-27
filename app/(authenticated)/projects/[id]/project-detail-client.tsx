@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Plus, ListTodo, Pencil, FileDown, Users, X, History, Loader2, ExternalLink, LifeBuoy } from "lucide-react"
@@ -62,8 +62,28 @@ export function ProjectDetailClient({
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [updatingStatus, setUpdatingStatus] = useState(false)
   const [currentStatus, setCurrentStatus] = useState(autoProjectStatus)
-
   const currentUser = useMemo(() => allUsers.find((u) => u.user_id === currentUserId), [allUsers, currentUserId])
+  
+  // Realtime Websocket Supabase
+  useEffect(() => {
+    const { supabase } = require("@/lib/supabase-client")
+    const channel = supabase
+      .channel('realtime-project-logs')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'project_logs' },
+        (payload: any) => {
+          if (payload.new.project_id === project.project_id) {
+             router.refresh()
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [router, project.project_id])
   const normOcc = currentUser?.user_occupation?.toLowerCase().replace(/\s+/g, "") ?? ""
   const isSUOrCOSU = ["superuser", "cosuperuser", "co-superuser"].includes(normOcc)
   const isHRIS = currentUser?.user_division?.toLowerCase().trim() === "hris"

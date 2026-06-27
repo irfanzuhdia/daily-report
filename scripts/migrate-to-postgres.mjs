@@ -1,6 +1,6 @@
 import { google } from 'googleapis';
 import { readFileSync } from 'fs';
-import { neon } from '@neondatabase/serverless';
+import postgres from 'postgres';
 
 // Parse .env file
 let envContent = '';
@@ -38,7 +38,7 @@ async function main() {
     scopes: ['https://www.googleapis.com/auth/spreadsheets.readonly'],
   });
   const sheets = google.sheets({ version: 'v4', auth });
-  const sql = neon(DATABASE_URL);
+  const sql = postgres(DATABASE_URL, { ssl: 'require' });
 
   console.log('Connecting to Neon PostgreSQL...');
   
@@ -46,7 +46,7 @@ async function main() {
   async function executeSqlBlock(block) {
     const queries = block.split(';').map(q => q.trim()).filter(Boolean);
     for (const q of queries) {
-      await sql.query(q);
+      await sql.unsafe(q);
     }
   }
 

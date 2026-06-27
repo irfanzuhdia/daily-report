@@ -36,6 +36,8 @@ export interface Project {
   updated_at: string | null;
   deleted_by: string | null;
   deleted_at: string | null;
+  total_hours?: string | number | null;
+  project_progress?: string | number | null;
 }
 
 export interface ProjectTeam {
@@ -64,6 +66,8 @@ export interface Task {
   updated_at: string | null;
   deleted_by: string | null;
   deleted_at: string | null;
+  total_hours?: string | number | null;
+  task_percentage?: string | number | null;
 }
 
 

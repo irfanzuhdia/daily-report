@@ -3,12 +3,8 @@ import { getSession } from "@/lib/session"
 import {
   DailyReportRepository,
   TaskRepository,
-  ProjectRepository,
   UserRepository,
   TaskTeamRepository,
-  filterReportsByUser,
-  filterTasksByUser,
-  getUserMap,
 } from "@/lib/repositories"
 import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
 import { ReportsClient } from "./reports-client"
@@ -24,6 +20,7 @@ export default async function ReportsPage({
     site_filter?: string
     div_filter?: string
     team_filter?: string
+    page?: string
   }>
 }) {
   const session = await getSession()
@@ -33,99 +30,76 @@ export default async function ReportsPage({
   const userId = session.user_id
   const params = await searchParams
 
-  const [allReports, allTasks, allProjects, userMap, allUsers] = await Promise.all([
-    DailyReportRepository.findAll(userId),
-    TaskRepository.findAll(userId),
-    ProjectRepository.findAll(userId),
-    getUserMap(),
-    UserRepository.findAll(),
-  ])
+  const page = parseInt(params.page || "1", 10)
+  const limit = 50
+  const offset = (page - 1) * limit
 
-  const currentUser = allUsers.find((u) => u.user_id === userId)
+  const currentUser = await UserRepository.findById(userId)
   const userLevel = currentUser?.level || 1
   const effectiveViewMode = userLevel === 1 ? "my" : viewMode
 
-  // Filter by user based on visibility levels
-  let reports = await filterReportsByUser(allReports, userId)
-
-  if (effectiveViewMode === "my") {
-    reports = reports.filter((r) => r.user_id === userId || r.created_by === userId)
+  const filters = {
+    search: params.search,
+    taskId: params.task_id,
+    createdBy: params.created_by,
+    dept: params.dept_filter,
+    site: params.site_filter,
+    div: params.div_filter,
+    team: params.team_filter,
+    viewMode: effectiveViewMode,
   }
 
-  // Pre-build user lookup map — O(n) once, then O(1) per lookup
-  const userById = new Map(allUsers.map(u => [u.user_id, u]))
+  // Fetch paginated enriched reports directly from DB
+  const { reports, total } = await DailyReportRepository.findPaginatedEnriched(
+    userId,
+    limit,
+    offset,
+    filters
+  )
 
-  // Apply enterprise filters
-  if (params.dept_filter) {
-    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_departement === params.dept_filter)
-  }
-  if (params.site_filter) {
-    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_site === params.site_filter)
-  }
-  if (params.div_filter) {
-    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_division === params.div_filter)
-  }
-  if (params.team_filter) {
-    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_team === params.team_filter)
-  }
+  // Fetch users for the filters
+  const allUsers = await UserRepository.findAll()
 
-  if (params.task_id) {
-    reports = reports.filter((r) => r.task_id === params.task_id)
-  }
-  if (params.created_by) {
-    reports = reports.filter((r) => r.user_id === params.created_by)
-  }
-  const taskMap = new Map(allTasks.map((t) => [t.id, t]))
-  const projectMap = new Map(allProjects.map((p) => [p.project_id, p.project_name]))
-
-  if (params.search) {
-    const q = params.search.toLowerCase()
-    reports = reports.filter((r) => {
-      if (r.remarks?.toLowerCase().includes(q) || r.report_id.toLowerCase().includes(q)) {
-        return true
-      }
-      const reporterName = (r.user_id && userMap[r.user_id]) ?? r.user_id
-      if (reporterName?.toLowerCase().includes(q)) {
-        return true
-      }
-      const taskDesc = taskMap.get(r.task_id)?.task_description
-      if (taskDesc?.toLowerCase().includes(q)) {
-        return true
-      }
-      const projId = taskMap.get(r.task_id)?.project_id
-      const projName = projId ? projectMap.get(projId) : null
-      if (projName?.toLowerCase().includes(q)) {
-        return true
-      }
-      return false
-    })
-  }
-
-  const enriched = reports
-    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
-    .map((r) => ({
-      ...r,
-      task_description: taskMap.get(r.task_id)?.task_description ?? undefined,
-      task_status: taskMap.get(r.task_id)?.task_status ?? undefined,
-      project_id: taskMap.get(r.task_id)?.project_id ?? undefined,
-      project_name: taskMap.get(r.task_id)
-        ? projectMap.get(taskMap.get(r.task_id)!.project_id) ?? undefined
-        : undefined,
-      created_by_name: (r.user_id && userMap[r.user_id]) ?? r.user_id ?? "Unknown",
-    }))
-
-  let filteredTasks = await filterTasksByUser(allTasks, userId)
+  // For the create form dropdown, fetch a simplified list of active tasks for this user
+  let activeTasks = await TaskRepository.findAll(userId) // Still need tasks for dropdown, but usually less than reports
   if (effectiveViewMode === "my") {
     const taskTeams = await TaskTeamRepository.findByUserId(userId)
     const myTaskIds = new Set(taskTeams.map((tt) => tt.task_id))
-    filteredTasks = filteredTasks.filter((t) => t.created_by === userId || myTaskIds.has(t.id))
+    activeTasks = activeTasks.filter((t) => t.created_by === userId || myTaskIds.has(t.id))
   }
+
+  // Convert DB models to match ReportsClient expectations
+  const cleanReports = reports.map((r: any) => ({
+    ...r,
+    id: r.id,
+    report_id: r.report_id,
+    task_id: r.task_id,
+    user_id: r.user_id,
+    date: r.date,
+    progress_percentage: r.progress_percentage,
+    total_hours: r.total_hours,
+    remarks: r.remarks,
+    created_by: r.created_by,
+    created_at: r.created_at,
+    updated_by: r.updated_by,
+    updated_at: r.updated_at,
+    deleted_by: r.deleted_by,
+    deleted_at: r.deleted_at,
+    // Enriched fields from SQL JOIN
+    task_description: r.task_description,
+    task_status: r.task_status,
+    project_id: r.project_id,
+    project_name: r.project_name,
+    created_by_name: r.created_by_name || r.user_id || "Unknown",
+  }))
+
+  const totalPages = Math.ceil(total / limit)
 
   return (
     <ReportsClient
-      reports={enriched}
-      tasks={filteredTasks}
-      users={allUsers}
+      reports={cleanReports}
+      tasks={activeTasks}
+      users={allUsers.map(u => ({ ...u, level: u.level ?? 1 }))}
       currentTaskId={params.task_id}
       currentSearch={params.search}
       currentCreatedBy={params.created_by}
@@ -135,6 +109,8 @@ export default async function ReportsPage({
       currentSite={params.site_filter}
       currentDiv={params.div_filter}
       currentTeam={params.team_filter}
+      currentPage={page}
+      totalPages={totalPages}
     />
   )
 }

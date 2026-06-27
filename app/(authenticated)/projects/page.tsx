@@ -3,11 +3,8 @@ import { getSession } from "@/lib/session"
 import {
   ProjectRepository,
   StatusRepository,
-  TaskRepository,
-  DailyReportRepository,
   UserRepository,
   ProjectTeamRepository,
-  filterProjectsByUser,
 } from "@/lib/repositories"
 import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
 import { ProjectsClient } from "./projects-client"
@@ -24,6 +21,7 @@ export default async function ProjectsPage({
     site_filter?: string
     div_filter?: string
     team_filter?: string
+    page?: string
   }>
 }) {
   const session = await getSession()
@@ -33,11 +31,13 @@ export default async function ProjectsPage({
   const userId = session.user_id
   const params = await searchParams
 
-  const [allProjects, statuses, allTasks, allReports, allUsers, allProjectTeams] = await Promise.all([
-    ProjectRepository.findAll(userId),
+  const page = parseInt(params.page || "1", 10)
+  const limit = 50
+  const offset = (page - 1) * limit
+
+  // We still fetch these globally because they are small and fully cached in Upstash Redis
+  const [statuses, allUsers, allProjectTeams] = await Promise.all([
     StatusRepository.findAll(),
-    TaskRepository.findAll(userId),
-    DailyReportRepository.findAll(userId),
     UserRepository.findAll(),
     ProjectTeamRepository.findAll(),
   ])
@@ -46,117 +46,22 @@ export default async function ProjectsPage({
   const userLevel = currentUser?.level || 1
   const effectiveViewMode = userLevel === 1 ? "my" : viewMode
 
-  // Filter by user based on visibility levels
-  let projects = await filterProjectsByUser(allProjects, userId)
+  // Fetch paginated & filtered projects directly from SQL
+  const { data: projects, total } = await ProjectRepository.findPaginated(
+    userId,
+    { ...params, viewMode: effectiveViewMode },
+    limit,
+    offset
+  )
 
-  if (effectiveViewMode === "my") {
-    const myProjectIds = new Set(
-      allProjectTeams.filter((pt) => pt.user_id === userId).map((pt) => pt.project_id)
-    )
-    projects = projects.filter((p) => p.created_by === userId || myProjectIds.has(p.project_id))
-  }
+  const totalPages = Math.ceil(total / limit)
 
-  // Pre-build lookup maps — O(n) once, then O(1) per lookup
-  const userById = new Map(allUsers.map(u => [u.user_id, u]))
-  const userMap = new Map(allUsers.map((u) => [u.user_id, (u.user_name || u.user_email || "").toLowerCase()]))
-
-  // Apply enterprise filters
-  if (params.dept_filter) {
-    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_departement === params.dept_filter)
-  }
-  if (params.site_filter) {
-    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_site === params.site_filter)
-  }
-  if (params.div_filter) {
-    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_division === params.div_filter)
-  }
-  if (params.team_filter) {
-    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_team === params.team_filter)
-  }
-
-  // Pre-index tasks by project and reports by task — O(n) each
-  const tasksByProject = new Map<string, typeof allTasks>()
-  for (const t of allTasks) {
-    if (!t.project_id) continue
-    const list = tasksByProject.get(t.project_id) || []
-    list.push(t)
-    tasksByProject.set(t.project_id, list)
-  }
-  const reportsByTask = new Map<string, typeof allReports>()
-  for (const r of allReports) {
-    const list = reportsByTask.get(r.task_id) || []
-    list.push(r)
-    reportsByTask.set(r.task_id, list)
-  }
-
-  // Pre-index project teams by project_id — O(n)
-  const teamsByProject = new Map<string, string[]>()
-  for (const pt of allProjectTeams) {
-    const list = teamsByProject.get(pt.project_id) || []
-    list.push(pt.user_id)
-    teamsByProject.set(pt.project_id, list)
-  }
-
-  // Apply search/status/created_by/member_id filters
-  if (params.status) {
-    projects = projects.filter((p) => p.project_status === params.status)
-  }
-  if (params.created_by) {
-    projects = projects.filter((p) => p.created_by === params.created_by)
-  }
-  if (params.member_id) {
-    const memberProjectIds = new Set(
-      allProjectTeams.filter((pt) => pt.user_id === params.member_id).map((pt) => pt.project_id)
-    )
-    projects = projects.filter((p) => memberProjectIds.has(p.project_id) || p.created_by === params.member_id)
-  }
-  if (params.search) {
-    const q = params.search.toLowerCase()
-    projects = projects.filter((p) => {
-      if (p.project_name?.toLowerCase().includes(q) || p.project_description?.toLowerCase().includes(q)) {
-        return true
-      }
-      const creatorName = p.created_by ? userMap.get(p.created_by) : ""
-      if (creatorName?.includes(q)) {
-        return true
-      }
-      const teamUserIds = teamsByProject.get(p.project_id) || []
-      for (const uid of teamUserIds) {
-        const memberName = userMap.get(uid)
-        if (memberName?.includes(q)) {
-          return true
-        }
-      }
-      return false
-    })
-  }
-
-  // Calculate total hours and progress per project
+  // Project hours and progress are now directly provided via PostgreSQL Computed Columns!
   const projectHoursMap: Record<string, number> = {}
   const projectProgressMap: Record<string, number> = {}
   for (const project of projects) {
-    const projectTasks = tasksByProject.get(project.project_id) || []
-    let totalHours = 0
-    let totalProgress = 0
-    for (const task of projectTasks) {
-      const taskReports = reportsByTask.get(task.id) || []
-      totalHours += taskReports.reduce((sum, r) => {
-          const h = parseFloat(r.total_hours ?? '0')
-          return sum + (isNaN(h) ? 0 : h)
-        }, 0)
-      if (taskReports.length > 0) {
-        const latest = taskReports.reduce((max, r) => {
-          if (!r.date) return max
-          if (!max.date) return r
-          return r.date > max.date ? r : max
-        }, taskReports[0])
-        totalProgress += parseFloat(latest.progress_percentage ?? '0') || 0
-      }
-    }
-    projectHoursMap[project.project_id] = totalHours
-    projectProgressMap[project.project_id] = projectTasks.length > 0
-      ? Math.round(totalProgress / projectTasks.length)
-      : 0
+    projectHoursMap[project.project_id] = parseFloat((project.total_hours as any) || '0')
+    projectProgressMap[project.project_id] = Math.round(parseFloat((project.project_progress as any) || '0'))
   }
 
   return (
@@ -177,6 +82,8 @@ export default async function ProjectsPage({
       currentSite={params.site_filter}
       currentDiv={params.div_filter}
       currentTeam={params.team_filter}
+      currentPage={page}
+      totalPages={totalPages}
     />
   )
 }

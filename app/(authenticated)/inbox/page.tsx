@@ -37,8 +37,25 @@ export default function InboxPage() {
     }
 
     fetchNotifications()
+
+    // Realtime Websocket Supabase
+    const { supabase } = require("@/lib/supabase-client")
+    const channel = supabase
+      .channel('realtime-notifications')
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        () => {
+          // Refetch if there's a new notification
+          fetchNotifications()
+          window.dispatchEvent(new Event("notificationsUpdated"))
+        }
+      )
+      .subscribe()
+
     return () => {
       active = false
+      supabase.removeChannel(channel)
     }
   }, [])
 

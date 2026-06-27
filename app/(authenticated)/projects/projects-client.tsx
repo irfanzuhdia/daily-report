@@ -332,6 +332,8 @@ export function ProjectsClient({
   currentSite = "",
   currentDiv = "",
   currentTeam = "",
+  currentPage = 1,
+  totalPages = 1,
 }: {
   projects: Project[]
   statuses: Status[]
@@ -349,6 +351,8 @@ export function ProjectsClient({
   currentSite?: string
   currentDiv?: string
   currentTeam?: string
+  currentPage?: number
+  totalPages?: number
 }) {
   const { density } = useViewDensity()
   const currentUser = useMemo(() => users.find(u => u.user_id === currentUserId), [users, currentUserId])
@@ -416,6 +420,25 @@ export function ProjectsClient({
     return () => clearTimeout(timer)
   }, [search])
 
+  // Realtime Websocket Supabase
+  useEffect(() => {
+    const { supabase } = require("@/lib/supabase-client")
+    const channel = supabase
+      .channel('realtime-projects')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'projects' },
+        () => {
+          router.refresh()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [router])
+
   useEffect(() => {
     if (isFirstMount.current) {
       isFirstMount.current = false
@@ -438,12 +461,15 @@ export function ProjectsClient({
 
   const handleDelete = async () => {
     if (!deleteId) return
-    await fetch(`/api/projects/${deleteId}`, { method: "DELETE" })
+    const idToDelete = deleteId
+    setDeleteId(null)
+    setLocalProjects(prev => prev.filter(p => p.project_id !== idToDelete))
+    
+    await fetch(`/api/projects/${idToDelete}`, { method: "DELETE" })
     await revalidatePathsAndTags(
       ['/projects', '/reports/dashboard'],
       ['projects']
     )
-    setDeleteId(null)
     router.refresh()
   }
 
@@ -1141,6 +1167,40 @@ export function ProjectsClient({
             </div>
           )
         )
+      )}
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between py-6 mt-6 border-t px-2">
+          <p className="text-sm text-muted-foreground">
+            Showing page {currentPage} of {totalPages} ({projects.length} items)
+          </p>
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              disabled={currentPage <= 1}
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search)
+                params.set("page", (currentPage - 1).toString())
+                router.push(`?${params.toString()}`)
+              }}
+            >
+              Previous
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              disabled={currentPage >= totalPages}
+              onClick={() => {
+                const params = new URLSearchParams(window.location.search)
+                params.set("page", (currentPage + 1).toString())
+                router.push(`?${params.toString()}`)
+              }}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       )}
 
       {/* Complete & Cancel Folder Dialog */}

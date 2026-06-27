@@ -65,6 +65,144 @@ const getCachedAllReportsIncludingDeleted = unstable_cache(
 // ============ DAILY REPORT REPOSITORY ============
 
 export const DailyReportRepository = {
+  async findPaginatedEnriched(
+    userId: string,
+    limit: number,
+    offset: number,
+    filters?: {
+      search?: string;
+      taskId?: string;
+      createdBy?: string;
+      dept?: string;
+      site?: string;
+      div?: string;
+      team?: string;
+      viewMode?: string;
+    }
+  ) {
+    const user = await UserRepository.findById(userId);
+    if (!user) return { reports: [], total: 0 };
+
+    const level = await getUserLevel(user.user_occupation);
+    let scopeCondition = '';
+    const params: any[] = [];
+    
+    // Base WHERE clause
+    let whereClauses = ['dr.deleted_at IS NULL'];
+    
+    if (filters?.viewMode === 'my') {
+      params.push(userId);
+      whereClauses.push(`(dr.user_id = $${params.length} OR dr.created_by = $${params.length})`);
+    } else if (level < 6) {
+      params.push(userId);
+      const userIdParamIdx = params.length;
+      
+      const viewerOcc = (user.user_occupation || '').toLowerCase().trim();
+      if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
+        params.push(user.user_departement || '');
+        scopeCondition = `(LOWER(u.user_departement) = LOWER($${params.length}) OR LOWER(cu.user_departement) = LOWER($${params.length}))`;
+      } else if (viewerOcc === 'site manager' || viewerOcc === 'site admin' || level === 5) {
+        params.push(user.user_site || '');
+        scopeCondition = `(LOWER(u.user_site) = LOWER($${params.length}) OR LOWER(cu.user_site) = LOWER($${params.length}))`;
+      } else if (viewerOcc.includes('div') || level === 4 || level === 3) {
+        params.push(user.user_division || '');
+        scopeCondition = `(LOWER(u.user_division) = LOWER($${params.length}) OR LOWER(cu.user_division) = LOWER($${params.length}))`;
+      } else if (viewerOcc === 'team leader' || level === 2) {
+        params.push(user.user_team || '');
+        scopeCondition = `(LOWER(u.user_team) = LOWER($${params.length}) OR LOWER(cu.user_team) = LOWER($${params.length}))`;
+      }
+      
+      let scopeWhere = `(dr.user_id = $${userIdParamIdx} OR dr.created_by = $${userIdParamIdx}`;
+      if (scopeCondition) {
+        scopeWhere += ` OR ${scopeCondition}`;
+      }
+      scopeWhere += `)`;
+      whereClauses.push(scopeWhere);
+    }
+    
+    // Apply explicit filters
+    if (filters?.dept) {
+      params.push(filters.dept);
+      whereClauses.push(`u.user_departement = $${params.length}`);
+    }
+    if (filters?.site) {
+      params.push(filters.site);
+      whereClauses.push(`u.user_site = $${params.length}`);
+    }
+    if (filters?.div) {
+      params.push(filters.div);
+      whereClauses.push(`u.user_division = $${params.length}`);
+    }
+    if (filters?.team) {
+      params.push(filters.team);
+      whereClauses.push(`u.user_team = $${params.length}`);
+    }
+    if (filters?.taskId) {
+      params.push(filters.taskId);
+      whereClauses.push(`dr.task_id = $${params.length}`);
+    }
+    if (filters?.createdBy) {
+      params.push(filters.createdBy);
+      whereClauses.push(`dr.user_id = $${params.length}`);
+    }
+    
+    if (filters?.search) {
+      params.push(`%${filters.search.toLowerCase()}%`);
+      const s = `$${params.length}`;
+      whereClauses.push(`(
+        LOWER(dr.remarks) LIKE ${s} OR 
+        LOWER(dr.report_id) LIKE ${s} OR 
+        LOWER(u.user_name) LIKE ${s} OR 
+        LOWER(t.task_description) LIKE ${s} OR 
+        LOWER(p.project_name) LIKE ${s}
+      )`);
+    }
+
+    const whereSql = whereClauses.join(' AND ');
+
+    // 1. Get total count
+    const countQuery = `
+      SELECT COUNT(DISTINCT dr.report_id) as total
+      FROM daily_reports dr
+      LEFT JOIN users u ON dr.user_id = u.user_id
+      LEFT JOIN users cu ON dr.created_by = cu.user_id
+      LEFT JOIN tasks t ON dr.task_id = t.id
+      LEFT JOIN projects p ON t.project_id = p.project_id
+      WHERE ${whereSql}
+    `;
+    const countRes = await sql.unsafe(countQuery, params);
+    const total = parseInt(countRes[0].total, 10);
+
+    // 2. Get paginated & enriched data
+    params.push(limit, offset);
+    const limitIdx = params.length - 1;
+    const offsetIdx = params.length;
+
+    const dataQuery = `
+      SELECT 
+        dr.*,
+        t.task_description,
+        t.task_status,
+        t.project_id,
+        p.project_name,
+        u.user_name as created_by_name
+      FROM daily_reports dr
+      LEFT JOIN users u ON dr.user_id = u.user_id
+      LEFT JOIN users cu ON dr.created_by = cu.user_id
+      LEFT JOIN tasks t ON dr.task_id = t.id
+      LEFT JOIN projects p ON t.project_id = p.project_id
+      WHERE ${whereSql}
+      ORDER BY dr.created_at DESC
+      LIMIT $${limitIdx} OFFSET $${offsetIdx}
+    `;
+    const rows = await sql.unsafe(dataQuery, params);
+    
+    return {
+      reports: rows as any[],
+      total
+    };
+  },
+
   async findAll(userId?: string): Promise<DailyReport[]> {
     if (!userId) {
       return getCachedReports();
@@ -104,7 +242,7 @@ export const DailyReportRepository = {
     }
 
     let query = `
-      SELECT DISTINCT dr.* 
+      SELECT dr.* 
       FROM daily_reports dr
       LEFT JOIN users u ON dr.user_id = u.user_id
       LEFT JOIN users cu ON dr.created_by = cu.user_id
@@ -120,7 +258,7 @@ export const DailyReportRepository = {
 
     query += `) ORDER BY dr.created_at DESC`;
 
-    const rows = await (sql as any).query(query, params);
+    const rows = await sql.unsafe(query, params);
     return rows as unknown as DailyReport[];
   },
 
@@ -581,7 +719,7 @@ export async function findAllReportsIncludingDeleted(userId?: string): Promise<D
 
   const level = await getUserLevel(user.user_occupation);
   if (level >= 6) {
-    return (sql as any).query(`SELECT * FROM daily_reports ORDER BY created_at DESC`) as unknown as DailyReport[];
+    return sql.unsafe(`SELECT * FROM daily_reports ORDER BY created_at DESC`) as unknown as DailyReport[];
   }
 
   let scopeCondition = '';
@@ -610,7 +748,7 @@ export async function findAllReportsIncludingDeleted(userId?: string): Promise<D
   }
 
   let query = `
-    SELECT DISTINCT dr.* 
+    SELECT dr.* 
     FROM daily_reports dr
     LEFT JOIN users u ON dr.user_id = u.user_id
     LEFT JOIN users cu ON dr.created_by = cu.user_id
@@ -625,7 +763,7 @@ export async function findAllReportsIncludingDeleted(userId?: string): Promise<D
 
   query += `) ORDER BY dr.created_at DESC`;
 
-  const rows = await (sql as any).query(query, params);
+  const rows = await sql.unsafe(query, params);
   return rows as unknown as DailyReport[];
 }
 

@@ -49,8 +49,7 @@ export function SearchableUserSelect({
     const q = searchQuery.toLowerCase()
     return (
       (u.user_name || "").toLowerCase().includes(q) ||
-      (u.user_email || "").toLowerCase().includes(q) ||
-      (u.user_occupation || "").toLowerCase().includes(q)
+      (u.user_email || "").toLowerCase().includes(q)
     )
   })
 
@@ -84,7 +83,7 @@ export function SearchableUserSelect({
         <div className="space-y-3 p-3 rounded-xl border bg-muted/20 shadow-sm animate-in zoom-in-95 duration-150">
           <div className="flex gap-2">
             <Input
-              placeholder="Search by name, email, or occupation..."
+              placeholder="Search by name or email..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="h-8 text-xs bg-background"
@@ -135,11 +134,6 @@ export function SearchableUserSelect({
                     <p className="font-semibold truncate">{u.user_name || u.user_email}</p>
                     <p className="text-[10px] text-muted-foreground truncate">{u.user_email}</p>
                   </div>
-                  {u.user_occupation && (
-                    <Badge variant="outline" className="text-[9px] py-0 px-1.5 shrink-0 border-muted-foreground/30 font-normal">
-                      {u.user_occupation}
-                    </Badge>
-                  )}
                 </button>
               ))}
             </div>

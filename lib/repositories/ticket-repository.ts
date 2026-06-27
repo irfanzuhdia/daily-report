@@ -105,7 +105,7 @@ export const TicketRepository = {
 
     query += ` ORDER BY t.created_at DESC`;
 
-    const tickets = await (sql as any).query(query, params) as unknown as Ticket[];
+    const tickets = await sql.unsafe(query, params) as unknown as Ticket[];
     if (tickets.length === 0) return [];
 
     // Optimize: fetch team assignments ONLY for the retrieved tickets
@@ -294,12 +294,8 @@ export const TicketRepository = {
       throw new Error('Cannot modify a closed ticket.');
     }
 
-    // Resolve if the updater is a member of the requested division or an admin
-    const userRow = await sql`SELECT user_division, user_occupation FROM users WHERE user_id = ${updatedBy} LIMIT 1`;
-    const userDiv = userRow[0]?.user_division || '';
+    const userRow = await sql`SELECT user_occupation FROM users WHERE user_id = ${updatedBy} LIMIT 1`;
     const userOcc = userRow[0]?.user_occupation || '';
-    const isDivisionStaff = userDiv && existing.request_to_division ? userDiv.toLowerCase() === existing.request_to_division.toLowerCase() : false;
-    
     let isAdmin = false;
     if (userOcc) {
       const norm = userOcc.toLowerCase().replace(/\s+/g, "");
@@ -353,27 +349,15 @@ export const TicketRepository = {
           throw new Error('Only the ticket requester can close this ticket.');
         }
       } else {
-        // Non-requesters/divisional staff can change status, but requester cannot set non-Closed status unless they are division staff/admin
-        if (!isDivisionStaff && !isAdmin) {
-          throw new Error('Only members of the requested division can update the ticket status.');
+        // Requester cannot set non-Closed status (e.g. In Progress, Resolved) unless they are admin
+        if (isRequester && !isAdmin) {
+          throw new Error('The ticket requester cannot process their own ticket. Only other staff can update the status.');
         }
       }
     }
 
-    // 4. Divisional fields permission guard
-    if (isDivFieldModified && !isDivisionStaff && !isAdmin) {
-      const isCategoryChanged = updates.division_category !== undefined && updates.division_category !== existing.division_category;
-      const isTagPersonChanged = updates.tag_person !== undefined && updates.tag_person !== existing.tag_person;
-      const isTeamUserIdsChanged = updates.team_user_ids !== undefined && 
-        JSON.stringify(updates.team_user_ids.sort()) !== JSON.stringify((existing.team_user_ids || []).sort());
-        
-      if (isCategoryChanged || isTagPersonChanged || isTeamUserIdsChanged) {
-        throw new Error('Only members of the requested division can assign categories or handlers.');
-      }
-    }
-
-    // 5. Core fields lock guard: if processed/commented, creator cannot edit details
-    if (isCoreFieldModified && isRequester && !isDivisionStaff && !isAdmin) {
+    // 4. Core fields lock guard: if processed/commented, creator cannot edit details
+    if (isCoreFieldModified && isRequester && !isAdmin) {
       // Check if anyone else has commented
       const comments = await this.findComments(id);
       const hasCommentsByOthers = comments.some(c => c.created_by !== existing.request_by);

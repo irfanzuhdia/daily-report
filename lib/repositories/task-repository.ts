@@ -122,7 +122,7 @@ export const TaskRepository = {
     }
 
     let query = `
-      SELECT DISTINCT t.* 
+      SELECT t.*
       FROM tasks t
       LEFT JOIN users u ON t.created_by = u.user_id
       LEFT JOIN task_teams tt ON t.id = tt.task_id AND tt.deleted_at IS NULL
@@ -137,10 +137,141 @@ export const TaskRepository = {
       query += ` OR ${scopeCondition}`;
     }
 
-    query += `) ORDER BY t.created_at DESC`;
+    query += `) GROUP BY t.id ORDER BY t.created_at DESC`;
 
-    const rows = await (sql as any).query(query, params);
+    const rows = await sql.unsafe(query, params);
     return rows as unknown as Task[];
+  },
+
+  async findPaginated(userId: string, filters: any, limit: number, offset: number): Promise<{ data: Task[], total: number }> {
+    const user = await UserRepository.findById(userId);
+    if (!user) return { data: [], total: 0 };
+    const level = await getUserLevel(user.user_occupation);
+
+    const conditions = ["t.deleted_at IS NULL"];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    // RBAC
+    if (level < 6) {
+      let rbacCondition = `(t.created_by = $${paramIndex} OR tt.user_id = $${paramIndex})`;
+      params.push(userId);
+      paramIndex++;
+
+      const viewerOcc = (user.user_occupation || '').toLowerCase().trim();
+      let scopeCondition = '';
+      if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
+        params.push(user.user_departement || '');
+        scopeCondition = `(LOWER(u.user_departement) = LOWER($${paramIndex}) OR LOWER(mu.user_departement) = LOWER($${paramIndex}))`;
+        paramIndex++;
+      } else if (viewerOcc === 'site manager' || viewerOcc === 'site admin' || level === 5) {
+        params.push(user.user_site || '');
+        scopeCondition = `(LOWER(u.user_site) = LOWER($${paramIndex}) OR LOWER(mu.user_site) = LOWER($${paramIndex}))`;
+        paramIndex++;
+      } else if (viewerOcc === 'divisi manager' || viewerOcc === 'divisi admin' || viewerOcc === 'div manager' || viewerOcc === 'div admin' || level === 4 || level === 3) {
+        params.push(user.user_division || '');
+        scopeCondition = `(LOWER(u.user_division) = LOWER($${paramIndex}) OR LOWER(mu.user_division) = LOWER($${paramIndex}))`;
+        paramIndex++;
+      } else if (viewerOcc === 'team leader' || level === 2) {
+        params.push(user.user_team || '');
+        scopeCondition = `(LOWER(u.user_team) = LOWER($${paramIndex}) OR LOWER(mu.user_team) = LOWER($${paramIndex}))`;
+        paramIndex++;
+      }
+
+      if (scopeCondition) {
+        rbacCondition = `(${rbacCondition} OR ${scopeCondition})`;
+      }
+      conditions.push(rbacCondition);
+    }
+
+    if (filters.viewMode === 'my') {
+       conditions.push(`(t.created_by = $${paramIndex} OR tt.user_id = $${paramIndex})`);
+       params.push(userId);
+       paramIndex++;
+    }
+
+    if (filters.dept_filter) {
+       conditions.push(`LOWER(u.user_departement) = LOWER($${paramIndex})`);
+       params.push(filters.dept_filter);
+       paramIndex++;
+    }
+    if (filters.site_filter) {
+       conditions.push(`LOWER(u.user_site) = LOWER($${paramIndex})`);
+       params.push(filters.site_filter);
+       paramIndex++;
+    }
+    if (filters.div_filter) {
+       conditions.push(`LOWER(u.user_division) = LOWER($${paramIndex})`);
+       params.push(filters.div_filter);
+       paramIndex++;
+    }
+    if (filters.team_filter) {
+       conditions.push(`LOWER(u.user_team) = LOWER($${paramIndex})`);
+       params.push(filters.team_filter);
+       paramIndex++;
+    }
+    if (filters.project_id) {
+       conditions.push(`t.project_id = $${paramIndex}`);
+       params.push(filters.project_id);
+       paramIndex++;
+    }
+    if (filters.status) {
+       conditions.push(`t.task_status = $${paramIndex}`);
+       params.push(filters.status);
+       paramIndex++;
+    }
+    if (filters.created_by) {
+       conditions.push(`t.created_by = $${paramIndex}`);
+       params.push(filters.created_by);
+       paramIndex++;
+    }
+    if (filters.member_id) {
+       conditions.push(`(t.created_by = $${paramIndex} OR tt.user_id = $${paramIndex})`);
+       params.push(filters.member_id);
+       paramIndex++;
+    }
+    if (filters.search) {
+       const q = `%${filters.search.toLowerCase()}%`;
+       conditions.push(`(
+         LOWER(t.task_description) LIKE $${paramIndex} OR 
+         LOWER(u.user_name) LIKE $${paramIndex} OR
+         LOWER(mu.user_name) LIKE $${paramIndex}
+       )`);
+       params.push(q);
+       paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    const countQuery = `
+      SELECT COUNT(DISTINCT t.id)::int as count
+      FROM tasks t
+      LEFT JOIN users u ON t.created_by = u.user_id
+      LEFT JOIN task_teams tt ON t.id = tt.task_id AND tt.deleted_at IS NULL
+      LEFT JOIN users mu ON tt.user_id = mu.user_id
+      ${whereClause}
+    `;
+
+    const dataQuery = `
+      SELECT t.*
+      FROM tasks t
+      LEFT JOIN users u ON t.created_by = u.user_id
+      LEFT JOIN task_teams tt ON t.id = tt.task_id AND tt.deleted_at IS NULL
+      LEFT JOIN users mu ON tt.user_id = mu.user_id
+      ${whereClause}
+      GROUP BY t.id
+      ORDER BY t.created_at DESC
+      LIMIT $${paramIndex} OFFSET $${paramIndex + 1}
+    `;
+
+    const dataParams = [...params, limit, offset];
+    
+    const countRes = await sql.unsafe(countQuery, params);
+    const total = countRes[0]?.count || 0;
+
+    const rows = await sql.unsafe(dataQuery, dataParams);
+    
+    return { data: rows as unknown as Task[], total };
   },
 
   async findByProjectId(projectId: string): Promise<Task[]> {
@@ -595,7 +726,7 @@ export async function findAllTasksIncludingDeleted(userId?: string): Promise<Tas
 
   const level = await getUserLevel(user.user_occupation);
   if (level >= 6) {
-    return (sql as any).query(`SELECT * FROM tasks ORDER BY created_at DESC`) as unknown as Task[];
+    return sql.unsafe(`SELECT * FROM tasks ORDER BY created_at DESC`) as unknown as Task[];
   }
 
   let scopeCondition = '';
@@ -624,7 +755,7 @@ export async function findAllTasksIncludingDeleted(userId?: string): Promise<Tas
   }
 
   let query = `
-    SELECT DISTINCT t.* 
+    SELECT t.*
     FROM tasks t
     LEFT JOIN users u ON t.created_by = u.user_id
     LEFT JOIN task_teams tt ON t.id = tt.task_id AND tt.deleted_at IS NULL
@@ -638,9 +769,9 @@ export async function findAllTasksIncludingDeleted(userId?: string): Promise<Tas
     query += ` OR ${scopeCondition}`;
   }
 
-  query += `) ORDER BY t.created_at DESC`;
+  query += `) GROUP BY t.id ORDER BY t.created_at DESC`;
 
-  const rows = await (sql as any).query(query, params);
+  const rows = await sql.unsafe(query, params);
   return rows as unknown as Task[];
 }
 

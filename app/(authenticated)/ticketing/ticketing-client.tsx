@@ -94,7 +94,7 @@ export function TicketingClient({
 
   // State
   const [tickets, setTickets] = useState<Ticket[]>(initialTickets)
-  const [activeTab, setActiveTab] = useState<"my" | "requested">("my")
+  const [activeTab, setActiveTab] = useState<"all" | "my">("all")
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
   const [priorityFilter, setPriorityFilter] = useState<string>("all")
@@ -132,6 +132,49 @@ export function TicketingClient({
   const [comments, setComments] = useState<(TicketComment & { author_name?: string; author_email?: string })[]>([])
   const [logs, setLogs] = useState<(TicketLog & { actor_name?: string; actor_email?: string })[]>([])
   const [activeDetailTab, setActiveDetailTab] = useState<"comments" | "logs">("comments")
+
+  const selectedTicketIdRef = useRef<string | null>(null)
+  useEffect(() => {
+    selectedTicketIdRef.current = selectedTicket?.id || null
+  }, [selectedTicket])
+
+  // Sync initial tickets when refreshed from server
+  useEffect(() => {
+    setTickets(initialTickets)
+  }, [initialTickets])
+
+  // Realtime Websocket Supabase
+  useEffect(() => {
+    const { supabase } = require("@/lib/supabase-client")
+    const channel = supabase
+      .channel('realtime-ticketing')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'tickets' },
+        () => {
+          router.refresh()
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'ticket_comments' },
+        (payload: any) => {
+          if (selectedTicketIdRef.current && payload.new.ticket_id === selectedTicketIdRef.current) {
+             fetch(`/api/tickets/${selectedTicketIdRef.current}/details`)
+               .then(res => res.json())
+               .then(data => {
+                  if (data.comments) setComments(data.comments)
+                  if (data.logs) setLogs(data.logs)
+               })
+          }
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [router])
 
   // Confirmation Modal States
   const [confirmOpen, setConfirmOpen] = useState(false)
@@ -668,12 +711,9 @@ export function TicketingClient({
     const filtered = tickets.filter((t) => {
       // 1. Tab filter
       if (activeTab === "my") {
-        if (t.request_by !== currentUserId) return false
-      } else {
-        // Requested to my division OR where I am tagged/assigned
-        const isToMyDiv = t.request_to_division ? t.request_to_division.toLowerCase() === currentUserDivision.toLowerCase() : false
-        const isTaggedToMe = t.tag_person === currentUserId || t.team_user_ids?.includes(currentUserId)
-        if (!isToMyDiv && !isTaggedToMe) return false
+        const isMyTicket = t.request_by === currentUserId
+        const isAssignedToMe = t.tag_person === currentUserId || t.team_user_ids?.includes(currentUserId)
+        if (!isMyTicket && !isAssignedToMe) return false
       }
 
       // 2. Status filter
@@ -1244,6 +1284,20 @@ export function TicketingClient({
       <div className="flex border-b border-muted">
         <button
           onClick={() => {
+            setActiveTab("all")
+            setSearchQuery("")
+          }}
+          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
+            activeTab === "all"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          }`}
+        >
+          <Users className="h-4 w-4" />
+          All Tickets
+        </button>
+        <button
+          onClick={() => {
             setActiveTab("my")
             setSearchQuery("")
           }}
@@ -1255,25 +1309,6 @@ export function TicketingClient({
         >
           <User className="h-4 w-4" />
           My Tickets
-        </button>
-        <button
-          onClick={() => {
-            setActiveTab("requested")
-            setSearchQuery("")
-          }}
-          className={`flex items-center gap-2 px-4 py-2.5 text-sm font-semibold border-b-2 transition-colors ${
-            activeTab === "requested"
-              ? "border-primary text-primary"
-              : "border-transparent text-muted-foreground hover:text-foreground"
-          }`}
-        >
-          <Users className="h-4 w-4" />
-          Requested Tickets
-          {currentUserDivision && (
-            <Badge variant="secondary" className="ml-1 px-1.5 py-0.5 text-[9px] font-normal">
-              {currentUserDivision}
-            </Badge>
-          )}
         </button>
       </div>
 

@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { getSession } from "@/lib/session";
-import { TicketRepository, UserRepository, ProjectRepository } from "@/lib/repositories";
+import { TicketRepository, UserRepository } from "@/lib/repositories";
 import { TicketingClient } from "./ticketing-client";
+import { sql } from "@/lib/db";
 
 export const revalidate = 0; // Disable cache to ensure real-time ticketing state
 
@@ -13,11 +14,11 @@ export default async function TicketingPage() {
 
   const userId = session.user_id;
 
-  // Fetch tickets, users, and projects
-  const [allTickets, allUsers, allProjects] = await Promise.all([
-    TicketRepository.findAll({ tab: 'my', currentUserId: userId }),
+  // Fetch all tickets, users, and linked projects efficiently
+  const [allTickets, allUsers, linkedProjects] = await Promise.all([
+    TicketRepository.findAll(), // No filters, fetch ALL tickets
     UserRepository.findAll(),
-    ProjectRepository.findAll(),
+    sql`SELECT project_id, ticket_reference FROM projects WHERE ticket_reference IS NOT NULL AND deleted_at IS NULL`,
   ]);
 
   const currentUser = allUsers.find((u) => u.user_id === userId);
@@ -32,7 +33,7 @@ export default async function TicketingPage() {
 
   // Build a map of ticket references to project IDs
   const ticketToProjectMap: Record<string, string> = {};
-  for (const project of allProjects) {
+  for (const project of linkedProjects) {
     if (project.ticket_reference) {
       ticketToProjectMap[project.ticket_reference] = project.project_id;
     }

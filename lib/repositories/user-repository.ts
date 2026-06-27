@@ -2,13 +2,23 @@ import { sql } from '../db';
 import type { User, UserLog } from '../types';
 import { unstable_cache, revalidateTag } from './shared';
 import { RoleLevelRepository } from './role-level-repository';
+import { redis } from '../redis';
 
 // ============ CACHING HELPERS ============
 
+const CACHE_KEY_USERS = 'users_all';
+const CACHE_KEY_USERS_DEL = 'users_all_del';
+
 const getCachedUsers = unstable_cache(
   async (): Promise<User[]> => {
+    if (redis) {
+      const cached = await redis.get<User[]>(CACHE_KEY_USERS);
+      if (cached) return cached;
+    }
     const rows = await sql`SELECT * FROM users WHERE deleted_at IS NULL`;
-    return rows as unknown as User[];
+    const res = rows as unknown as User[];
+    if (redis) await redis.set(CACHE_KEY_USERS, res, { ex: 300 });
+    return res;
   },
   ['users-all'],
   { tags: ['users'], revalidate: 60 }
@@ -16,8 +26,14 @@ const getCachedUsers = unstable_cache(
 
 const getCachedUsersIncludingDeleted = unstable_cache(
   async (): Promise<User[]> => {
+    if (redis) {
+      const cached = await redis.get<User[]>(CACHE_KEY_USERS_DEL);
+      if (cached) return cached;
+    }
     const rows = await sql`SELECT * FROM users`;
-    return rows as unknown as User[];
+    const res = rows as unknown as User[];
+    if (redis) await redis.set(CACHE_KEY_USERS_DEL, res, { ex: 300 });
+    return res;
   },
   ['users-all-including-deleted'],
   { tags: ['users'], revalidate: 60 }
@@ -147,9 +163,13 @@ export const UserRepository = {
         ${newUser.user_division}, ${newUser.user_departement}, ${newUser.user_site}, ${newUser.user_team}, ${newUser.user_unit},
         ${newUser.created_by}, ${newUser.created_at},
         ${newUser.updated_by}, ${newUser.updated_at}, ${newUser.deleted_by}, ${newUser.deleted_at}
-      )
+      ) RETURNING *
     `;
 
+    if (redis) {
+      await redis.del(CACHE_KEY_USERS);
+      await redis.del(CACHE_KEY_USERS_DEL);
+    }
     revalidateTag('users');
     return newUser;
   },
@@ -187,6 +207,7 @@ export const UserRepository = {
             updated_at = ${new Date().toISOString()}, 
             updated_by = ${updatedBy} 
         WHERE user_id = ${userId}
+        RETURNING *
       `;
     } else {
       await sql`
@@ -202,7 +223,12 @@ export const UserRepository = {
             updated_at = ${new Date().toISOString()}, 
             updated_by = ${updatedBy} 
         WHERE user_id = ${userId}
+        RETURNING *
       `;
+    }
+    if (redis) {
+      await redis.del(CACHE_KEY_USERS);
+      await redis.del(CACHE_KEY_USERS_DEL);
     }
     revalidateTag('users');
     return true;

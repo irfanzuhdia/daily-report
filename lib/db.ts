@@ -1,8 +1,12 @@
-import { neon } from '@neondatabase/serverless';
+import postgres from 'postgres';
 
 const databaseUrl = process.env.DATABASE_URL || '';
 
-export const sql = neon(databaseUrl);
+export const sql = postgres(databaseUrl, {
+  ssl: 'require',
+  max: 10,
+  idle_timeout: 20
+});
 
 // Self-initializing DB schema for role_levels
 if (databaseUrl && typeof window === 'undefined') {

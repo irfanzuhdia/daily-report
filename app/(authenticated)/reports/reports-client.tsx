@@ -290,6 +290,8 @@ export function ReportsClient({
   currentSite = "",
   currentDiv = "",
   currentTeam = "",
+  currentPage = 1,
+  totalPages = 1,
 }: {
   reports: EnrichedReport[]
   tasks: Task[]
@@ -303,6 +305,8 @@ export function ReportsClient({
   currentSite?: string
   currentDiv?: string
   currentTeam?: string
+  currentPage?: number
+  totalPages?: number
 }) {
   const { density } = useViewDensity()
   const currentUser = useMemo(() => (users || []).find(u => u.user_id === currentUserId), [users, currentUserId])
@@ -369,6 +373,25 @@ export function ReportsClient({
     return () => clearTimeout(timer)
   }, [search])
 
+  // Realtime Websocket Supabase
+  useEffect(() => {
+    const { supabase } = require("@/lib/supabase-client")
+    const channel = supabase
+      .channel('realtime-reports')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'daily_reports' },
+        () => {
+          router.refresh()
+        }
+      )
+      .subscribe()
+
+    return () => {
+      supabase.removeChannel(channel)
+    }
+  }, [router])
+
   useEffect(() => {
     if (isFirstMount.current) {
       isFirstMount.current = false
@@ -390,12 +413,15 @@ export function ReportsClient({
 
   const handleDelete = async () => {
     if (!deleteId) return
-    await fetch(`/api/reports/${deleteId}`, { method: "DELETE" })
+    const idToDelete = deleteId
+    setDeleteId(null)
+    setLocalReports(prev => prev.filter(r => r.id !== idToDelete))
+    
+    await fetch(`/api/reports/${idToDelete}`, { method: "DELETE" })
     await revalidatePathsAndTags(
       ['/reports', '/reports/dashboard'],
       ['reports', 'tasks', 'projects']
     )
-    setDeleteId(null)
     router.refresh()
   }
 
@@ -949,6 +975,39 @@ export function ReportsClient({
             ))}
           </div>
         )
+      )}
+
+      {/* Pagination Controls */}
+      {layout !== "kanban" && totalPages > 1 && (
+        <div className="flex items-center justify-center py-6 mt-4 gap-2 border-t">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const url = new URL(window.location.href)
+              url.searchParams.set("page", String(Math.max(1, currentPage - 1)))
+              router.push(url.pathname + url.search)
+            }}
+            disabled={currentPage <= 1}
+          >
+            Previous
+          </Button>
+          <div className="text-sm text-muted-foreground px-4">
+            Page <span className="font-medium text-foreground">{currentPage}</span> of {totalPages}
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const url = new URL(window.location.href)
+              url.searchParams.set("page", String(Math.min(totalPages, currentPage + 1)))
+              router.push(url.pathname + url.search)
+            }}
+            disabled={currentPage >= totalPages}
+          >
+            Next
+          </Button>
+        </div>
       )}
 
       {/* Complete & Cancel Reports Folder Dialog */}

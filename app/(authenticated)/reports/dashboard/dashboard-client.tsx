@@ -493,7 +493,7 @@ export function DashboardClient({
             View Reports
           </Button>
         </Link>
-        <Link href="/analytics">
+        <Link href="/reports/analytics">
           <Button variant="outline">
             <BarChart3 className="mr-2 h-4 w-4" />
             Analytics
@@ -581,7 +581,7 @@ function ContributionHeatmapPreview({
             {startDate && endDate ? `${startDate} to ${endDate}` : "Last 30 days"}
           </span>
         </div>
-        <Link href="/analytics">
+        <Link href="/reports/analytics">
           <Button variant="ghost" size="sm" className={density === "compact" ? "h-7 text-xs px-2" : ""}>
             View all <ArrowRight className="ml-1 h-3 w-3" />
           </Button>

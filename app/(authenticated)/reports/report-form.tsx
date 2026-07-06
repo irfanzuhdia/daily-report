@@ -132,7 +132,7 @@ export function ReportForm({
           paths,
           ['reports', 'tasks', 'task_log', 'projects', 'project_log']
         )
-        router.push(`/reports/${report.report_id}`)
+        router.push(`/reports`)
       } else {
         const res = await fetch("/api/reports", {
           method: "POST",
@@ -160,7 +160,7 @@ export function ReportForm({
           paths,
           ['reports', 'tasks', 'task_log', 'projects', 'project_log']
         )
-        router.push(`/reports/${data.report_id}`)
+        router.push(`/reports`)
       }
       router.refresh()
     } catch (error) {

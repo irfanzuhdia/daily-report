@@ -151,7 +151,7 @@ export function ProjectForm({
           ['/projects', `/projects/${project.project_id}`, '/reports/dashboard'],
           ['projects', 'project_log']
         )
-        router.push(`/projects/${project.project_id}`)
+        router.push(`/projects`)
       } else {
         const res = await fetch("/api/projects", {
           method: "POST",
@@ -167,7 +167,7 @@ export function ProjectForm({
           ['/projects', `/projects/${data.project_id}`, '/reports/dashboard'],
           ['projects', 'project_log']
         )
-        router.push(`/projects/${data.project_id}`)
+        router.push(`/projects`)
       }
       router.refresh()
     } catch (error) {

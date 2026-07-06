@@ -141,7 +141,7 @@ function SortableReportCard({
           </div>
 
           <div className={isCompact ? "space-y-1" : "space-y-1.5"}>
-            <h4 className={`font-semibold text-foreground leading-snug ${isCompact ? "text-xs line-clamp-1" : "text-sm line-clamp-3"}`}>
+            <h4 className={`font-semibold text-foreground leading-snug whitespace-pre-wrap ${isCompact ? "text-xs" : "text-sm"}`}>
               {report.remarks || "No remarks"}
             </h4>
             <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
@@ -206,7 +206,7 @@ function ReportDragOverlay({ report }: { report: EnrichedReport }) {
           </div>
         </div>
         <div className="space-y-1.5">
-          <h4 className="text-xs font-semibold text-foreground line-clamp-2">
+          <h4 className="font-semibold text-sm whitespace-pre-wrap leading-snug">
             {report.remarks || "No remarks"}
           </h4>
           <div className="flex items-center gap-1 text-[10px] text-muted-foreground">

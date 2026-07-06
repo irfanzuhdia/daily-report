@@ -150,7 +150,7 @@ export function TaskForm({
           ['/tasks', `/tasks/${task.id}`, `/projects/${task.project_id}`, '/projects', '/reports/dashboard'],
           ['tasks', 'task_log', 'projects', 'project_log']
         )
-        router.push(`/tasks/${task.id}`)
+        router.push(`/tasks`)
       } else {
         const res = await fetch("/api/tasks", {
           method: "POST",
@@ -166,7 +166,7 @@ export function TaskForm({
           ['/tasks', `/tasks/${data.id}`, `/projects/${projectId}`, '/projects', '/reports/dashboard'],
           ['tasks', 'task_log', 'projects', 'project_log']
         )
-        router.push(`/tasks/${data.id}`)
+        router.push(`/tasks`)
       }
       router.refresh()
     } catch (error) {

@@ -110,7 +110,7 @@ function SortableTaskCard({
               </button>
             )}
             <div className="space-y-1 min-w-0 flex-1">
-              <Link href={`/tasks/${task.id}`} className="font-medium text-sm hover:text-primary leading-snug line-clamp-2">
+              <Link href={`/tasks/${task.id}`} className="font-medium text-sm hover:text-primary leading-snug whitespace-pre-wrap">
                 {task.task_description}
               </Link>
               <p className="text-[10px] text-muted-foreground truncate">
@@ -198,7 +198,7 @@ function TaskDragOverlay({
   return (
     <Card className="shadow-xl ring-2 ring-primary/50 rotate-2 w-[280px]">
       <CardContent className="p-4 space-y-2">
-        <p className="font-medium text-sm line-clamp-2">{task.task_description}</p>
+        <p className="font-medium text-sm whitespace-pre-wrap">{task.task_description}</p>
         <p className="text-[11px] text-muted-foreground truncate">
           📁 {projectMap[task.project_id] ?? task.project_id}
         </p>

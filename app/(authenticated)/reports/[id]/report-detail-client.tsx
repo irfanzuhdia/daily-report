@@ -39,7 +39,7 @@ export function ReportDetailClient({
                 <span className="text-xs font-mono text-muted-foreground bg-muted px-2 py-0.5 rounded">
                   {report.report_id}
                 </span>
-                <h1 className="text-2xl font-bold">{report.remarks || "No remarks"}</h1>
+                <h1 className="text-2xl font-bold whitespace-pre-wrap">{report.remarks || "No remarks"}</h1>
                 <Badge variant="outline">{report.progress_percentage ?? 0}%</Badge>
                 {report.total_hours && (
                   <Badge variant="secondary">{report.total_hours}h</Badge>

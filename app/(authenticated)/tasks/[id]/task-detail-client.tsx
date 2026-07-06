@@ -139,7 +139,7 @@ export function TaskDetailClient({
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="mb-2 flex items-center gap-2">
-                <h1 className="text-2xl font-bold">{task.task_description}</h1>
+                <h1 className="text-2xl font-bold whitespace-pre-wrap">{task.task_description}</h1>
                 <Badge variant={statusVariant[task.task_status ?? "NS"] ?? "default"}>
                   {statusName}
                 </Badge>
@@ -304,9 +304,7 @@ export function TaskDetailClient({
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{member.user_name}</p>
                     <p className="text-xs text-muted-foreground truncate">{member.user_email}</p>
-                    {member.user_occupation && (
-                      <p className="text-xs text-muted-foreground truncate">{member.user_occupation}</p>
-                    )}
+
                   </div>
                   {removingId === member.user_id ? (
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />

@@ -195,7 +195,7 @@ export function ProjectDetailClient({
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <div className="mb-2 flex flex-wrap items-center gap-2">
-                <h1 className="text-2xl font-bold">{project.project_name}</h1>
+                <h1 className="text-2xl font-bold whitespace-pre-wrap">{project.project_name}</h1>
                 {project.ticket_reference && (
                   <Link href={`/ticketing?ticketId=${project.ticket_reference}`}>
                     <Badge variant="outline" className="h-6 gap-1 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary cursor-pointer transition-colors">
@@ -406,9 +406,7 @@ export function ProjectDetailClient({
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium truncate">{member.user_name}</p>
                     <p className="text-xs text-muted-foreground truncate">{member.user_email}</p>
-                    {member.user_occupation && (
-                      <p className="text-xs text-muted-foreground truncate">{member.user_occupation}</p>
-                    )}
+
                   </div>
                   {removingId === member.user_id ? (
                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />

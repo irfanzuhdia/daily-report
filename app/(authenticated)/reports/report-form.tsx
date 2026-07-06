@@ -132,7 +132,11 @@ export function ReportForm({
           paths,
           ['reports', 'tasks', 'task_log', 'projects', 'project_log']
         )
-        router.push(`/reports`)
+        if (defaultTaskId) {
+          router.push(`/tasks/${defaultTaskId}`)
+        } else {
+          router.push(`/reports`)
+        }
       } else {
         const res = await fetch("/api/reports", {
           method: "POST",
@@ -160,7 +164,11 @@ export function ReportForm({
           paths,
           ['reports', 'tasks', 'task_log', 'projects', 'project_log']
         )
-        router.push(`/reports`)
+        if (defaultTaskId) {
+          router.push(`/tasks/${defaultTaskId}`)
+        } else {
+          router.push(`/reports`)
+        }
       }
       router.refresh()
     } catch (error) {

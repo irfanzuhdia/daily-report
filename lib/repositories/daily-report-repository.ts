@@ -588,6 +588,98 @@ export async function getCategoryContributionData(options?: {
   return getCachedCategoryContribution(JSON.stringify(options ?? {}));
 }
 
+const getCachedProjectContribution = unstable_cache(
+  async (optionsSerialized: string): Promise<{ project_name: string | null; hours: number }[]> => {
+    const options = JSON.parse(optionsSerialized) as {
+      userId?: string;
+      projectId?: string;
+      startDate?: string;
+      endDate?: string;
+    };
+
+    const userId = options?.userId || null;
+    const projectId = options?.projectId || null;
+    const startDate = options?.startDate || null;
+    const endDate = options?.endDate || null;
+
+    const rows = await sql`
+      SELECT p.project_name, COALESCE(SUM(r.total_hours::numeric), 0)::float as hours
+      FROM daily_reports r
+      JOIN tasks t ON r.task_id = t.id
+      JOIN projects p ON t.project_id = p.project_id
+      WHERE r.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+        AND p.deleted_at IS NULL
+        AND (${userId}::text IS NULL OR r.user_id = ${userId})
+        AND (${projectId}::text IS NULL OR t.project_id = ${projectId})
+        AND (${startDate}::text IS NULL OR r.date >= ${startDate})
+        AND (${endDate}::text IS NULL OR r.date <= ${endDate})
+      GROUP BY p.project_name
+    `;
+
+    return rows.map((r) => ({
+      project_name: r.project_name as string | null,
+      hours: r.hours as number,
+    }));
+  },
+  ['project-contribution-data'],
+  { tags: ['reports', 'tasks', 'projects'] }
+);
+
+export async function getProjectContributionData(options?: {
+  userId?: string;
+  projectId?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<{ project_name: string | null; hours: number }[]> {
+  return getCachedProjectContribution(JSON.stringify(options ?? {}));
+}
+
+const getCachedTaskContribution = unstable_cache(
+  async (optionsSerialized: string): Promise<{ task_name: string | null; hours: number }[]> => {
+    const options = JSON.parse(optionsSerialized) as {
+      userId?: string;
+      projectId?: string;
+      startDate?: string;
+      endDate?: string;
+    };
+
+    const userId = options?.userId || null;
+    const projectId = options?.projectId || null;
+    const startDate = options?.startDate || null;
+    const endDate = options?.endDate || null;
+
+    const rows = await sql`
+      SELECT t.task_description as task_name, COALESCE(SUM(r.total_hours::numeric), 0)::float as hours
+      FROM daily_reports r
+      JOIN tasks t ON r.task_id = t.id
+      WHERE r.deleted_at IS NULL
+        AND t.deleted_at IS NULL
+        AND (${userId}::text IS NULL OR r.user_id = ${userId})
+        AND (${projectId}::text IS NULL OR t.project_id = ${projectId})
+        AND (${startDate}::text IS NULL OR r.date >= ${startDate})
+        AND (${endDate}::text IS NULL OR r.date <= ${endDate})
+      GROUP BY t.task_description
+    `;
+
+    return rows.map((r) => ({
+      task_name: r.task_name as string | null,
+      hours: r.hours as number,
+    }));
+  },
+  ['task-contribution-data'],
+  { tags: ['reports', 'tasks'] }
+);
+
+export async function getTaskContributionData(options?: {
+  userId?: string;
+  projectId?: string;
+  startDate?: string;
+  endDate?: string;
+}): Promise<{ task_name: string | null; hours: number }[]> {
+  return getCachedTaskContribution(JSON.stringify(options ?? {}));
+}
+
 const getCachedContributionSummary = unstable_cache(
   async (optionsSerialized: string) => {
     const options = JSON.parse(optionsSerialized) as {

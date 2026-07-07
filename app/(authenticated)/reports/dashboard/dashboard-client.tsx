@@ -2,7 +2,6 @@
 import { toDateStr } from "@/lib/format"
 import { useState, useEffect, useRef, useCallback, useMemo } from "react"
 import { useRouter, useSearchParams, usePathname } from "next/navigation"
-
 import Link from "next/link"
 import { useViewDensity } from "@/lib/view-density"
 import {
@@ -49,6 +48,63 @@ interface UserSelectItem {
   level?: number
 }
 
+type PresetKey = "thisMonth" | "last30d" | "6m" | "1y" | "lastYear" | "ytd" | "5y" | "custom"
+
+
+
+function addDays(d: Date, n: number): Date {
+  const r = new Date(d)
+  r.setDate(r.getDate() + n)
+  return r
+}
+
+function startOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth(), 1)
+}
+
+function endOfMonth(d: Date): Date {
+  return new Date(d.getFullYear(), d.getMonth() + 1, 0)
+}
+
+function startOfYear(d: Date): Date {
+  return new Date(d.getFullYear(), 0, 1)
+}
+
+function getPresetRange(key: PresetKey): { startDate: string; endDate: string } | null {
+  const now = new Date()
+  switch (key) {
+    case "thisMonth":
+      return { startDate: toDateStr(startOfMonth(now)), endDate: toDateStr(endOfMonth(now)) }
+    case "last30d":
+      return { startDate: toDateStr(addDays(now, -29)), endDate: toDateStr(now) }
+    case "6m":
+      return { startDate: toDateStr(addDays(now, -180)), endDate: toDateStr(now) }
+    case "1y":
+      return { startDate: toDateStr(addDays(now, -364)), endDate: toDateStr(now) }
+    case "lastYear": {
+      const lastYearStart = new Date(now.getFullYear() - 1, 0, 1)
+      const lastYearEnd = new Date(now.getFullYear() - 1, 11, 31)
+      return { startDate: toDateStr(lastYearStart), endDate: toDateStr(lastYearEnd) }
+    }
+    case "ytd":
+      return { startDate: toDateStr(startOfYear(now)), endDate: toDateStr(now) }
+    case "5y":
+      return { startDate: toDateStr(addDays(now, -(365 * 5))), endDate: toDateStr(now) }
+    default:
+      return null
+  }
+}
+
+const PRESETS: { key: PresetKey; label: string }[] = [
+  { key: "thisMonth", label: "This Month" },
+  { key: "last30d", label: "Last 30 Days" },
+  { key: "6m", label: "6 Months" },
+  { key: "1y", label: "1 Year" },
+  { key: "lastYear", label: "Last Year" },
+  { key: "ytd", label: "YTD" },
+  { key: "5y", label: "5 Years" },
+]
+
 export function DashboardClient({
   stats,
   viewMode,
@@ -87,10 +143,10 @@ export function DashboardClient({
   const isDivDisabled = userLevel < 3
   const isTeamDisabled = userLevel < 2
 
-  const defaultDept = isDeptDisabled ? (currentUser?.user_departement || "") : ""
-  const defaultSite = isSiteDisabled ? (currentUser?.user_site || "") : ""
-  const defaultDiv = isDivDisabled ? (currentUser?.user_division || "") : ""
-  const defaultTeam = isTeamDisabled ? (currentUser?.user_team || "") : ""
+  const defaultDept = currentUser?.user_departement || ""
+  const defaultSite = currentUser?.user_site || ""
+  const defaultDiv = currentUser?.user_division || ""
+  const defaultTeam = currentUser?.user_team || ""
 
   const [createdBy, setCreatedBy] = useState(currentCreatedBy)
   const [startDate, setStartDate] = useState(currentStartDate)
@@ -101,8 +157,13 @@ export function DashboardClient({
   const [division, setDivision] = useState(currentDiv || defaultDiv)
   const [team, setTeam] = useState(currentTeam || defaultTeam)
 
-  const [inputStart, setInputStart] = useState(currentStartDate)
-  const [inputEnd, setInputEnd] = useState(currentEndDate)
+  const [preset, setPreset] = useState<PresetKey>("thisMonth") // default preset or parse from URL if passed
+
+  const [inputStart, setInputStart] = useState(currentStartDate || getPresetRange(preset)?.startDate || "")
+  const [inputEnd, setInputEnd] = useState(currentEndDate || getPresetRange(preset)?.endDate || "")
+  
+  const [dateError, setDateError] = useState<string | null>(null)
+  const isDateDirty = inputStart !== startDate || inputEnd !== endDate
 
   const isFirstMount = useRef(true)
 
@@ -120,16 +181,16 @@ export function DashboardClient({
       if (createdBy) nextParams.set("created_by", createdBy)
       else nextParams.delete("created_by")
 
-      if (dept) nextParams.set("dept_filter", dept)
+      if (dept && dept !== "all") nextParams.set("dept_filter", dept)
       else nextParams.delete("dept_filter")
 
-      if (site) nextParams.set("site_filter", site)
+      if (site && site !== "all") nextParams.set("site_filter", site)
       else nextParams.delete("site_filter")
 
-      if (division) nextParams.set("div_filter", division)
+      if (division && division !== "all") nextParams.set("div_filter", division)
       else nextParams.delete("div_filter")
 
-      if (team) nextParams.set("team_filter", team)
+      if (team && team !== "all") nextParams.set("team_filter", team)
       else nextParams.delete("team_filter")
     } else {
       nextParams.delete("created_by")
@@ -151,26 +212,68 @@ export function DashboardClient({
   }, [createdBy, startDate, endDate, viewMode, pathname, router, searchParams, dept, site, division, team])
 
   const handleApplyDates = useCallback(() => {
+    if (!inputStart || !inputEnd) {
+      setDateError("Please select both start and end dates.")
+      return
+    }
+    const start = new Date(inputStart + "T00:00:00")
+    const end = new Date(inputEnd + "T00:00:00")
+    if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+      setDateError("Invalid date format.")
+      return
+    }
+    if (end < start) {
+      setDateError("End date cannot be earlier than start date.")
+      return
+    }
+    const diffDays = Math.round((end.getTime() - start.getTime()) / 86400000) + 1
+    if (diffDays > 365 * 5) {
+      setDateError("Date range cannot exceed 5 years.")
+      return
+    }
+    setDateError(null)
     setStartDate(inputStart)
     setEndDate(inputEnd)
   }, [inputStart, inputEnd])
 
   const handleReset = useCallback(() => {
     setCreatedBy("")
-    setStartDate("")
-    setEndDate("")
-    setInputStart("")
-    setInputEnd("")
     setDept(defaultDept)
     setSite(defaultSite)
     setDivision(defaultDiv)
     setTeam(defaultTeam)
+    
+    const defaultDates = getPresetRange("thisMonth")
+    setInputStart(defaultDates?.startDate || "")
+    setInputEnd(defaultDates?.endDate || "")
+    setPreset("thisMonth")
+    setDateError(null)
+    
+    setStartDate("")
+    setEndDate("")
   }, [defaultDept, defaultSite, defaultDiv, defaultTeam])
 
-  const uniqueDepts = Array.from(new Set(users.map((u) => u.user_departement).filter(Boolean))) as string[]
-  const uniqueSites = Array.from(new Set(users.map((u) => u.user_site).filter(Boolean))) as string[]
-  const uniqueDivs = Array.from(new Set(users.map((u) => u.user_division).filter(Boolean))) as string[]
-  const uniqueTeams = Array.from(new Set(users.map((u) => u.user_team).filter(Boolean))) as string[]
+  const handleQuickDate = useCallback((k: PresetKey) => {
+    setPreset(k)
+    const range = getPresetRange(k)
+    if (range) {
+      setInputStart(range.startDate)
+      setInputEnd(range.endDate)
+    }
+  }, [])
+
+  // Cascading dropdowns that respect user locks
+  const availableDepts = isDeptDisabled ? users.filter(u => u.user_departement === defaultDept) : users;
+  const uniqueDepts = Array.from(new Set(availableDepts.map((u) => u.user_departement).filter(Boolean))) as string[]
+
+  const availableSites = availableDepts.filter(u => (!dept || dept === "all" || u.user_departement === dept) && (!isSiteDisabled || u.user_site === defaultSite));
+  const uniqueSites = Array.from(new Set(availableSites.map((u) => u.user_site).filter(Boolean))) as string[]
+
+  const availableDivs = availableSites.filter(u => (!site || site === "all" || u.user_site === site) && (!isDivDisabled || u.user_division === defaultDiv));
+  const uniqueDivs = Array.from(new Set(availableDivs.map((u) => u.user_division).filter(Boolean))) as string[]
+
+  const availableTeams = availableDivs.filter(u => (!division || division === "all" || u.user_division === division) && (!isTeamDisabled || u.user_team === defaultTeam));
+  const uniqueTeams = Array.from(new Set(availableTeams.map((u) => u.user_team).filter(Boolean))) as string[]
 
   const hasActiveFilters = createdBy || startDate || endDate || 
     (dept !== defaultDept) || 
@@ -287,43 +390,72 @@ export function DashboardClient({
                 </Select>
               </div>
 
-              {/* Start Date */}
-              <div className="w-full sm:w-auto">
-                <Label className="text-xs text-muted-foreground mb-1 block">Start Date</Label>
-                <Input
-                  type="date"
-                  value={inputStart}
-                  onChange={(e) => setInputStart(e.target.value)}
-                  className="w-full sm:w-[160px]"
-                />
-              </div>
-
-              {/* End Date */}
-              <div className="w-full sm:w-auto">
-                <Label className="text-xs text-muted-foreground mb-1 block">End Date</Label>
-                <Input
-                  type="date"
-                  value={inputEnd}
-                  onChange={(e) => setInputEnd(e.target.value)}
-                  className="w-full sm:w-[160px]"
-                />
-              </div>
-
-              {/* Buttons */}
-              <div className="flex items-center gap-2 w-full sm:w-auto mt-2 sm:mt-0">
-                <Button type="button" onClick={handleApplyDates} className="w-full sm:w-auto">
-                  Apply Date
-                </Button>
-                {hasActiveFilters && (
-                  <Button type="button" variant="ghost" onClick={handleReset} className="w-full sm:w-auto text-destructive hover:text-destructive">
-                    Reset
-                  </Button>
-                )}
-              </div>
             </div>
           </CardContent>
         </Card>
       )}
+
+      {/* Date Filters Row */}
+      <Card className={density === "compact" ? "shadow-sm border-t-4 border-t-primary/20" : "border-t-4 border-t-primary/20"}>
+        <CardContent className={density === "compact" ? "p-3" : "p-4"}>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Date Range Inputs */}
+              <div className="flex items-center gap-2 bg-background border rounded-md p-1">
+                <Input
+                  type="date"
+                  value={inputStart}
+                  onChange={(e) => setInputStart(e.target.value)}
+                  className="h-8 border-0 bg-transparent w-[130px] text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+                <span className="text-muted-foreground text-xs">—</span>
+                <Input
+                  type="date"
+                  value={inputEnd}
+                  onChange={(e) => setInputEnd(e.target.value)}
+                  className="h-8 border-0 bg-transparent w-[130px] text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+              </div>
+
+              {/* Quick Date Buttons */}
+              <div className="flex flex-wrap gap-1.5">
+                {PRESETS.map((p) => (
+                  <Button
+                    key={p.key}
+                    variant={preset === p.key ? "default" : "outline"}
+                    size="sm"
+                    className={`h-8 text-xs ${preset === p.key ? "" : "bg-transparent"}`}
+                    onClick={() => handleQuickDate(p.key)}
+                  >
+                    {p.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Apply & Clear */}
+            <div className="flex items-center gap-2 mt-2 lg:mt-0 ml-auto">
+              {dateError && <span className="text-xs text-destructive mr-2">{dateError}</span>}
+              {hasActiveFilters && (
+                <Button variant="ghost" size="sm" onClick={handleReset} className="h-8 text-xs text-destructive hover:text-destructive">
+                  Reset
+                </Button>
+              )}
+              <div className="relative">
+                <Button size="sm" onClick={handleApplyDates} className="h-8 text-xs">
+                  Apply Filters
+                </Button>
+                {isDateDirty && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stats Grid */}
       <div className={`grid sm:grid-cols-2 lg:grid-cols-5 ${density === "compact" ? "gap-3" : "gap-4"}`}>
@@ -412,21 +544,71 @@ export function DashboardClient({
             {stats.projectsByStatus.length === 0 ? (
               <p className="text-sm text-muted-foreground">No projects yet</p>
             ) : (
-              <div className={density === "compact" ? "space-y-2" : "space-y-3"}>
-                {stats.projectsByStatus.map((item) => (
-                  <div
-                    key={item.status}
-                    className="flex items-center justify-between"
-                  >
-                    <Badge
-                      variant={statusVariant[item.status] ?? "default"}
-                      className={density === "compact" ? "text-[10px] py-0 px-1.5" : ""}
-                    >
-                      {item.status}
-                    </Badge>
-                    <span className={`font-medium ${density === "compact" ? "text-xs" : "text-sm"}`}>{item.count}</span>
-                  </div>
-                ))}
+              <div className="flex flex-col items-center py-2">
+                <svg
+                  width={density === "compact" ? 140 : 180}
+                  height={density === "compact" ? 140 : 180}
+                  viewBox={`0 0 ${density === "compact" ? 140 : 180} ${density === "compact" ? 140 : 180}`}
+                  className="transform -rotate-90 select-none drop-shadow-sm mb-4"
+                >
+                  {stats.projectsByStatus.reduce((acc, item, index) => {
+                    const size = density === "compact" ? 140 : 180;
+                    const radius = density === "compact" ? 48 : 60;
+                    const strokeWidth = density === "compact" ? 16 : 20;
+                    const circumference = 2 * Math.PI * radius;
+                    
+                    const totalCount = stats.projectsByStatus.reduce((sum, i) => sum + i.count, 0);
+                    const percent = totalCount > 0 ? (item.count / totalCount) * 100 : 0;
+                    
+                    const strokeDasharray = `${(percent / 100) * circumference} ${circumference}`;
+                    const strokeDashoffset = - (acc.startPercent / 100) * circumference;
+                    
+                    const statusColors: Record<string, string> = {
+                      "Done": "stroke-emerald-500",
+                      "On Progress": "stroke-amber-500",
+                      "Hold": "stroke-rose-500",
+                      "Cancel": "stroke-gray-500",
+                      "Not Started": "stroke-slate-400"
+                    };
+
+                    const strokeClass = statusColors[item.status] || "stroke-slate-400";
+                    
+                    acc.elements.push(
+                      <circle
+                        key={index}
+                        cx={size / 2}
+                        cy={size / 2}
+                        r={radius}
+                        fill="transparent"
+                        strokeWidth={strokeWidth}
+                        strokeDasharray={strokeDasharray}
+                        strokeDashoffset={strokeDashoffset}
+                        className={strokeClass}
+                        style={{ strokeLinecap: "butt", transformOrigin: "center" }}
+                      />
+                    );
+                    
+                    acc.startPercent += percent;
+                    return acc;
+                  }, { elements: [] as React.ReactNode[], startPercent: 0 }).elements}
+                </svg>
+                <div className="w-full flex flex-wrap justify-center gap-2">
+                  {stats.projectsByStatus.map((item, index) => {
+                     const statusBgColors: Record<string, string> = {
+                      "Done": "bg-emerald-500",
+                      "On Progress": "bg-amber-500",
+                      "Hold": "bg-rose-500",
+                      "Cancel": "bg-gray-500",
+                      "Not Started": "bg-slate-400"
+                    };
+                    return (
+                      <div key={index} className="flex items-center gap-1.5 text-xs">
+                        <span className={`w-2 h-2 rounded-full ${statusBgColors[item.status] || "bg-slate-400"}`}></span>
+                        <span className="text-muted-foreground">{item.status} ({item.count})</span>
+                      </div>
+                    )
+                  })}
+                </div>
               </div>
             )}
           </CardContent>

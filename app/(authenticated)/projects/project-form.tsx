@@ -50,10 +50,20 @@ export function ProjectForm({
   const isEdit = !!project
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const today = new Date()
+  const nextWeek = new Date()
+  nextWeek.setDate(nextWeek.getDate() + 7)
+  const getLocalYMD = (d: Date) => {
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
   const [name, setName] = useState(project?.project_name ?? initialName ?? "")
   const [description, setDescription] = useState(project?.project_description ?? initialDescription ?? "")
-  const [startDate, setStartDate] = useState(project?.project_start_date_plan ?? defaultStartDate ?? "")
-  const [endDate, setEndDate] = useState(project?.project_end_date_plan ?? defaultEndDate ?? "")
+  const [startDate, setStartDate] = useState(project?.project_start_date_plan ?? defaultStartDate ?? getLocalYMD(today))
+  const [endDate, setEndDate] = useState(project?.project_end_date_plan ?? defaultEndDate ?? getLocalYMD(nextWeek))
   const [status, setStatus] = useState(project?.project_status ?? "NS")
   const [category, setCategory] = useState(project?.category ?? initialCategory ?? "")
   const [projectFile, setProjectFile] = useState<string | null>(project?.project_file ?? null)

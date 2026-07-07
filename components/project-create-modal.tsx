@@ -26,6 +26,13 @@ interface ProjectCreateModalProps {
   uniqueCategories: string[]
 }
 
+const getLocalYMD = (d: Date) => {
+  const year = d.getFullYear()
+  const month = String(d.getMonth() + 1).padStart(2, "0")
+  const day = String(d.getDate()).padStart(2, "0")
+  return `${year}-${month}-${day}`
+}
+
 export function ProjectCreateModal({
   isOpen,
   onClose,
@@ -39,8 +46,13 @@ export function ProjectCreateModal({
 
   const [name, setName] = useState("")
   const [description, setDescription] = useState("")
-  const [startDate, setStartDate] = useState("")
-  const [endDate, setEndDate] = useState("")
+  
+  const today = new Date()
+  const nextWeek = new Date()
+  nextWeek.setDate(nextWeek.getDate() + 7)
+  
+  const [startDate, setStartDate] = useState(getLocalYMD(today))
+  const [endDate, setEndDate] = useState(getLocalYMD(nextWeek))
   const [status, setStatus] = useState("NS")
   const [category, setCategory] = useState("")
   const [projectFile, setProjectFile] = useState<string | null>(null)
@@ -97,7 +109,7 @@ export function ProjectCreateModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!name.trim() || saving) return
+    if (!name.trim() || !startDate || !endDate || saving) return
     setSaving(true)
     setSaveError(null)
 
@@ -131,8 +143,8 @@ export function ProjectCreateModal({
       // Reset form
       setName("")
       setDescription("")
-      setStartDate("")
-      setEndDate("")
+      setStartDate(getLocalYMD(today))
+      setEndDate(getLocalYMD(nextWeek))
       setStatus("NS")
       setCategory("")
       setProjectFile(null)
@@ -235,21 +247,23 @@ export function ProjectCreateModal({
 
           <div className="grid gap-4 grid-cols-2">
             <div className="space-y-2">
-              <Label htmlFor="modalProjStart">Start Date</Label>
+              <Label htmlFor="modalProjStart">Start Date *</Label>
               <Input
                 id="modalProjStart"
                 type="date"
                 value={startDate}
                 onChange={(e) => setStartDate(e.target.value)}
+                required
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="modalProjEnd">End Date</Label>
+              <Label htmlFor="modalProjEnd">End Date *</Label>
               <Input
                 id="modalProjEnd"
                 type="date"
                 value={endDate}
                 onChange={(e) => setEndDate(e.target.value)}
+                required
               />
             </div>
           </div>

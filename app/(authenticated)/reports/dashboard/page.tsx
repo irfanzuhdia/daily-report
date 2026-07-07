@@ -76,25 +76,34 @@ export default async function DashboardPage({
   const userById = new Map(allUsers.map(u => [u.user_id, u]))
 
   // Apply enterprise filters on dashboard
-  if (params.dept_filter) {
-    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_departement === params.dept_filter)
-    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_departement === params.dept_filter)
-    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_departement === params.dept_filter)
+  const isDeptDisabled = userLevel < 6
+  const isSiteDisabled = userLevel < 5
+  const isDivDisabled = userLevel < 3
+  const isTeamDisabled = userLevel < 2
+
+  if (isDeptDisabled || params.dept_filter) {
+    const targetDept = isDeptDisabled ? (currentUser?.user_departement || "") : params.dept_filter
+    projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_departement || "") === targetDept)
+    tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_departement || "") === targetDept)
+    reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_departement || "") === targetDept)
   }
-  if (params.site_filter) {
-    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_site === params.site_filter)
-    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_site === params.site_filter)
-    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_site === params.site_filter)
+  if (isSiteDisabled || params.site_filter) {
+    const targetSite = isSiteDisabled ? (currentUser?.user_site || "") : params.site_filter
+    projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_site || "") === targetSite)
+    tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_site || "") === targetSite)
+    reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_site || "") === targetSite)
   }
-  if (params.div_filter) {
-    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_division === params.div_filter)
-    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_division === params.div_filter)
-    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_division === params.div_filter)
+  if (isDivDisabled || params.div_filter) {
+    const targetDiv = isDivDisabled ? (currentUser?.user_division || "") : params.div_filter
+    projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_division || "") === targetDiv)
+    tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_division || "") === targetDiv)
+    reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_division || "") === targetDiv)
   }
-  if (params.team_filter) {
-    projects = projects.filter((p) => p.created_by && userById.get(p.created_by)?.user_team === params.team_filter)
-    tasks = tasks.filter((t) => t.created_by && userById.get(t.created_by)?.user_team === params.team_filter)
-    reports = reports.filter((r) => r.user_id && userById.get(r.user_id)?.user_team === params.team_filter)
+  if (isTeamDisabled || params.team_filter) {
+    const targetTeam = isTeamDisabled ? (currentUser?.user_team || "") : params.team_filter
+    projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_team || "") === targetTeam)
+    tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_team || "") === targetTeam)
+    reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_team || "") === targetTeam)
   }
 
   const userMap = new Map(allUsers.map((u) => [u.user_id, u.user_name || u.user_email || u.user_id]))
@@ -181,11 +190,35 @@ export default async function DashboardPage({
     contributionData,
   }
 
+  let visibleUsers = allUsers;
+  if (userLevel < 6 && currentUser) {
+    const viewerOcc = (currentUser.user_occupation || "").toLowerCase().trim();
+    visibleUsers = allUsers.filter(u => {
+      if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
+        return u.user_departement === currentUser.user_departement;
+      } else if (viewerOcc === 'site manager' || viewerOcc === 'site admin' || userLevel === 5) {
+        return u.user_site === currentUser.user_site;
+      } else if (
+        viewerOcc === 'divisi manager' || 
+        viewerOcc === 'divisi admin' || 
+        viewerOcc === 'div manager' || 
+        viewerOcc === 'div admin' || 
+        userLevel === 4 || 
+        userLevel === 3
+      ) {
+        return u.user_division === currentUser.user_division;
+      } else if (viewerOcc === 'team leader' || userLevel === 2) {
+        return u.user_team === currentUser.user_team;
+      }
+      return u.user_id === currentUser.user_id;
+    });
+  }
+
   return (
     <DashboardClient
       stats={stats}
       viewMode={effectiveViewMode}
-      users={allUsers.map((u) => ({
+      users={visibleUsers.map((u) => ({
         user_id: u.user_id,
         user_email: u.user_email,
         user_name: u.user_name,

@@ -65,7 +65,9 @@ export const UserRepository = {
     const roles = await RoleLevelRepository.findAll();
     const roleLevelMap = new Map<string, number>();
     for (const r of roles) {
-      roleLevelMap.set(r.role_name.toLowerCase(), r.level);
+      if (r.role_name) {
+        roleLevelMap.set(r.role_name.toLowerCase(), r.level);
+      }
     }
     return users.map((u) => {
       let level = 1;

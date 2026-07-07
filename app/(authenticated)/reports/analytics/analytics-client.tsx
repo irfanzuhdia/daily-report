@@ -1,12 +1,12 @@
 "use client"
-
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import Link from "next/link"
-import { useRouter, usePathname } from "next/navigation"
-import { ArrowLeft, Calendar, BarChart3, Clock, TrendingUp, Award } from "lucide-react"
+import { useRouter, usePathname, useSearchParams } from "next/navigation"
+import { ArrowLeft, Calendar, BarChart3, Clock, TrendingUp, Award, PieChart } from "lucide-react"
 import { useViewDensity } from "@/lib/view-density"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { TimeDistributionTree } from "@/components/dashboard/time-distribution-tree"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -22,17 +22,34 @@ import type { Project } from "@/lib/types"
 interface ContributionCalendarProps {
   data: Record<string, number>
   categoryData: { category: string | null; hours: number }[]
+  projectData: { project_name: string | null; hours: number }[]
+  taskData: { task_name: string | null; hours: number }[]
+  timeDistributionTree: any[]
   projects: Project[]
-  users: { user_id: string; user_email: string; user_name: string | null }[]
+  users: { 
+    user_id: string; 
+    user_email: string; 
+    user_name: string | null;
+    user_departement?: string | null;
+    user_site?: string | null;
+    user_division?: string | null;
+    user_team?: string | null;
+    level?: number;
+  }[]
   viewMode: "my" | "team"
   currentStartDate?: string
   currentEndDate?: string
   currentPreset?: string
   currentProjectId?: string
   currentUserId?: string
+  currentCreatedBy?: string
+  currentDept?: string
+  currentSite?: string
+  currentDiv?: string
+  currentTeam?: string
 }
 
-type PresetKey = "7d" | "30d" | "90d" | "1y" | "thisMonth" | "lastMonth" | "thisYear" | "custom"
+type PresetKey = "thisMonth" | "last30d" | "6m" | "1y" | "lastYear" | "ytd" | "5y" | "custom"
 
 /* ─── constants ─── */
 const GITHUB_COLORS = [
@@ -109,39 +126,39 @@ function daysBetween(a: Date, b: Date): number {
 function getPresetRange(key: PresetKey): { startDate: string; endDate: string } | null {
   const now = new Date()
   switch (key) {
-    case "7d":
-      return { startDate: toDateStr(addDays(now, -6)), endDate: toDateStr(now) }
-    case "30d":
-      return { startDate: toDateStr(addDays(now, -29)), endDate: toDateStr(now) }
-    case "90d":
-      return { startDate: toDateStr(addDays(now, -89)), endDate: toDateStr(now) }
-    case "1y":
-      return { startDate: toDateStr(addDays(now, -364)), endDate: toDateStr(now) }
     case "thisMonth":
       return { startDate: toDateStr(startOfMonth(now)), endDate: toDateStr(endOfMonth(now)) }
-    case "lastMonth": {
-      const last = addDays(startOfMonth(now), -1)
-      return { startDate: toDateStr(startOfMonth(last)), endDate: toDateStr(endOfMonth(last)) }
+    case "last30d":
+      return { startDate: toDateStr(addDays(now, -29)), endDate: toDateStr(now) }
+    case "6m":
+      return { startDate: toDateStr(addDays(now, -180)), endDate: toDateStr(now) }
+    case "1y":
+      return { startDate: toDateStr(addDays(now, -364)), endDate: toDateStr(now) }
+    case "lastYear": {
+      const lastYearStart = new Date(now.getFullYear() - 1, 0, 1)
+      const lastYearEnd = new Date(now.getFullYear() - 1, 11, 31)
+      return { startDate: toDateStr(lastYearStart), endDate: toDateStr(lastYearEnd) }
     }
-    case "thisYear":
-      return { startDate: toDateStr(startOfYear(now)), endDate: toDateStr(endOfYear(now)) }
+    case "ytd":
+      return { startDate: toDateStr(startOfYear(now)), endDate: toDateStr(now) }
+    case "5y":
+      return { startDate: toDateStr(addDays(now, -(365 * 5))), endDate: toDateStr(now) }
     default:
       return null
   }
 }
 
 const PRESETS: { key: PresetKey; label: string }[] = [
-  { key: "7d", label: "Last 7 Days" },
   { key: "thisMonth", label: "This Month" },
-  { key: "30d", label: "Last 30 Days" },
-  { key: "lastMonth", label: "Last Month" },
-  { key: "90d", label: "Last 90 Days" },
-  { key: "thisYear", label: "This Year" },
-  { key: "1y", label: "Last 1 Year" },
-  { key: "custom", label: "Custom Range" },
+  { key: "last30d", label: "Last 30 Days" },
+  { key: "6m", label: "6 Months" },
+  { key: "1y", label: "1 Year" },
+  { key: "lastYear", label: "Last Year" },
+  { key: "ytd", label: "YTD" },
+  { key: "5y", label: "5 Years" },
 ]
 
-export function CategoryPieChart({ data }: { data: { category: string | null; hours: number }[] }) {
+export function AnalyticsPieChart({ data, emptyMessage }: { data: { name: string | null; hours: number }[], emptyMessage: string }) {
   const { density } = useViewDensity()
   const isCompact = density === "compact"
 
@@ -149,7 +166,7 @@ export function CategoryPieChart({ data }: { data: { category: string | null; ho
     return data
       .filter((item) => item.hours > 0)
       .map((item) => ({
-        name: item.category || "Uncategorized",
+        name: item.name || "Uncategorized",
         hours: Math.round(item.hours * 10) / 10,
       }))
       .sort((a, b) => b.hours - a.hours)
@@ -186,7 +203,7 @@ export function CategoryPieChart({ data }: { data: { category: string | null; ho
     return (
       <div className="flex flex-col items-center justify-center py-12 text-muted-foreground text-center">
         <BarChart3 className="mb-3 h-10 w-10 opacity-40" />
-        <p className="text-sm">No report hours logged in this period</p>
+        <p className="text-sm">{emptyMessage}</p>
       </div>
     )
   }
@@ -305,7 +322,10 @@ export function CategoryPieChart({ data }: { data: { category: string | null; ho
 /* ─── main component ─── */
 export function ContributionCalendar({
   data,
-  categoryData = [],
+  categoryData,
+  projectData,
+  taskData,
+  timeDistributionTree,
   projects,
   users,
   viewMode: globalViewMode,
@@ -314,62 +334,98 @@ export function ContributionCalendar({
   currentPreset = "1y",
   currentProjectId = "",
   currentUserId = "",
+  currentCreatedBy = "",
+  currentDept = "",
+  currentSite = "",
+  currentDiv = "",
+  currentTeam = "",
 }: ContributionCalendarProps) {
   const { density } = useViewDensity()
   const isCompact = density === "compact"
   const router = useRouter()
   const pathname = usePathname()
+  const searchParams = useSearchParams()
+
+  const currentUser = useMemo(() => users.find((u) => u.user_id === currentUserId), [users, currentUserId])
+  const userLevel = currentUser?.level || 1
+
+  const isDeptDisabled = userLevel < 6
+  const isSiteDisabled = userLevel < 5
+  const isDivDisabled = userLevel < 3
+  const isTeamDisabled = userLevel < 2
+
+  const defaultDept = currentUser?.user_departement || ""
+  const defaultSite = currentUser?.user_site || ""
+  const defaultDiv = currentUser?.user_division || ""
+  const defaultTeam = currentUser?.user_team || ""
 
   const [selectedProject, setSelectedProject] = useState<string>(currentProjectId)
-  const [selectedUser, setSelectedUser] = useState<string>(currentUserId)
+  const [createdBy, setCreatedBy] = useState<string>(currentCreatedBy)
+  const [dept, setDept] = useState<string>(currentDept || defaultDept)
+  const [site, setSite] = useState<string>(currentSite || defaultSite)
+  const [division, setDivision] = useState<string>(currentDiv || defaultDiv)
+  const [team, setTeam] = useState<string>(currentTeam || defaultTeam)
+
   const [preset, setPreset] = useState<PresetKey>(currentPreset as PresetKey)
 
-  // Initial custom dates or preset range dates
-  const [inputStart, setInputStart] = useState<string>(
-    currentStartDate || getPresetRange(preset)?.startDate || ""
-  )
-  const [inputEnd, setInputEnd] = useState<string>(
-    currentEndDate || getPresetRange(preset)?.endDate || ""
-  )
-  const [customStart, setCustomStart] = useState<string>(
-    currentStartDate || getPresetRange(preset)?.startDate || ""
-  )
-  const [customEnd, setCustomEnd] = useState<string>(
-    currentEndDate || getPresetRange(preset)?.endDate || ""
-  )
+  // Applied dates for URL
+  const [startDate, setStartDate] = useState<string>(currentStartDate || getPresetRange(preset)?.startDate || "")
+  const [endDate, setEndDate] = useState<string>(currentEndDate || getPresetRange(preset)?.endDate || "")
+
+  // Local inputs (dirty state)
+  const [inputStart, setInputStart] = useState<string>(startDate)
+  const [inputEnd, setInputEnd] = useState<string>(endDate)
 
   const [dateError, setDateError] = useState<string | null>(null)
   const [hoveredDay, setHoveredDay] = useState<{ date: string; hours: number } | null>(null)
 
-  /* ── resolve active date range from preset or custom inputs ── */
-  const { startDate, endDate } = useMemo(() => {
-    if (preset === "custom") {
-      return { startDate: customStart, endDate: customEnd }
-    }
-    const range = getPresetRange(preset)
-    return range ?? { startDate: "", endDate: "" }
-  }, [preset, customStart, customEnd])
+  const isDateDirty = inputStart !== startDate || inputEnd !== endDate
 
   const isFirstMount = useRef(true)
 
-  // Sync state values with URL search parameters on filter change
+  // Sync basic filters with URL (excluding dates which need apply button)
   useEffect(() => {
     if (isFirstMount.current) {
       isFirstMount.current = false
       return
     }
-    const params = new URLSearchParams()
+    const params = new URLSearchParams(searchParams.toString())
     if (selectedProject) params.set("project_id", selectedProject)
-    if (globalViewMode === "team" && selectedUser) params.set("user_id", selectedUser)
-    if (startDate) params.set("start_date", startDate)
-    if (endDate) params.set("end_date", endDate)
-    if (preset) params.set("preset", preset)
+    else params.delete("project_id")
 
-    router.push(`${pathname}?${params.toString()}`)
-  }, [selectedProject, selectedUser, startDate, endDate, preset, globalViewMode, pathname, router])
+    if (globalViewMode === "team") {
+      if (createdBy) params.set("created_by", createdBy)
+      else params.delete("created_by")
+
+      if (dept && dept !== "all") params.set("dept_filter", dept)
+      else params.delete("dept_filter")
+
+      if (site && site !== "all") params.set("site_filter", site)
+      else params.delete("site_filter")
+
+      if (division && division !== "all") params.set("div_filter", division)
+      else params.delete("div_filter")
+
+      if (team && team !== "all") params.set("team_filter", team)
+      else params.delete("team_filter")
+    }
+
+    if (startDate) params.set("start_date", startDate)
+    else params.delete("start_date")
+    
+    if (endDate) params.set("end_date", endDate)
+    else params.delete("end_date")
+
+    if (preset) params.set("preset", preset)
+    else params.delete("preset")
+
+    if (searchParams.toString() !== params.toString()) {
+      router.push(`${pathname}?${params.toString()}`)
+    }
+  }, [selectedProject, createdBy, dept, site, division, team, startDate, endDate, preset, globalViewMode, pathname, router, searchParams])
 
   /* ── handle apply custom range ── */
-  const handleApplyCustomRange = useCallback(() => {
+  const handleApplyDates = useCallback(() => {
     if (!inputStart || !inputEnd) {
       setDateError("Please select both start and end dates.")
       return
@@ -390,10 +446,35 @@ export function ContributionCalendar({
       return
     }
     setDateError(null)
-    setPreset("custom")
-    setCustomStart(inputStart)
-    setCustomEnd(inputEnd)
+    setStartDate(inputStart)
+    setEndDate(inputEnd)
   }, [inputStart, inputEnd])
+
+  const handleClear = useCallback(() => {
+    setCreatedBy("")
+    setDept(defaultDept)
+    setSite(defaultSite)
+    setDivision(defaultDiv)
+    setTeam(defaultTeam)
+    
+    const defaultDates = getPresetRange("1y")
+    setInputStart(defaultDates?.startDate || "")
+    setInputEnd(defaultDates?.endDate || "")
+    setPreset("1y")
+    setDateError(null)
+    
+    setStartDate(defaultDates?.startDate || "")
+    setEndDate(defaultDates?.endDate || "")
+  }, [defaultDept, defaultSite, defaultDiv, defaultTeam])
+
+  const handleQuickDate = useCallback((k: PresetKey) => {
+    setPreset(k)
+    const range = getPresetRange(k)
+    if (range) {
+      setInputStart(range.startDate)
+      setInputEnd(range.endDate)
+    }
+  }, [])
 
   /* ── build the day list that matches the active range exactly ── */
   const allDays = useMemo(() => {
@@ -491,21 +572,6 @@ export function ContributionCalendar({
 
   const dayLabels = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
-  /* ── apply a preset ── */
-  const applyPreset = useCallback((key: PresetKey) => {
-    setPreset(key)
-    setDateError(null)
-    if (key !== "custom") {
-      const range = getPresetRange(key)
-      if (range) {
-        setInputStart(range.startDate)
-        setInputEnd(range.endDate)
-        setCustomStart(range.startDate)
-        setCustomEnd(range.endDate)
-      }
-    }
-  }, [])
-
   /* ── range label for display ── */
   const rangeLabel = useMemo(() => {
     if (!startDate || !endDate) return "No date range selected"
@@ -517,6 +583,19 @@ export function ContributionCalendar({
   const cellSize = isCompact ? 10 : 12
   const cellGap = isCompact ? 1.5 : 2
   const colWidth = cellSize + cellGap
+
+  // Cascading dropdowns that respect user locks
+  const availableDepts = isDeptDisabled ? users.filter(u => u.user_departement === defaultDept) : users;
+  const uniqueDepts = Array.from(new Set(availableDepts.map((u) => u.user_departement).filter(Boolean))) as string[]
+
+  const availableSites = availableDepts.filter(u => (!dept || dept === "all" || u.user_departement === dept) && (!isSiteDisabled || u.user_site === defaultSite));
+  const uniqueSites = Array.from(new Set(availableSites.map((u) => u.user_site).filter(Boolean))) as string[]
+
+  const availableDivs = availableSites.filter(u => (!site || site === "all" || u.user_site === site) && (!isDivDisabled || u.user_division === defaultDiv));
+  const uniqueDivs = Array.from(new Set(availableDivs.map((u) => u.user_division).filter(Boolean))) as string[]
+
+  const availableTeams = availableDivs.filter(u => (!division || division === "all" || u.user_division === division) && (!isTeamDisabled || u.user_team === defaultTeam));
+  const uniqueTeams = Array.from(new Set(availableTeams.map((u) => u.user_team).filter(Boolean))) as string[]
 
   return (
     <div className={isCompact ? "space-y-4" : "space-y-6"}>
@@ -533,6 +612,175 @@ export function ContributionCalendar({
           <p className={`${isCompact ? "text-xs" : "text-sm"} text-muted-foreground`}>Visualize daily work hours across your team</p>
         </div>
       </div>
+
+      {/* Role-Based Filters */}
+      {globalViewMode === "team" && (
+        <Card className={isCompact ? "shadow-sm" : ""}>
+          <CardContent className={isCompact ? "p-3" : "pt-6 pb-6"}>
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:flex-wrap">
+              {/* Project */}
+              <div className="w-full sm:w-[180px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Project</Label>
+                <Select value={selectedProject} onValueChange={setSelectedProject}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Projects" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Projects</SelectItem>
+                    {projects.map((p) => (
+                      <SelectItem key={p.project_id} value={p.project_id}>
+                        {p.project_name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Created by */}
+              <div className="w-full sm:w-[200px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Created by</Label>
+                <Select value={createdBy} onValueChange={setCreatedBy}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All team members" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All team members</SelectItem>
+                    {users.map((u) => (
+                      <SelectItem key={u.user_id} value={u.user_id}>
+                        {u.user_name || u.user_email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Department */}
+              <div className="w-full sm:w-[180px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Department</Label>
+                <Select value={dept} onValueChange={setDept} disabled={isDeptDisabled}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Departments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Departments</SelectItem>
+                    {uniqueDepts.map((d) => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Site */}
+              <div className="w-full sm:w-[180px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Site</Label>
+                <Select value={site} onValueChange={setSite} disabled={isSiteDisabled}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Sites" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Sites</SelectItem>
+                    {uniqueSites.map((s) => (
+                      <SelectItem key={s} value={s}>{s}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Division */}
+              <div className="w-full sm:w-[180px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Division</Label>
+                <Select value={division} onValueChange={setDivision} disabled={isDivDisabled}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Divisions" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Divisions</SelectItem>
+                    {uniqueDivs.map((d) => (
+                      <SelectItem key={d} value={d}>{d}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Team */}
+              <div className="w-full sm:w-[180px]">
+                <Label className="text-xs text-muted-foreground mb-1 block">Team</Label>
+                <Select value={team} onValueChange={setTeam} disabled={isTeamDisabled}>
+                  <SelectTrigger className="w-full">
+                    <SelectValue placeholder="All Teams" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Teams</SelectItem>
+                    {uniqueTeams.map((t) => (
+                      <SelectItem key={t} value={t}>{t}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Date Filters Row */}
+      <Card className={isCompact ? "shadow-sm border-t-4 border-t-primary/20" : "border-t-4 border-t-primary/20"}>
+        <CardContent className={isCompact ? "p-3" : "p-4"}>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Date Range Inputs */}
+              <div className="flex items-center gap-2 bg-background border rounded-md p-1">
+                <Input
+                  type="date"
+                  value={inputStart}
+                  onChange={(e) => setInputStart(e.target.value)}
+                  className="h-8 border-0 bg-transparent w-[130px] text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+                <span className="text-muted-foreground text-xs">—</span>
+                <Input
+                  type="date"
+                  value={inputEnd}
+                  onChange={(e) => setInputEnd(e.target.value)}
+                  className="h-8 border-0 bg-transparent w-[130px] text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
+                />
+              </div>
+
+              {/* Quick Date Buttons */}
+              <div className="flex flex-wrap gap-1.5">
+                {PRESETS.map((p) => (
+                  <Button
+                    key={p.key}
+                    variant={preset === p.key ? "default" : "outline"}
+                    size="sm"
+                    className={`h-8 text-xs ${preset === p.key ? "" : "bg-transparent"}`}
+                    onClick={() => handleQuickDate(p.key)}
+                  >
+                    {p.label}
+                  </Button>
+                ))}
+              </div>
+            </div>
+
+            {/* Apply & Clear */}
+            <div className="flex items-center gap-2 mt-2 lg:mt-0 ml-auto">
+              {dateError && <span className="text-xs text-destructive mr-2">{dateError}</span>}
+              <Button variant="ghost" size="sm" onClick={handleClear} className="h-8 text-xs">
+                Clear
+              </Button>
+              <div className="relative">
+                <Button size="sm" onClick={handleApplyDates} className="h-8 text-xs">
+                  Apply Filters
+                </Button>
+                {isDateDirty && (
+                  <span className="absolute -top-1 -right-1 flex h-3 w-3">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-3 w-3 bg-red-500"></span>
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Summary Cards */}
       <div className={`grid ${isCompact ? "gap-2 sm:grid-cols-2 lg:grid-cols-4" : "gap-4 sm:grid-cols-2 lg:grid-cols-4"}`}>
@@ -580,124 +828,53 @@ export function ContributionCalendar({
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card className={isCompact ? "shadow-sm" : ""}>
-        <CardHeader className={isCompact ? "p-3.5 pb-2" : ""}>
-          <CardTitle className={isCompact ? "text-sm" : "text-base"}>Filters</CardTitle>
-        </CardHeader>
-        <CardContent className={isCompact ? "p-3.5 pt-0 space-y-3" : "space-y-4"}>
-          {/* Quick presets */}
-          <div>
-            <Label className={`text-muted-foreground mb-1.5 block ${isCompact ? "text-[10px]" : "text-xs"}`}>Quick Presets</Label>
-            <div className="flex flex-wrap gap-1.5">
-              {PRESETS.map((p) => (
-                <Button
-                  key={p.key}
-                  size="sm"
-                  variant={preset === p.key ? "default" : "outline"}
-                  onClick={() => applyPreset(p.key)}
-                  className={isCompact ? "h-7 text-xs px-2.5 rounded-md" : ""}
-                >
-                  {p.label}
-                </Button>
-              ))}
-            </div>
-          </div>
 
-          {/* Filters dropdowns & date range */}
-          <div className={`flex flex-wrap ${isCompact ? "gap-2" : "gap-3"}`}>
-            {globalViewMode === "team" && (
-              <div className="w-full sm:w-auto">
-                <Label className={`text-muted-foreground mb-1 block ${isCompact ? "text-[10px]" : "text-xs"}`}>Created by</Label>
-                <Select value={selectedUser} onValueChange={setSelectedUser}>
-                  <SelectTrigger className={`w-full sm:w-[200px] ${isCompact ? "h-8 text-xs rounded-md" : ""}`}>
-                    <SelectValue placeholder="All users" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All users</SelectItem>
-                    {users.map((u) => (
-                      <SelectItem key={u.user_id} value={u.user_id}>
-                        {u.user_name || u.user_email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-
-            <div className="w-full sm:w-auto">
-              <Label className={`text-muted-foreground mb-1 block ${isCompact ? "text-[10px]" : "text-xs"}`}>Project</Label>
-              <Select value={selectedProject} onValueChange={setSelectedProject}>
-                <SelectTrigger className={`w-full sm:w-[200px] ${isCompact ? "h-8 text-xs rounded-md" : ""}`}>
-                  <SelectValue placeholder="All projects" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All projects</SelectItem>
-                  {projects.map((p) => (
-                    <SelectItem key={p.project_id} value={p.project_id}>
-                      {p.project_name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+      <div className={`grid ${isCompact ? "gap-4 md:grid-cols-3" : "gap-6 md:grid-cols-3"}`}>
+        <Card className={isCompact ? "shadow-sm" : ""}>
+          <CardHeader className={isCompact ? "p-3 pb-1.5" : ""}>
+            <div className="flex items-center gap-2">
+              <PieChart className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className={isCompact ? "text-sm" : ""}>Category Distribution</CardTitle>
             </div>
-
-            {/* Custom date inputs — always visible so user can fine-tune */}
-            <div className="w-full sm:w-auto">
-              <Label className={`text-muted-foreground mb-1 block ${isCompact ? "text-[10px]" : "text-xs"}`}>Start Date</Label>
-              <Input
-                type="date"
-                value={inputStart}
-                onChange={(e) => { setInputStart(e.target.value); setPreset("custom") }}
-                className={`w-full sm:w-[160px] ${isCompact ? "h-8 text-xs rounded-md" : ""}`}
-              />
+          </CardHeader>
+          <CardContent className={isCompact ? "p-3 pt-0" : ""}>
+            <AnalyticsPieChart 
+              data={categoryData.map(d => ({ name: d.category, hours: d.hours }))} 
+              emptyMessage="No category hours logged" 
+            />
+          </CardContent>
+        </Card>
+        
+        <Card className={isCompact ? "shadow-sm" : ""}>
+          <CardHeader className={isCompact ? "p-3 pb-1.5" : ""}>
+            <div className="flex items-center gap-2">
+              <PieChart className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className={isCompact ? "text-sm" : ""}>Project Distribution</CardTitle>
             </div>
-            <div className="w-full sm:w-auto">
-              <Label className={`text-muted-foreground mb-1 block ${isCompact ? "text-[10px]" : "text-xs"}`}>End Date</Label>
-              <Input
-                type="date"
-                value={inputEnd}
-                onChange={(e) => { setInputEnd(e.target.value); setPreset("custom") }}
-                className={`w-full sm:w-[160px] ${isCompact ? "h-8 text-xs rounded-md" : ""}`}
-              />
-            </div>
-            <div className="w-full sm:w-auto flex items-end">
-              <Button
-                type="button"
-                onClick={handleApplyCustomRange}
-                className={`w-full sm:w-auto ${isCompact ? "h-8 text-xs px-3 rounded-md" : ""}`}
-              >
-                Apply
-              </Button>
-            </div>
-          </div>
+          </CardHeader>
+          <CardContent className={isCompact ? "p-3 pt-0" : ""}>
+            <AnalyticsPieChart 
+              data={projectData.map(d => ({ name: d.project_name, hours: d.hours }))} 
+              emptyMessage="No project hours logged" 
+            />
+          </CardContent>
+        </Card>
 
-          {dateError && (
-            <p className="text-xs text-destructive font-medium mt-1">{dateError}</p>
-          )}
-
-          {/* Active range summary */}
-          {startDate && endDate && (
-            <div className="text-[11px] text-muted-foreground">
-              Showing: <span className="font-medium text-foreground">{rangeLabel}</span>
-              {" · "}{allDays.length} days
+        <Card className={isCompact ? "shadow-sm" : ""}>
+          <CardHeader className={isCompact ? "p-3 pb-1.5" : ""}>
+            <div className="flex items-center gap-2">
+              <PieChart className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className={isCompact ? "text-sm" : ""}>Task Distribution</CardTitle>
             </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Category Contribution Pie Chart */}
-      <Card className={isCompact ? "shadow-sm" : ""}>
-        <CardHeader className={isCompact ? "p-3.5 pb-2" : ""}>
-          <CardTitle className={`flex items-center gap-2 ${isCompact ? "text-sm" : "text-base"}`}>
-            <BarChart3 className={isCompact ? "h-3.5 w-3.5" : "h-4 w-4"} />
-            Time Distribution by Category
-          </CardTitle>
-        </CardHeader>
-        <CardContent className={isCompact ? "p-3.5 pt-0" : ""}>
-          <CategoryPieChart data={categoryData} />
-        </CardContent>
-      </Card>
+          </CardHeader>
+          <CardContent className={isCompact ? "p-3 pt-0" : ""}>
+            <AnalyticsPieChart 
+              data={taskData.map(d => ({ name: d.task_name, hours: d.hours }))} 
+              emptyMessage="No task hours logged" 
+            />
+          </CardContent>
+        </Card>
+      </div>
 
       {/* Heatmap */}
       <Card className={isCompact ? "shadow-sm" : ""}>
@@ -789,6 +966,9 @@ export function ContributionCalendar({
           )}
         </CardContent>
       </Card>
+
+      {/* Time Distribution Hierarchy */}
+      <TimeDistributionTree data={timeDistributionTree || []} />
     </div>
   )
 }

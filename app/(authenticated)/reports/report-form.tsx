@@ -285,8 +285,8 @@ export function ReportForm({
                 <Input
                   id="totalHours"
                   type="number"
-                  min="0"
-                  step="0.5"
+                  min="0.1"
+                  step="0.1"
                   value={totalHours}
                   onChange={(e) => setTotalHours(e.target.value)}
                   placeholder="e.g. 8"

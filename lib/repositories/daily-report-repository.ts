@@ -72,6 +72,8 @@ export const DailyReportRepository = {
     filters?: {
       search?: string;
       taskId?: string;
+      projectId?: string;
+      memberId?: string;
       createdBy?: string;
       dept?: string;
       site?: string;
@@ -86,17 +88,17 @@ export const DailyReportRepository = {
     const level = await getUserLevel(user.user_occupation);
     let scopeCondition = '';
     const params: any[] = [];
-    
+
     // Base WHERE clause
     let whereClauses = ['dr.deleted_at IS NULL'];
-    
+
     if (filters?.viewMode === 'my') {
       params.push(userId);
       whereClauses.push(`(dr.user_id = $${params.length} OR dr.created_by = $${params.length})`);
     } else if (level < 6) {
       params.push(userId);
       const userIdParamIdx = params.length;
-      
+
       const viewerOcc = (user.user_occupation || '').toLowerCase().trim();
       if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
         params.push(user.user_departement || '');
@@ -111,7 +113,7 @@ export const DailyReportRepository = {
         params.push(user.user_team || '');
         scopeCondition = `(LOWER(u.user_team) = LOWER($${params.length}) OR LOWER(cu.user_team) = LOWER($${params.length}))`;
       }
-      
+
       let scopeWhere = `(dr.user_id = $${userIdParamIdx} OR dr.created_by = $${userIdParamIdx}`;
       if (scopeCondition) {
         scopeWhere += ` OR ${scopeCondition}`;
@@ -119,7 +121,7 @@ export const DailyReportRepository = {
       scopeWhere += `)`;
       whereClauses.push(scopeWhere);
     }
-    
+
     // Apply explicit filters
     if (filters?.dept) {
       params.push(filters.dept);
@@ -141,11 +143,19 @@ export const DailyReportRepository = {
       params.push(filters.taskId);
       whereClauses.push(`dr.task_id = $${params.length}`);
     }
+    if (filters?.projectId) {
+      params.push(filters.projectId);
+      whereClauses.push(`t.project_id = $${params.length}`);
+    }
+    if (filters?.memberId) {
+      params.push(filters.memberId);
+      whereClauses.push(`dr.task_id IN (SELECT task_id FROM task_team WHERE user_id = $${params.length})`);
+    }
     if (filters?.createdBy) {
       params.push(filters.createdBy);
       whereClauses.push(`dr.user_id = $${params.length}`);
     }
-    
+
     if (filters?.search) {
       params.push(`%${filters.search.toLowerCase()}%`);
       const s = `$${params.length}`;
@@ -196,7 +206,7 @@ export const DailyReportRepository = {
       LIMIT $${limitIdx} OFFSET $${offsetIdx}
     `;
     const rows = await sql.unsafe(dataQuery, params);
-    
+
     return {
       reports: rows as any[],
       total
@@ -227,11 +237,11 @@ export const DailyReportRepository = {
       params.push(user.user_site || '');
       scopeCondition = `(LOWER(u.user_site) = LOWER($2) OR LOWER(cu.user_site) = LOWER($2))`;
     } else if (
-      viewerOcc === 'divisi manager' || 
-      viewerOcc === 'divisi admin' || 
-      viewerOcc === 'div manager' || 
-      viewerOcc === 'div admin' || 
-      level === 4 || 
+      viewerOcc === 'divisi manager' ||
+      viewerOcc === 'divisi admin' ||
+      viewerOcc === 'div manager' ||
+      viewerOcc === 'div admin' ||
+      level === 4 ||
       level === 3
     ) {
       params.push(user.user_division || '');
@@ -407,7 +417,7 @@ export const DailyReportRepository = {
    */
   async _syncTaskFromLatestReport(taskId: string, updatedBy: string): Promise<void> {
     const taskReports = await DailyReportRepository.findByTaskId(taskId);
-    
+
     let progress = 0;
     let autoStatus: string = STATUS.NOT_STARTED;
 
@@ -825,11 +835,11 @@ export async function findAllReportsIncludingDeleted(userId?: string): Promise<D
     params.push(user.user_site || '');
     scopeCondition = `(LOWER(u.user_site) = LOWER($2) OR LOWER(cu.user_site) = LOWER($2))`;
   } else if (
-    viewerOcc === 'divisi manager' || 
-    viewerOcc === 'divisi admin' || 
-    viewerOcc === 'div manager' || 
-    viewerOcc === 'div admin' || 
-    level === 4 || 
+    viewerOcc === 'divisi manager' ||
+    viewerOcc === 'divisi admin' ||
+    viewerOcc === 'div manager' ||
+    viewerOcc === 'div admin' ||
+    level === 4 ||
     level === 3
   ) {
     params.push(user.user_division || '');

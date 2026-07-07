@@ -804,22 +804,22 @@ export function ProjectsClient({
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-[1.25rem] p-2 shadow-sm mb-6 flex flex-col gap-2">
+        <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search projects..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+                className="pl-9 h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300 placeholder:text-zinc-500 w-full"
               />
             </div>
+        <div className="flex flex-row items-center flex-wrap gap-2">
+            
             {layout === "list" && (
               <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[180px]">
-                  <Filter className="mr-2 h-4 w-4" />
+                <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                  <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                   <SelectValue placeholder="All statuses" />
                 </SelectTrigger>
                 <SelectContent>
@@ -835,8 +835,8 @@ export function ProjectsClient({
             {viewMode === "team" && (
               <>
                 <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Created by" />
                   </SelectTrigger>
                   <SelectContent>
@@ -850,8 +850,8 @@ export function ProjectsClient({
                 </Select>
 
                 <Select value={memberFilter} onValueChange={setMemberFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Project team" />
                   </SelectTrigger>
                   <SelectContent>
@@ -865,8 +865,8 @@ export function ProjectsClient({
                 </Select>
 
                 <Select value={dept} onValueChange={setDept} disabled={isDeptDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Department" />
                   </SelectTrigger>
                   <SelectContent>
@@ -880,8 +880,8 @@ export function ProjectsClient({
                 </Select>
 
                 <Select value={site} onValueChange={setSite} disabled={isSiteDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Site" />
                   </SelectTrigger>
                   <SelectContent>
@@ -895,8 +895,8 @@ export function ProjectsClient({
                 </Select>
 
                 <Select value={division} onValueChange={setDivision} disabled={isDivDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Division" />
                   </SelectTrigger>
                   <SelectContent>
@@ -910,8 +910,8 @@ export function ProjectsClient({
                 </Select>
 
                 <Select value={team} onValueChange={setTeam} disabled={isTeamDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Team" />
                   </SelectTrigger>
                   <SelectContent>
@@ -926,8 +926,7 @@ export function ProjectsClient({
               </>
             )}
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
       {/* Main Content Area */}
       {layout === "kanban" ? (

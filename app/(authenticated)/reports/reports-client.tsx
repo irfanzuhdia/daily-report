@@ -280,10 +280,13 @@ function DroppableColumn({
 export function ReportsClient({
   reports,
   tasks,
+  projects = [],
   users = [],
   currentTaskId,
+  currentProjectId,
   currentSearch,
   currentCreatedBy,
+  currentMemberId,
   viewMode,
   currentUserId,
   currentDept = "",
@@ -295,10 +298,13 @@ export function ReportsClient({
 }: {
   reports: EnrichedReport[]
   tasks: Task[]
+  projects?: any[]
   users?: any[]
   currentTaskId?: string
+  currentProjectId?: string
   currentSearch?: string
   currentCreatedBy?: string
+  currentMemberId?: string
   viewMode: "my" | "team"
   currentUserId?: string
   currentDept?: string
@@ -326,7 +332,9 @@ export function ReportsClient({
   const router = useRouter()
   const [search, setSearch] = useState(currentSearch ?? "")
   const [taskFilter, setTaskFilter] = useState(currentTaskId ?? "")
+  const [projectFilter, setProjectFilter] = useState(currentProjectId ?? "")
   const [createdByFilter, setCreatedByFilter] = useState(currentCreatedBy ?? "")
+  const [memberFilter, setMemberFilter] = useState(currentMemberId ?? "")
 
   const [dept, setDept] = useState(currentDept || defaultDept)
   const [site, setSite] = useState(currentSite || defaultSite)
@@ -400,16 +408,22 @@ export function ReportsClient({
     const params = new URLSearchParams()
     if (debouncedSearch) params.set("search", debouncedSearch)
     if (taskFilter) params.set("task_id", taskFilter)
-    if (viewMode === "team") {
-      if (createdByFilter) params.set("created_by", createdByFilter)
-      if (dept) params.set("dept_filter", dept)
-      if (site) params.set("site_filter", site)
-      if (division) params.set("div_filter", division)
-      if (team) params.set("team_filter", team)
+    if (projectFilter) params.set("project_id", projectFilter)
+    if (createdByFilter) params.set("created_by", createdByFilter)
+    if (memberFilter) params.set("member_id", memberFilter)
+    if (dept !== defaultDept) params.set("dept_filter", dept)
+    if (site !== defaultSite) params.set("site_filter", site)
+    if (division !== defaultDiv) params.set("div_filter", division)
+    if (team !== defaultTeam) params.set("team_filter", team)
+    
+    const currentParams = new URLSearchParams(window.location.search)
+    currentParams.delete("page") // Ignore page for comparison
+    const newParamsStr = params.toString()
+    
+    if (currentParams.toString() !== newParamsStr) {
+      router.push(`/reports?${newParamsStr}`)
     }
-    const query = params.toString()
-    router.push(`/reports${query ? "?" + query : ""}`)
-  }, [debouncedSearch, taskFilter, createdByFilter, viewMode, router, dept, site, division, team])
+  }, [debouncedSearch, taskFilter, projectFilter, createdByFilter, memberFilter, router, dept, site, division, team, defaultDept, defaultSite, defaultDiv, defaultTeam])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -752,21 +766,36 @@ export function ReportsClient({
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center flex-wrap">
-            <div className="relative flex-1 min-w-[200px]">
+      <div className="bg-zinc-950 border border-zinc-800 rounded-[1.25rem] p-2 shadow-sm mb-6 flex flex-col gap-2">
+        <div className="relative w-full">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Search reports..."
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="pl-9"
+                className="pl-9 h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300 placeholder:text-zinc-500 w-full"
               />
             </div>
+        <div className="flex flex-row items-center flex-wrap gap-2">
+            
+            <Select value={projectFilter} onValueChange={setProjectFilter}>
+              <SelectTrigger className="w-full sm:w-[200px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                <SelectValue placeholder="All projects" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">All projects</SelectItem>
+                {projects?.map((p: any) => (
+                  <SelectItem key={p.project_id} value={p.project_id}>
+                    {p.project_name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             <Select value={taskFilter} onValueChange={setTaskFilter}>
-              <SelectTrigger className="w-full sm:w-[200px]">
-                <Filter className="mr-2 h-4 w-4" />
+              <SelectTrigger className="w-full sm:w-[200px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                 <SelectValue placeholder="All tasks" />
               </SelectTrigger>
               <SelectContent>
@@ -782,8 +811,8 @@ export function ReportsClient({
             {viewMode === "team" && (
               <>
                 <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Created by" />
                   </SelectTrigger>
                   <SelectContent>
@@ -796,9 +825,24 @@ export function ReportsClient({
                   </SelectContent>
                 </Select>
 
+                <Select value={memberFilter} onValueChange={setMemberFilter}>
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
+                    <SelectValue placeholder="Task team" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">All team members</SelectItem>
+                    {uniqueReporters.map((u) => (
+                      <SelectItem key={u.user_id} value={u.user_id}>
+                        {u.user_name || u.user_email}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+
                 <Select value={dept} onValueChange={setDept} disabled={isDeptDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Department" />
                   </SelectTrigger>
                   <SelectContent>
@@ -812,8 +856,8 @@ export function ReportsClient({
                 </Select>
 
                 <Select value={site} onValueChange={setSite} disabled={isSiteDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Site" />
                   </SelectTrigger>
                   <SelectContent>
@@ -827,8 +871,8 @@ export function ReportsClient({
                 </Select>
 
                 <Select value={division} onValueChange={setDivision} disabled={isDivDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Division" />
                   </SelectTrigger>
                   <SelectContent>
@@ -842,8 +886,8 @@ export function ReportsClient({
                 </Select>
 
                 <Select value={team} onValueChange={setTeam} disabled={isTeamDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px]">
-                    <Filter className="mr-2 h-4 w-4" />
+                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
+                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
                     <SelectValue placeholder="Team" />
                   </SelectTrigger>
                   <SelectContent>
@@ -858,8 +902,7 @@ export function ReportsClient({
               </>
             )}
           </div>
-        </CardContent>
-      </Card>
+      </div>
 
       {/* Main Content Area */}
       {layout === "kanban" ? (

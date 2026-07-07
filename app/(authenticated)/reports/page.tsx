@@ -3,6 +3,7 @@ import { getSession } from "@/lib/session"
 import {
   DailyReportRepository,
   TaskRepository,
+  ProjectRepository,
   UserRepository,
   TaskTeamRepository,
 } from "@/lib/repositories"
@@ -14,8 +15,10 @@ export default async function ReportsPage({
 }: {
   searchParams: Promise<{
     task_id?: string
+    project_id?: string
     search?: string
     created_by?: string
+    member_id?: string
     dept_filter?: string
     site_filter?: string
     div_filter?: string
@@ -34,13 +37,16 @@ export default async function ReportsPage({
   const limit = 50
   const offset = (page - 1) * limit
 
-  const currentUser = await UserRepository.findById(userId)
+  const allUsers = await UserRepository.findAll()
+  const currentUser = allUsers.find(u => u.user_id === userId)
   const userLevel = currentUser?.level || 1
   const effectiveViewMode = userLevel === 1 ? "my" : viewMode
 
   const filters = {
     search: params.search,
     taskId: params.task_id,
+    projectId: params.project_id,
+    memberId: params.member_id,
     createdBy: params.created_by,
     dept: params.dept_filter,
     site: params.site_filter,
@@ -57,15 +63,22 @@ export default async function ReportsPage({
     filters
   )
 
-  // Fetch users for the filters
-  const allUsers = await UserRepository.findAll()
+  // allUsers already fetched above
 
   // For the create form dropdown, fetch a simplified list of active tasks for this user
-  let activeTasks = await TaskRepository.findAll(userId) // Still need tasks for dropdown, but usually less than reports
+  let activeTasks = await TaskRepository.findAll(userId) 
   if (effectiveViewMode === "my") {
     const taskTeams = await TaskTeamRepository.findByUserId(userId)
     const myTaskIds = new Set(taskTeams.map((tt) => tt.task_id))
     activeTasks = activeTasks.filter((t) => t.created_by === userId || myTaskIds.has(t.id))
+  }
+
+  // Fetch projects for the new project filter
+  let allProjects = await ProjectRepository.findAll()
+
+  // Filter tasks based on selected project to make task dropdown smarter
+  if (params.project_id) {
+    activeTasks = activeTasks.filter(t => t.project_id === params.project_id)
   }
 
   // Convert DB models to match ReportsClient expectations
@@ -99,10 +112,13 @@ export default async function ReportsPage({
     <ReportsClient
       reports={cleanReports}
       tasks={activeTasks}
+      projects={allProjects}
       users={allUsers.map(u => ({ ...u, level: u.level ?? 1 }))}
       currentTaskId={params.task_id}
+      currentProjectId={params.project_id}
       currentSearch={params.search}
       currentCreatedBy={params.created_by}
+      currentMemberId={params.member_id}
       viewMode={effectiveViewMode}
       currentUserId={userId}
       currentDept={params.dept_filter}

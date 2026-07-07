@@ -48,7 +48,7 @@ interface UserSelectItem {
   level?: number
 }
 
-type PresetKey = "thisMonth" | "last30d" | "6m" | "1y" | "lastYear" | "ytd" | "5y" | "custom"
+type PresetKey = "thisMonth" | "last30d" | "6m" | "ytd" | "1y" | "lastYear" | "3y" | "custom"
 
 
 
@@ -88,8 +88,8 @@ function getPresetRange(key: PresetKey): { startDate: string; endDate: string } 
     }
     case "ytd":
       return { startDate: toDateStr(startOfYear(now)), endDate: toDateStr(now) }
-    case "5y":
-      return { startDate: toDateStr(addDays(now, -(365 * 5))), endDate: toDateStr(now) }
+    case "3y":
+      return { startDate: toDateStr(addDays(now, -(365 * 3))), endDate: toDateStr(now) }
     default:
       return null
   }
@@ -99,10 +99,10 @@ const PRESETS: { key: PresetKey; label: string }[] = [
   { key: "thisMonth", label: "This Month" },
   { key: "last30d", label: "Last 30 Days" },
   { key: "6m", label: "6 Months" },
+  { key: "ytd", label: "YTD" },
   { key: "1y", label: "1 Year" },
   { key: "lastYear", label: "Last Year" },
-  { key: "ytd", label: "YTD" },
-  { key: "5y", label: "5 Years" },
+  { key: "3y", label: "3 Years" },
 ]
 
 export function DashboardClient({
@@ -148,19 +148,23 @@ export function DashboardClient({
   const defaultDiv = currentUser?.user_division || ""
   const defaultTeam = currentUser?.user_team || ""
 
+  const defaultDateRange = getPresetRange("last30d")
+  const defaultStartDate = defaultDateRange?.startDate || ""
+  const defaultEndDate = defaultDateRange?.endDate || ""
+
   const [createdBy, setCreatedBy] = useState(currentCreatedBy)
-  const [startDate, setStartDate] = useState(currentStartDate)
-  const [endDate, setEndDate] = useState(currentEndDate)
+  const [startDate, setStartDate] = useState(currentStartDate || defaultStartDate)
+  const [endDate, setEndDate] = useState(currentEndDate || defaultEndDate)
 
   const [dept, setDept] = useState(currentDept || defaultDept)
   const [site, setSite] = useState(currentSite || defaultSite)
   const [division, setDivision] = useState(currentDiv || defaultDiv)
   const [team, setTeam] = useState(currentTeam || defaultTeam)
 
-  const [preset, setPreset] = useState<PresetKey>("thisMonth") // default preset or parse from URL if passed
+  const [preset, setPreset] = useState<PresetKey>("last30d") // default preset or parse from URL if passed
 
-  const [inputStart, setInputStart] = useState(currentStartDate || getPresetRange(preset)?.startDate || "")
-  const [inputEnd, setInputEnd] = useState(currentEndDate || getPresetRange(preset)?.endDate || "")
+  const [inputStart, setInputStart] = useState(currentStartDate || defaultStartDate)
+  const [inputEnd, setInputEnd] = useState(currentEndDate || defaultEndDate)
   
   const [dateError, setDateError] = useState<string | null>(null)
   const isDateDirty = inputStart !== startDate || inputEnd !== endDate
@@ -181,16 +185,16 @@ export function DashboardClient({
       if (createdBy) nextParams.set("created_by", createdBy)
       else nextParams.delete("created_by")
 
-      if (dept && dept !== "all") nextParams.set("dept_filter", dept)
+      if (dept && dept !== defaultDept) nextParams.set("dept_filter", dept)
       else nextParams.delete("dept_filter")
 
-      if (site && site !== "all") nextParams.set("site_filter", site)
+      if (site && site !== defaultSite) nextParams.set("site_filter", site)
       else nextParams.delete("site_filter")
 
-      if (division && division !== "all") nextParams.set("div_filter", division)
+      if (division && division !== defaultDiv) nextParams.set("div_filter", division)
       else nextParams.delete("div_filter")
 
-      if (team && team !== "all") nextParams.set("team_filter", team)
+      if (team && team !== defaultTeam) nextParams.set("team_filter", team)
       else nextParams.delete("team_filter")
     } else {
       nextParams.delete("created_by")
@@ -200,16 +204,16 @@ export function DashboardClient({
       nextParams.delete("team_filter")
     }
     
-    if (startDate) nextParams.set("start_date", startDate)
+    if (startDate && startDate !== defaultStartDate) nextParams.set("start_date", startDate)
     else nextParams.delete("start_date")
     
-    if (endDate) nextParams.set("end_date", endDate)
+    if (endDate && endDate !== defaultEndDate) nextParams.set("end_date", endDate)
     else nextParams.delete("end_date")
 
     if (currentParams.toString() !== nextParams.toString()) {
       router.push(`${pathname}?${nextParams.toString()}`)
     }
-  }, [createdBy, startDate, endDate, viewMode, pathname, router, searchParams, dept, site, division, team])
+  }, [createdBy, startDate, endDate, viewMode, pathname, router, searchParams, dept, site, division, team, defaultStartDate, defaultEndDate])
 
   const handleApplyDates = useCallback(() => {
     if (!inputStart || !inputEnd) {
@@ -259,6 +263,10 @@ export function DashboardClient({
     if (range) {
       setInputStart(range.startDate)
       setInputEnd(range.endDate)
+      // Apply immediately
+      setStartDate(range.startDate)
+      setEndDate(range.endDate)
+      setDateError(null)
     }
   }, [])
 

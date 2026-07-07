@@ -49,7 +49,7 @@ interface ContributionCalendarProps {
   currentTeam?: string
 }
 
-type PresetKey = "thisMonth" | "last30d" | "6m" | "1y" | "lastYear" | "ytd" | "5y" | "custom"
+type PresetKey = "thisMonth" | "last30d" | "6m" | "ytd" | "1y" | "lastYear" | "3y" | "custom"
 
 /* ─── constants ─── */
 const GITHUB_COLORS = [
@@ -141,8 +141,8 @@ function getPresetRange(key: PresetKey): { startDate: string; endDate: string } 
     }
     case "ytd":
       return { startDate: toDateStr(startOfYear(now)), endDate: toDateStr(now) }
-    case "5y":
-      return { startDate: toDateStr(addDays(now, -(365 * 5))), endDate: toDateStr(now) }
+    case "3y":
+      return { startDate: toDateStr(addDays(now, -(365 * 3))), endDate: toDateStr(now) }
     default:
       return null
   }
@@ -152,10 +152,10 @@ const PRESETS: { key: PresetKey; label: string }[] = [
   { key: "thisMonth", label: "This Month" },
   { key: "last30d", label: "Last 30 Days" },
   { key: "6m", label: "6 Months" },
+  { key: "ytd", label: "YTD" },
   { key: "1y", label: "1 Year" },
   { key: "lastYear", label: "Last Year" },
-  { key: "ytd", label: "YTD" },
-  { key: "5y", label: "5 Years" },
+  { key: "3y", label: "3 Years" },
 ]
 
 export function AnalyticsPieChart({ data, emptyMessage }: { data: { name: string | null; hours: number }[], emptyMessage: string }) {
@@ -360,17 +360,21 @@ export function ContributionCalendar({
   const defaultTeam = currentUser?.user_team || ""
 
   const [selectedProject, setSelectedProject] = useState<string>(currentProjectId)
+  const defaultDateRange = getPresetRange("1y")
+  const defaultStartDate = defaultDateRange?.startDate || ""
+  const defaultEndDate = defaultDateRange?.endDate || ""
+
   const [createdBy, setCreatedBy] = useState<string>(currentCreatedBy)
   const [dept, setDept] = useState<string>(currentDept || defaultDept)
   const [site, setSite] = useState<string>(currentSite || defaultSite)
   const [division, setDivision] = useState<string>(currentDiv || defaultDiv)
   const [team, setTeam] = useState<string>(currentTeam || defaultTeam)
 
-  const [preset, setPreset] = useState<PresetKey>(currentPreset as PresetKey)
+  const [preset, setPreset] = useState<PresetKey>(currentPreset as PresetKey || "1y")
 
   // Applied dates for URL
-  const [startDate, setStartDate] = useState<string>(currentStartDate || getPresetRange(preset)?.startDate || "")
-  const [endDate, setEndDate] = useState<string>(currentEndDate || getPresetRange(preset)?.endDate || "")
+  const [startDate, setStartDate] = useState<string>(currentStartDate || defaultStartDate)
+  const [endDate, setEndDate] = useState<string>(currentEndDate || defaultEndDate)
 
   // Local inputs (dirty state)
   const [inputStart, setInputStart] = useState<string>(startDate)
@@ -397,23 +401,23 @@ export function ContributionCalendar({
       if (createdBy) params.set("created_by", createdBy)
       else params.delete("created_by")
 
-      if (dept && dept !== "all") params.set("dept_filter", dept)
+      if (dept && dept !== defaultDept) params.set("dept_filter", dept)
       else params.delete("dept_filter")
 
-      if (site && site !== "all") params.set("site_filter", site)
+      if (site && site !== defaultSite) params.set("site_filter", site)
       else params.delete("site_filter")
 
-      if (division && division !== "all") params.set("div_filter", division)
+      if (division && division !== defaultDiv) params.set("div_filter", division)
       else params.delete("div_filter")
 
-      if (team && team !== "all") params.set("team_filter", team)
+      if (team && team !== defaultTeam) params.set("team_filter", team)
       else params.delete("team_filter")
     }
 
-    if (startDate) params.set("start_date", startDate)
+    if (startDate && startDate !== defaultStartDate) params.set("start_date", startDate)
     else params.delete("start_date")
     
-    if (endDate) params.set("end_date", endDate)
+    if (endDate && endDate !== defaultEndDate) params.set("end_date", endDate)
     else params.delete("end_date")
 
     if (preset) params.set("preset", preset)
@@ -473,6 +477,10 @@ export function ContributionCalendar({
     if (range) {
       setInputStart(range.startDate)
       setInputEnd(range.endDate)
+      // Apply immediately
+      setStartDate(range.startDate)
+      setEndDate(range.endDate)
+      setDateError(null)
     }
   }, [])
 

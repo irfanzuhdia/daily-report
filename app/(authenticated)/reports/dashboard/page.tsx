@@ -81,26 +81,33 @@ export default async function DashboardPage({
   const isDivDisabled = userLevel < 3
   const isTeamDisabled = userLevel < 2
 
-  if (isDeptDisabled || params.dept_filter) {
-    const targetDept = isDeptDisabled ? (currentUser?.user_departement || "") : params.dept_filter
+  // Dept Filter
+  const targetDept = isDeptDisabled ? (currentUser?.user_departement || "") : (params.dept_filter !== undefined ? params.dept_filter : (currentUser?.user_departement || ""))
+  if (targetDept && targetDept !== "all") {
     projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_departement || "") === targetDept)
     tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_departement || "") === targetDept)
     reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_departement || "") === targetDept)
   }
-  if (isSiteDisabled || params.site_filter) {
-    const targetSite = isSiteDisabled ? (currentUser?.user_site || "") : params.site_filter
+
+  // Site Filter
+  const targetSite = isSiteDisabled ? (currentUser?.user_site || "") : (params.site_filter !== undefined ? params.site_filter : (currentUser?.user_site || ""))
+  if (targetSite && targetSite !== "all") {
     projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_site || "") === targetSite)
     tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_site || "") === targetSite)
     reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_site || "") === targetSite)
   }
-  if (isDivDisabled || params.div_filter) {
-    const targetDiv = isDivDisabled ? (currentUser?.user_division || "") : params.div_filter
+
+  // Div Filter
+  const targetDiv = isDivDisabled ? (currentUser?.user_division || "") : (params.div_filter !== undefined ? params.div_filter : (currentUser?.user_division || ""))
+  if (targetDiv && targetDiv !== "all") {
     projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_division || "") === targetDiv)
     tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_division || "") === targetDiv)
     reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_division || "") === targetDiv)
   }
-  if (isTeamDisabled || params.team_filter) {
-    const targetTeam = isTeamDisabled ? (currentUser?.user_team || "") : params.team_filter
+
+  // Team Filter
+  const targetTeam = isTeamDisabled ? (currentUser?.user_team || "") : (params.team_filter !== undefined ? params.team_filter : (currentUser?.user_team || ""))
+  if (targetTeam && targetTeam !== "all") {
     projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_team || "") === targetTeam)
     tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_team || "") === targetTeam)
     reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_team || "") === targetTeam)
@@ -116,15 +123,25 @@ export default async function DashboardPage({
   }
 
   // Apply date range filters
-  if (params.start_date) {
-    projects = projects.filter((p) => p.created_at && p.created_at.split('T')[0] >= params.start_date!)
-    tasks = tasks.filter((t) => t.created_at && t.created_at.split('T')[0] >= params.start_date!)
-    reports = reports.filter((r) => r.date && r.date >= params.start_date!)
+  const now = new Date()
+  const defaultEndDate = now.toLocaleDateString('en-CA') // YYYY-MM-DD
+  
+  const thirtyDaysAgo = new Date(now)
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 29)
+  const defaultStartDate = thirtyDaysAgo.toLocaleDateString('en-CA')
+
+  const targetStartDate = params.start_date || defaultStartDate
+  const targetEndDate = params.end_date || defaultEndDate
+
+  if (targetStartDate) {
+    projects = projects.filter((p) => p.created_at && p.created_at.split('T')[0] >= targetStartDate)
+    tasks = tasks.filter((t) => t.created_at && t.created_at.split('T')[0] >= targetStartDate)
+    reports = reports.filter((r) => r.date && r.date >= targetStartDate)
   }
-  if (params.end_date) {
-    projects = projects.filter((p) => p.created_at && p.created_at.split('T')[0] <= params.end_date!)
-    tasks = tasks.filter((t) => t.created_at && t.created_at.split('T')[0] <= params.end_date!)
-    reports = reports.filter((r) => r.date && r.date <= params.end_date!)
+  if (targetEndDate) {
+    projects = projects.filter((p) => p.created_at && p.created_at.split('T')[0] <= targetEndDate)
+    tasks = tasks.filter((t) => t.created_at && t.created_at.split('T')[0] <= targetEndDate)
+    reports = reports.filter((r) => r.date && r.date <= targetEndDate)
   }
 
   // Build status lookup
@@ -169,14 +186,15 @@ export default async function DashboardPage({
     return sum + (isNaN(h) ? 0 : h);
   }, 0);
 
-  // Contribution data for heatmap (selected range or default 30 days)
-  const thirtyDaysAgo = new Date()
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-  const contributionData = await getContributionData({
-    startDate: params.start_date ?? toDateStr(thirtyDaysAgo),
-    endDate: params.end_date,
-    userId: viewMode === "my" ? userId : params.created_by,
-  })
+  // Contribution data for heatmap
+  const contributionData: Record<string, number> = {}
+  for (const r of reports) {
+    const h = parseFloat(r.total_hours ?? '0')
+    if (isNaN(h) || h <= 0) continue
+    if (r.date) {
+      contributionData[r.date] = (contributionData[r.date] || 0) + h
+    }
+  }
 
   const stats = {
     totalProjects: projects.length,

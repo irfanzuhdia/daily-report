@@ -70,20 +70,27 @@ export default async function AnalyticsPage({
       filteredReports = filteredReports.filter(r => r.user_id === params.created_by || r.created_by === params.created_by)
     }
     
-    if (isDeptDisabled || params.dept_filter) {
-      const targetDept = isDeptDisabled ? (currentUser?.user_departement || "") : params.dept_filter
+    // Dept Filter
+    const targetDept = isDeptDisabled ? (currentUser?.user_departement || "") : (params.dept_filter !== undefined ? params.dept_filter : (currentUser?.user_departement || ""))
+    if (targetDept && targetDept !== "all") {
       filteredReports = filteredReports.filter(r => (userById.get(r.user_id || "")?.user_departement || "") === targetDept)
     }
-    if (isSiteDisabled || params.site_filter) {
-      const targetSite = isSiteDisabled ? (currentUser?.user_site || "") : params.site_filter
+
+    // Site Filter
+    const targetSite = isSiteDisabled ? (currentUser?.user_site || "") : (params.site_filter !== undefined ? params.site_filter : (currentUser?.user_site || ""))
+    if (targetSite && targetSite !== "all") {
       filteredReports = filteredReports.filter(r => (userById.get(r.user_id || "")?.user_site || "") === targetSite)
     }
-    if (isDivDisabled || params.div_filter) {
-      const targetDiv = isDivDisabled ? (currentUser?.user_division || "") : params.div_filter
+
+    // Div Filter
+    const targetDiv = isDivDisabled ? (currentUser?.user_division || "") : (params.div_filter !== undefined ? params.div_filter : (currentUser?.user_division || ""))
+    if (targetDiv && targetDiv !== "all") {
       filteredReports = filteredReports.filter(r => (userById.get(r.user_id || "")?.user_division || "") === targetDiv)
     }
-    if (isTeamDisabled || params.team_filter) {
-      const targetTeam = isTeamDisabled ? (currentUser?.user_team || "") : params.team_filter
+
+    // Team Filter
+    const targetTeam = isTeamDisabled ? (currentUser?.user_team || "") : (params.team_filter !== undefined ? params.team_filter : (currentUser?.user_team || ""))
+    if (targetTeam && targetTeam !== "all") {
       filteredReports = filteredReports.filter(r => (userById.get(r.user_id || "")?.user_team || "") === targetTeam)
     }
   } else {
@@ -98,11 +105,21 @@ export default async function AnalyticsPage({
   }
 
   // Apply Date Filter
-  if (params.start_date) {
-    filteredReports = filteredReports.filter(r => r.date && r.date >= params.start_date!)
+  const now = new Date()
+  const defaultEndDate = now.toLocaleDateString('en-CA') // YYYY-MM-DD
+  
+  const oneYearAgo = new Date(now)
+  oneYearAgo.setDate(oneYearAgo.getDate() - 364)
+  const defaultStartDate = oneYearAgo.toLocaleDateString('en-CA')
+
+  const targetStartDate = params.start_date || defaultStartDate
+  const targetEndDate = params.end_date || defaultEndDate
+
+  if (targetStartDate) {
+    filteredReports = filteredReports.filter(r => r.date && r.date >= targetStartDate)
   }
-  if (params.end_date) {
-    filteredReports = filteredReports.filter(r => r.date && r.date <= params.end_date!)
+  if (targetEndDate) {
+    filteredReports = filteredReports.filter(r => r.date && r.date <= targetEndDate)
   }
 
   // Aggregate Data in JS for Heatmap and Pie Charts

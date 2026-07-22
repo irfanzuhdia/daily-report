@@ -223,6 +223,7 @@ export function AnalyticsPieChart({ data, emptyMessage }: { data: { name: string
           viewBox={`0 0 ${size} ${size}`}
           className="transform -rotate-90 select-none drop-shadow-sm"
         >
+          {/* Visible Chart Segments */}
           {chartData.map((item, index) => {
             const strokeDasharray = `${(item.percent / 100) * circumference} ${circumference}`
             const strokeDashoffset = - (item.startPercent / 100) * circumference
@@ -231,15 +232,39 @@ export function AnalyticsPieChart({ data, emptyMessage }: { data: { name: string
 
             return (
               <circle
-                key={index}
+                key={`visible-${index}`}
                 cx={size / 2}
                 cy={size / 2}
                 r={radius}
                 fill="transparent"
-                strokeWidth={isHovered ? strokeWidth + 4 : strokeWidth}
+                strokeWidth={isHovered ? strokeWidth + 6 : strokeWidth}
                 strokeDasharray={strokeDasharray}
                 strokeDashoffset={strokeDashoffset}
-                className={`transition-all duration-300 ease-out cursor-pointer ${c.stroke}`}
+                className={`transition-all duration-300 ease-out pointer-events-none ${c.stroke}`}
+                style={{
+                  strokeLinecap: "butt",
+                  transformOrigin: "center",
+                }}
+              />
+            )
+          })}
+          
+          {/* Invisible Hit Areas for smoother hover */}
+          {chartData.map((item, index) => {
+            const strokeDasharray = `${(item.percent / 100) * circumference} ${circumference}`
+            const strokeDashoffset = - (item.startPercent / 100) * circumference
+
+            return (
+              <circle
+                key={`hit-${index}`}
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="transparent"
+                strokeWidth={strokeWidth + 24}
+                strokeDasharray={strokeDasharray}
+                strokeDashoffset={strokeDashoffset}
+                className="cursor-pointer stroke-transparent outline-none"
                 onMouseEnter={() => setHoveredIndex(index)}
                 onMouseLeave={() => setHoveredIndex(null)}
                 style={{

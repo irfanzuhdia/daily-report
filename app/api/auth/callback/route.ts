@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { createSession, getCookieName } from '@/lib/auth';
@@ -45,7 +46,7 @@ export async function GET(request: NextRequest) {
 
     if (!tokenRes.ok) {
       const errText = await tokenRes.text();
-      console.error('Google token exchange failed:', tokenRes.status, errText);
+      logger.error('Google token exchange failed:', tokenRes.status, errText);
       return NextResponse.redirect(new URL('/login?error=token', request.url));
     }
 
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
 
     if (!userRes.ok) {
       const errText = await userRes.text();
-      console.error('Google userinfo failed:', userRes.status, errText);
+      logger.error('Google userinfo failed:', userRes.status, errText);
       return NextResponse.redirect(new URL('/login?error=userinfo', request.url));
     }
 
@@ -98,7 +99,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.redirect(new URL('/reports/dashboard', request.url));
   } catch (error) {
-    console.error('OAuth callback error:', error);
+    logger.error('OAuth callback error:', error);
     return NextResponse.redirect(new URL('/login?error=server', request.url));
   }
 }

@@ -1,6 +1,8 @@
+import { logger } from '@/lib/logger';
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/session"
 import { UserRepository, UserLogRepository, getUserLevel } from "@/lib/repositories"
+import { userSchema } from "@/lib/validation/schemas"
 
 export async function POST(request: Request) {
   try {
@@ -31,6 +33,17 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
+    
+    const userCreateSchema = userSchema.omit({ user_id: true })
+    const validationResult = userCreateSchema.safeParse(body)
+    
+    if (!validationResult.success) {
+      return NextResponse.json(
+        { error: 'Validation failed', details: validationResult.error.flatten().fieldErrors },
+        { status: 400 }
+      )
+    }
+    
     const {
       user_email,
       user_name,
@@ -40,11 +53,7 @@ export async function POST(request: Request) {
       user_site,
       user_team,
       user_unit,
-    } = body
-
-    if (!user_email || !user_email.trim()) {
-      return NextResponse.json({ error: "Email address is required" }, { status: 400 })
-    }
+    } = validationResult.data
 
     const email = user_email.trim()
 
@@ -81,7 +90,8 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, user: newUser })
   } catch (e: any) {
-    console.error("Error creating user:", e)
+    logger.error("Error creating user:", e)
     return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 })
   }
 }
+

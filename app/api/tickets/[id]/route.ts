@@ -1,6 +1,8 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextRequest } from 'next/server';
 import { getSession } from '@/lib/session';
-import { TicketRepository } from '@/lib/repositories';
+import { TicketService } from '@/lib/services/ticket-service';
+import { handleApiError } from '@/lib/error-handler';
+import { createSuccessResponse, createErrorResponse } from '@/lib/api-response';
 
 export async function GET(
   _request: NextRequest,
@@ -9,28 +11,14 @@ export async function GET(
   try {
     const session = await getSession();
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse("UNAUTHORIZED", "Unauthorized", 401);
     }
 
     const { id } = await params;
-    const ticket = await TicketRepository.findById(id);
-    if (!ticket) {
-      return NextResponse.json({ error: 'Ticket not found' }, { status: 404 });
-    }
-
-    const [comments, logs] = await Promise.all([
-      TicketRepository.findComments(id),
-      TicketRepository.findLogs(id),
-    ]);
-
-    return NextResponse.json({
-      ticket,
-      comments,
-      logs,
-    });
+    const details = await TicketService.getTicketDetails(id);
+    return createSuccessResponse(details);
   } catch (error) {
-    console.error('GET /api/tickets/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return handleApiError(error);
   }
 }
 
@@ -41,26 +29,17 @@ export async function PUT(
   try {
     const session = await getSession();
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse("UNAUTHORIZED", "Unauthorized", 401);
     }
 
     const { id } = await params;
     const body = await request.json();
+    const currentUser = { id: session.real_user_id ?? session.user_id };
 
-    const updated = await TicketRepository.update(
-      id,
-      body,
-      session.real_user_id ?? session.user_id
-    );
-
-    if (!updated) {
-      return NextResponse.json({ error: 'Ticket not found or update failed' }, { status: 404 });
-    }
-
-    return NextResponse.json(updated);
+    const updated = await TicketService.updateTicket(id, body, currentUser);
+    return createSuccessResponse(updated);
   } catch (error) {
-    console.error('PUT /api/tickets/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return handleApiError(error);
   }
 }
 
@@ -71,22 +50,15 @@ export async function DELETE(
   try {
     const session = await getSession();
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+      return createErrorResponse("UNAUTHORIZED", "Unauthorized", 401);
     }
 
     const { id } = await params;
-    const success = await TicketRepository.softDelete(
-      id,
-      session.real_user_id ?? session.user_id
-    );
+    const currentUser = { id: session.real_user_id ?? session.user_id };
 
-    if (!success) {
-      return NextResponse.json({ error: 'Ticket not found or deletion failed' }, { status: 404 });
-    }
-
-    return NextResponse.json({ success: true });
+    const result = await TicketService.deleteTicket(id, currentUser);
+    return createSuccessResponse(result);
   } catch (error) {
-    console.error('DELETE /api/tickets/[id] error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    return handleApiError(error);
   }
 }

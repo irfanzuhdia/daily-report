@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { X, Upload, FileText, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +17,7 @@ import {
 } from "@/components/ui/select"
 import { SearchableUserSelect, getSelectableUsers, type UserSelectItem } from "@/components/ui/searchable-user-select"
 import type { Task, Status } from "@/lib/types"
+import { taskSchema, type TaskInput } from "@/lib/validation/schemas"
 
 interface TaskCreateModalProps {
   isOpen: boolean
@@ -37,17 +40,52 @@ export function TaskCreateModal({
 }: TaskCreateModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const [description, setDescription] = useState("")
-  const [status, setStatus] = useState("NS")
-  const [percentage, setPercentage] = useState(0)
-  const [taskFile, setTaskFile] = useState<string | null>(null)
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<TaskInput>({
+    resolver: zodResolver(taskSchema),
+    defaultValues: {
+      project_id: projectId,
+      task_description: "",
+      task_status: "NS",
+      task_latest_percentage: "0",
+      additional_link: "",
+      task_user_ids: [currentUserId],
+      task_file: "",
+    },
+  })
+
+  // Watch custom controlled fields
+  const status = watch("task_status")
+  const teamUserIds = watch("task_user_ids") || []
+  const taskFile = watch("task_file")
+
   const [fileName, setFileName] = useState<string | null>(null)
-  const [additionalLink, setAdditionalLink] = useState("")
-  const [teamUserIds, setTeamUserIds] = useState<string[]>([currentUserId])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        project_id: projectId,
+        task_description: "",
+        task_status: "NS",
+        task_latest_percentage: "0",
+        additional_link: "",
+        task_user_ids: [currentUserId],
+        task_file: "",
+      })
+      setFileName(null)
+      setSaveError(null)
+      setUploadError(null)
+    }
+  }, [isOpen, reset, currentUserId, projectId])
 
   if (!isOpen) return null
 
@@ -65,7 +103,7 @@ export function TaskCreateModal({
         throw new Error(data.error || "Upload failed")
       }
       const data = await res.json()
-      setTaskFile(data.webViewLink)
+      setValue("task_file", data.webViewLink)
       setFileName(data.fileName)
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Upload failed"
@@ -77,36 +115,30 @@ export function TaskCreateModal({
   }
 
   const handleRemoveFile = () => {
-    setTaskFile(null)
+    setValue("task_file", "")
     setFileName(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   const addTeamMember = (userId: string) => {
     if (!teamUserIds.includes(userId)) {
-      setTeamUserIds([...teamUserIds, userId])
+      setValue("task_user_ids", [...teamUserIds, userId])
     }
   }
 
   const removeTeamMember = (userId: string) => {
-    setTeamUserIds(teamUserIds.filter((id) => id !== userId))
+    setValue("task_user_ids", teamUserIds.filter((id) => id !== userId))
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!description.trim() || saving) return
-    setSaving(true)
+  const onSubmit = async (data: TaskInput) => {
     setSaveError(null)
 
     try {
       const payload = {
-        project_id: projectId,
-        task_description: description.trim(),
-        task_status: status,
-        task_latest_percentage: percentage.toString(),
-        task_file: taskFile || undefined,
-        additional_link: additionalLink.trim() || undefined,
-        task_user_ids: teamUserIds,
+        ...data,
+        task_latest_percentage: data.task_latest_percentage || "0",
+        additional_link: data.additional_link || undefined,
+        task_file: data.task_file || undefined,
       }
 
       const res = await fetch("/api/tasks", {
@@ -117,26 +149,18 @@ export function TaskCreateModal({
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Failed to create task" }))
+        if (err.errors) {
+          throw new Error(err.errors.map((e: any) => e.message).join(", "))
+        }
         throw new Error(err.error || "Failed to create task")
       }
 
       const newTask = await res.json()
       onSuccess(newTask)
-      
-      // Reset form
-      setDescription("")
-      setStatus("NS")
-      setPercentage(0)
-      setTaskFile(null)
-      setFileName(null)
-      setAdditionalLink("")
-      setTeamUserIds([currentUserId])
       onClose()
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Failed to create task"
       setSaveError(msg)
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -162,7 +186,7 @@ export function TaskCreateModal({
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
           {saveError && (
             <div className="p-3 text-xs bg-destructive/10 text-destructive rounded-lg font-medium">
               {saveError}
@@ -173,20 +197,23 @@ export function TaskCreateModal({
             <Label htmlFor="modalTaskDesc">Task Description *</Label>
             <Textarea
               id="modalTaskDesc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              {...register("task_description")}
               placeholder="Enter task description..."
               rows={3}
-              required
               autoFocus
+              className={errors.task_description ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {errors.task_description && <p className="text-[10px] text-destructive">{errors.task_description.message}</p>}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="modalTaskStatus">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger id="modalTaskStatus">
+              <Select 
+                value={status} 
+                onValueChange={(val) => setValue("task_status", val as any)}
+              >
+                <SelectTrigger id="modalTaskStatus" className={errors.task_status ? "border-destructive" : ""}>
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -197,6 +224,7 @@ export function TaskCreateModal({
                   ))}
                 </SelectContent>
               </Select>
+              {errors.task_status && <p className="text-[10px] text-destructive">{errors.task_status.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="modalTaskPercent">Progress (%)</Label>
@@ -205,9 +233,10 @@ export function TaskCreateModal({
                 type="number"
                 min="0"
                 max="100"
-                value={percentage}
-                onChange={(e) => setPercentage(Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
+                {...register("task_latest_percentage")}
+                className={errors.task_latest_percentage ? "border-destructive focus-visible:ring-destructive" : ""}
               />
+              {errors.task_latest_percentage && <p className="text-[10px] text-destructive">{errors.task_latest_percentage.message}</p>}
             </div>
           </div>
 
@@ -277,10 +306,11 @@ export function TaskCreateModal({
             <Input
               id="modalTaskLink"
               type="url"
-              value={additionalLink}
-              onChange={(e) => setAdditionalLink(e.target.value)}
+              {...register("additional_link")}
               placeholder="https://example.com/task-docs"
+              className={errors.additional_link ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {errors.additional_link && <p className="text-[10px] text-destructive">{errors.additional_link.message}</p>}
           </div>
 
           {/* Task Team Members Selector */}
@@ -306,8 +336,8 @@ export function TaskCreateModal({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={saving || !description.trim()}>
-              {saving ? (
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating...

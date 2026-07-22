@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { 
@@ -94,7 +95,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Restore error:', error);
+    logger.error('Restore error:', error);
     return NextResponse.json({ error: 'Restore failed' }, { status: 500 });
   }
 }

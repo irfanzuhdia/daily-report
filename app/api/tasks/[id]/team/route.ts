@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { TaskTeamRepository, TaskRepository, NotificationRepository } from '@/lib/repositories';
@@ -69,7 +70,7 @@ export async function POST(
 
     return NextResponse.json(result, { status: 201 });
   } catch (error) {
-    console.error('Failed to add team member:', error);
+    logger.error('Failed to add team member:', error);
     return NextResponse.json({ error: 'Failed to add team member' }, { status: 500 });
   }
 }
@@ -101,7 +102,7 @@ export async function DELETE(
     await TaskTeamRepository.softDelete(membership.id, session.real_user_id ?? session.user_id);
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('Failed to remove team member:', error);
+    logger.error('Failed to remove team member:', error);
     return NextResponse.json({ error: 'Failed to remove team member' }, { status: 500 });
   }
 }

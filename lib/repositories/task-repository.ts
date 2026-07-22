@@ -191,42 +191,42 @@ export const TaskRepository = {
     }
 
     if (filters.dept_filter) {
-       conditions.push(`LOWER(u.user_departement) = LOWER($${paramIndex})`);
+       conditions.push(`LOWER(u.user_departement) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
        params.push(filters.dept_filter);
        paramIndex++;
     }
     if (filters.site_filter) {
-       conditions.push(`LOWER(u.user_site) = LOWER($${paramIndex})`);
+       conditions.push(`LOWER(u.user_site) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
        params.push(filters.site_filter);
        paramIndex++;
     }
     if (filters.div_filter) {
-       conditions.push(`LOWER(u.user_division) = LOWER($${paramIndex})`);
+       conditions.push(`LOWER(u.user_division) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
        params.push(filters.div_filter);
        paramIndex++;
     }
     if (filters.team_filter) {
-       conditions.push(`LOWER(u.user_team) = LOWER($${paramIndex})`);
+       conditions.push(`LOWER(u.user_team) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
        params.push(filters.team_filter);
        paramIndex++;
     }
     if (filters.project_id) {
-       conditions.push(`t.project_id = $${paramIndex}`);
+       conditions.push(`t.project_id = ANY(string_to_array($${paramIndex}, ','))`);
        params.push(filters.project_id);
        paramIndex++;
     }
     if (filters.status) {
-       conditions.push(`t.task_status = $${paramIndex}`);
+       conditions.push(`t.task_status = ANY(string_to_array($${paramIndex}, ','))`);
        params.push(filters.status);
        paramIndex++;
     }
     if (filters.created_by) {
-       conditions.push(`t.created_by = $${paramIndex}`);
+       conditions.push(`t.created_by = ANY(string_to_array($${paramIndex}, ','))`);
        params.push(filters.created_by);
        paramIndex++;
     }
     if (filters.member_id) {
-       conditions.push(`(t.created_by = $${paramIndex} OR tt.user_id = $${paramIndex})`);
+       conditions.push(`(t.created_by = ANY(string_to_array($${paramIndex}, ',')) OR tt.user_id = ANY(string_to_array($${paramIndex}, ',')))`);
        params.push(filters.member_id);
        paramIndex++;
     }
@@ -238,6 +238,16 @@ export const TaskRepository = {
          LOWER(mu.user_name) LIKE $${paramIndex}
        )`);
        params.push(q);
+       paramIndex++;
+    }
+    if (filters.start_date) {
+       conditions.push(`t.created_at >= $${paramIndex}`);
+       params.push(filters.start_date);
+       paramIndex++;
+    }
+    if (filters.end_date) {
+       conditions.push(`t.created_at <= $${paramIndex}`);
+       params.push(filters.end_date + 'T23:59:59.999Z');
        paramIndex++;
     }
 
@@ -315,26 +325,24 @@ export const TaskRepository = {
       deleted_at: null,
     };
 
-    await sql`
-      INSERT INTO tasks (
-        id, project_id, task_description, task_status, task_latest_percentage,
-        task_file, additional_link, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
-      ) VALUES (
-        ${newTask.id}, ${newTask.project_id}, ${newTask.task_description}, ${newTask.task_status},
-        ${newTask.task_latest_percentage}, ${newTask.task_file}, ${newTask.additional_link}, ${newTask.created_by}, ${newTask.created_at},
-        ${newTask.updated_by}, ${newTask.updated_at}, ${newTask.deleted_by}, ${newTask.deleted_at}
-      )
-    `;
+    await sql.begin(async (tx) => {
+      await tx`
+        INSERT INTO tasks (
+          id, project_id, task_description, task_status, task_latest_percentage,
+          task_file, additional_link, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
+        ) VALUES (
+          ${newTask.id}, ${newTask.project_id}, ${newTask.task_description}, ${newTask.task_status},
+          ${newTask.task_latest_percentage}, ${newTask.task_file}, ${newTask.additional_link}, ${newTask.created_by}, ${newTask.created_at},
+          ${newTask.updated_by}, ${newTask.updated_at}, ${newTask.deleted_by}, ${newTask.deleted_at}
+        )
+      `;
 
-    // Log task creation
-    await TaskLogRepository.create(
-      {
-        task_id: nextId,
-        task_status_old: 'CREATED',
-        task_status_new: newTask.task_status || STATUS.NOT_STARTED,
-      },
-      createdBy
-    );
+      // Log task creation
+      await tx`
+        INSERT INTO task_logs (task_id, task_status_old, task_status_new, created_by, created_at)
+        VALUES (${nextId}, 'CREATED', ${newTask.task_status || STATUS.NOT_STARTED}, ${createdBy}, ${now})
+      `;
+    });
 
     // Auto-update parent project status after task change
     if (task.project_id) {

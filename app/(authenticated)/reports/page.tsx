@@ -74,7 +74,7 @@ export default async function ReportsPage({
   }
 
   // Fetch projects for the new project filter
-  let allProjects = await ProjectRepository.findAll()
+  let allProjects = await ProjectRepository.findAll(userId)
 
   // Filter tasks based on selected project to make task dropdown smarter
   if (params.project_id) {

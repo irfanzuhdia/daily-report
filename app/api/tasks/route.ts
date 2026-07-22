@@ -1,19 +1,21 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
-import { TaskRepository, TaskTeamRepository, NotificationRepository } from '@/lib/repositories'
+import { taskSchema } from '@/lib/validation/schemas'
+import { TaskService } from '@/lib/services/task-service'
+import { handleApiError } from '@/lib/error-handler'
+import { createSuccessResponse, createErrorResponse } from '@/lib/api-response'
 
 export async function GET() {
   try {
     const session = await getSession()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse("UNAUTHORIZED", "Unauthorized", 401)
     }
 
-    const tasks = await TaskRepository.findAll()
-    return NextResponse.json(tasks)
+    const tasks = await TaskService.getAllTasks()
+    return createSuccessResponse(tasks)
   } catch (error) {
-    console.error('GET /api/tasks error:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return handleApiError(error)
   }
 }
 
@@ -21,36 +23,23 @@ export async function POST(request: NextRequest) {
   try {
     const session = await getSession()
     if (!session) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+      return createErrorResponse("UNAUTHORIZED", "Unauthorized", 401)
     }
 
     const body = await request.json()
-    const { task_user_ids, ...taskData } = body
-
-    const task = await TaskRepository.create(taskData, session.real_user_id ?? session.user_id)
-
-    // Create TaskTeam entries
-    if (task_user_ids && Array.isArray(task_user_ids)) {
-      const senderName = session.real_name ?? session.name ?? session.email ?? 'Someone'
-      const desc = task.task_description || ''
-      const truncatedDesc = desc.length > 60 ? desc.substring(0, 60) + '...' : desc
-      for (const userId of task_user_ids) {
-        await TaskTeamRepository.create(task.id, userId, session.real_user_id ?? session.user_id)
-        if (userId !== (session.real_user_id ?? session.user_id)) {
-          await NotificationRepository.create({
-            user_id: userId,
-            type: 'task_created',
-            title: 'Assigned to Task',
-            content: `${senderName} assigned you to the task: "${truncatedDesc}"`,
-            link: `/tasks/${task.id}`
-          })
-        }
-      }
+    const validationResult = taskSchema.parse(body) // using parse to let error handler catch ZodError
+    
+    const { task_user_ids, ...taskData } = validationResult
+    
+    const currentUser = {
+      id: session.real_user_id ?? session.user_id,
+      name: session.real_name ?? session.name ?? session.email ?? 'Someone'
     }
 
-    return NextResponse.json(task, { status: 201 })
+    const task = await TaskService.createTask(taskData, task_user_ids, currentUser)
+    return createSuccessResponse(task, 201)
   } catch (error) {
-    console.error('POST /api/tasks error:', error)
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+    return handleApiError(error)
   }
 }
+

@@ -18,7 +18,7 @@ export default async function NewTaskPage({
 
   const params = await searchParams
   const [projects, statuses, allUsers, uniqueCategories] = await Promise.all([
-    ProjectRepository.findAll(),
+    ProjectRepository.findAll(session.user_id),
     StatusRepository.findAll(),
     UserRepository.findAll(),
     ProjectRepository.findUniqueCategories(),

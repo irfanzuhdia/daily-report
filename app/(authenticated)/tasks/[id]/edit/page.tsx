@@ -21,7 +21,7 @@ export default async function EditTaskPage({
   const { id } = await params
   const [task, projects, statuses, allUsers, uniqueCategories] = await Promise.all([
     TaskRepository.findById(id),
-    ProjectRepository.findAll(),
+    ProjectRepository.findAll(session.user_id),
     StatusRepository.findAll(),
     UserRepository.findAll(),
     ProjectRepository.findUniqueCategories(),

@@ -79,6 +79,26 @@ export default async function LoginPage({
             </Button>
           </a>
 
+          {process.env.NODE_ENV === "development" && (
+            <div className="mt-4">
+              <div className="relative mb-4">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t border-muted-foreground/20" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">
+                    Or (Dev Only)
+                  </span>
+                </div>
+              </div>
+              <a href="/api/auth/dev-login">
+                <Button className="w-full" variant="outline" size="lg">
+                  Bypass Login
+                </Button>
+              </a>
+            </div>
+          )}
+
           <p className="mt-6 text-center text-xs text-muted-foreground">
             Only registered users can access this application.
             <br />

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import { NotificationRepository } from '@/lib/repositories'
@@ -27,7 +28,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({ notifications, unreadCount })
   } catch (error) {
-    console.error('GET /api/notifications error:', error)
+    logger.error('GET /api/notifications error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -54,7 +55,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({ error: 'id or all is required' }, { status: 400 })
   } catch (error) {
-    console.error('PUT /api/notifications error:', error)
+    logger.error('PUT /api/notifications error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

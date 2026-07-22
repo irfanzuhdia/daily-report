@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server'
 import { getSession } from '@/lib/session'
 import { CommentRepository, UserRepository, NotificationRepository } from '@/lib/repositories'
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(enriched)
   } catch (error) {
-    console.error('GET /api/comments error:', error)
+    logger.error('GET /api/comments error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
@@ -121,7 +122,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(comment, { status: 201 })
   } catch (error) {
-    console.error('POST /api/comments error:', error)
+    logger.error('POST /api/comments error:', error)
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }

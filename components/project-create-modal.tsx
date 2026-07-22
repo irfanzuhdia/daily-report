@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
+import { useForm } from "react-hook-form"
+import { zodResolver } from "@hookform/resolvers/zod"
 import { X, Upload, FileText, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,6 +17,7 @@ import {
 } from "@/components/ui/select"
 import { SearchableUserSelect, getSelectableUsers, type UserSelectItem } from "@/components/ui/searchable-user-select"
 import type { Project, Status } from "@/lib/types"
+import { projectSchema, type ProjectInput } from "@/lib/validation/schemas"
 
 interface ProjectCreateModalProps {
   isOpen: boolean
@@ -43,26 +46,62 @@ export function ProjectCreateModal({
   uniqueCategories = [],
 }: ProjectCreateModalProps) {
   const fileInputRef = useRef<HTMLInputElement>(null)
-
-  const [name, setName] = useState("")
-  const [description, setDescription] = useState("")
   
   const today = new Date()
   const nextWeek = new Date()
   nextWeek.setDate(nextWeek.getDate() + 7)
-  
-  const [startDate, setStartDate] = useState(getLocalYMD(today))
-  const [endDate, setEndDate] = useState(getLocalYMD(nextWeek))
-  const [status, setStatus] = useState("NS")
-  const [category, setCategory] = useState("")
-  const [projectFile, setProjectFile] = useState<string | null>(null)
+
+  const {
+    register,
+    handleSubmit,
+    setValue,
+    watch,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<ProjectInput>({
+    resolver: zodResolver(projectSchema),
+    defaultValues: {
+      project_name: "",
+      project_description: "",
+      project_start_date_plan: getLocalYMD(today),
+      project_end_date_plan: getLocalYMD(nextWeek),
+      project_status: "NS",
+      category: "",
+      additional_link: "",
+      team_user_ids: [currentUserId],
+      project_file: "",
+    },
+  })
+
+  // Watch custom controlled fields
+  const status = watch("project_status")
+  const teamUserIds = watch("team_user_ids") || []
+  const projectFile = watch("project_file")
+
   const [fileName, setFileName] = useState<string | null>(null)
-  const [additionalLink, setAdditionalLink] = useState("")
-  const [teamUserIds, setTeamUserIds] = useState<string[]>([currentUserId])
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+
+  // Reset form when modal opens/closes
+  useEffect(() => {
+    if (isOpen) {
+      reset({
+        project_name: "",
+        project_description: "",
+        project_start_date_plan: getLocalYMD(today),
+        project_end_date_plan: getLocalYMD(nextWeek),
+        project_status: "NS",
+        category: "",
+        additional_link: "",
+        team_user_ids: [currentUserId],
+        project_file: "",
+      })
+      setFileName(null)
+      setSaveError(null)
+      setUploadError(null)
+    }
+  }, [isOpen, reset, currentUserId])
 
   if (!isOpen) return null
 
@@ -80,7 +119,7 @@ export function ProjectCreateModal({
         throw new Error(data.error || "Upload failed")
       }
       const data = await res.json()
-      setProjectFile(data.webViewLink)
+      setValue("project_file", data.webViewLink)
       setFileName(data.fileName)
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : "Upload failed"
@@ -92,38 +131,30 @@ export function ProjectCreateModal({
   }
 
   const handleRemoveFile = () => {
-    setProjectFile(null)
+    setValue("project_file", "")
     setFileName(null)
     if (fileInputRef.current) fileInputRef.current.value = ""
   }
 
   const addTeamMember = (userId: string) => {
     if (!teamUserIds.includes(userId)) {
-      setTeamUserIds([...teamUserIds, userId])
+      setValue("team_user_ids", [...teamUserIds, userId])
     }
   }
 
   const removeTeamMember = (userId: string) => {
-    setTeamUserIds(teamUserIds.filter((id) => id !== userId))
+    setValue("team_user_ids", teamUserIds.filter((id) => id !== userId))
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!name.trim() || !startDate || !endDate || saving) return
-    setSaving(true)
+  const onSubmit = async (data: ProjectInput) => {
     setSaveError(null)
-
     try {
       const payload = {
-        project_name: name.trim(),
-        project_description: description.trim() || undefined,
-        project_start_date_plan: startDate || undefined,
-        project_end_date_plan: endDate || undefined,
-        project_status: status,
-        project_file: projectFile || undefined,
-        additional_link: additionalLink.trim() || undefined,
-        category: category.trim() || undefined,
-        team_user_ids: teamUserIds,
+        ...data,
+        project_description: data.project_description || undefined,
+        additional_link: data.additional_link || undefined,
+        category: data.category || undefined,
+        project_file: data.project_file || undefined,
       }
 
       const res = await fetch("/api/projects", {
@@ -134,29 +165,19 @@ export function ProjectCreateModal({
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({ error: "Failed to create project" }))
+        // Handle Zod server-side errors
+        if (err.errors) {
+          throw new Error(err.errors.map((e: any) => e.message).join(", "))
+        }
         throw new Error(err.error || "Failed to create project")
       }
 
       const newProject = await res.json()
       onSuccess(newProject)
-      
-      // Reset form
-      setName("")
-      setDescription("")
-      setStartDate(getLocalYMD(today))
-      setEndDate(getLocalYMD(nextWeek))
-      setStatus("NS")
-      setCategory("")
-      setProjectFile(null)
-      setFileName(null)
-      setAdditionalLink("")
-      setTeamUserIds([currentUserId])
       onClose()
     } catch (error: unknown) {
       const msg = error instanceof Error ? error.message : "Failed to create project"
       setSaveError(msg)
-    } finally {
-      setSaving(false)
     }
   }
 
@@ -182,7 +203,7 @@ export function ProjectCreateModal({
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
+        <form onSubmit={handleSubmit(onSubmit)} className="flex-1 overflow-y-auto p-6 space-y-4 custom-scrollbar">
           {saveError && (
             <div className="p-3 text-xs bg-destructive/10 text-destructive rounded-lg font-medium">
               {saveError}
@@ -193,30 +214,34 @@ export function ProjectCreateModal({
             <Label htmlFor="modalProjName">Project Name *</Label>
             <Input
               id="modalProjName"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
+              {...register("project_name")}
               placeholder="e.g. Project Apollo"
-              required
               autoFocus
+              className={errors.project_name ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {errors.project_name && <p className="text-[10px] text-destructive">{errors.project_name.message}</p>}
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="modalProjDesc">Description</Label>
             <Textarea
               id="modalProjDesc"
-              value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              {...register("project_description")}
               placeholder="Enter project description..."
               rows={3}
+              className={errors.project_description ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {errors.project_description && <p className="text-[10px] text-destructive">{errors.project_description.message}</p>}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="modalProjStatus">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger id="modalProjStatus">
+              <Select 
+                value={status} 
+                onValueChange={(val) => setValue("project_status", val as any)}
+              >
+                <SelectTrigger id="modalProjStatus" className={errors.project_status ? "border-destructive" : ""}>
                   <SelectValue placeholder="Select status" />
                 </SelectTrigger>
                 <SelectContent>
@@ -227,13 +252,14 @@ export function ProjectCreateModal({
                   ))}
                 </SelectContent>
               </Select>
+              {errors.project_status && <p className="text-[10px] text-destructive">{errors.project_status.message}</p>}
             </div>
+            
             <div className="space-y-2">
               <Label htmlFor="modalProjCategory">Category</Label>
               <Input
                 id="modalProjCategory"
-                value={category}
-                onChange={(e) => setCategory(e.target.value)}
+                {...register("category")}
                 placeholder="e.g. Frontend, Backend"
                 list="modal-project-categories"
               />
@@ -251,20 +277,20 @@ export function ProjectCreateModal({
               <Input
                 id="modalProjStart"
                 type="date"
-                value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                required
+                {...register("project_start_date_plan")}
+                className={errors.project_start_date_plan ? "border-destructive focus-visible:ring-destructive" : ""}
               />
+              {errors.project_start_date_plan && <p className="text-[10px] text-destructive">{errors.project_start_date_plan.message}</p>}
             </div>
             <div className="space-y-2">
               <Label htmlFor="modalProjEnd">End Date *</Label>
               <Input
                 id="modalProjEnd"
                 type="date"
-                value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                required
+                {...register("project_end_date_plan")}
+                className={errors.project_end_date_plan ? "border-destructive focus-visible:ring-destructive" : ""}
               />
+              {errors.project_end_date_plan && <p className="text-[10px] text-destructive">{errors.project_end_date_plan.message}</p>}
             </div>
           </div>
 
@@ -334,10 +360,11 @@ export function ProjectCreateModal({
             <Input
               id="modalProjLink"
               type="url"
-              value={additionalLink}
-              onChange={(e) => setAdditionalLink(e.target.value)}
+              {...register("additional_link")}
               placeholder="https://example.com/project-docs"
+              className={errors.additional_link ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {errors.additional_link && <p className="text-[10px] text-destructive">{errors.additional_link.message}</p>}
           </div>
 
           {/* Project Team Members Selector */}
@@ -363,8 +390,8 @@ export function ProjectCreateModal({
             >
               Cancel
             </Button>
-            <Button type="submit" disabled={saving || !name.trim()}>
-              {saving ? (
+            <Button type="submit" disabled={isSubmitting}>
+              {isSubmitting ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Creating...

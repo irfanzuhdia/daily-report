@@ -13,8 +13,8 @@ export default async function NewReportPage({
 
   const params = await searchParams
   const [tasks, projects, uniqueCategories, statuses, allUsers] = await Promise.all([
-    TaskRepository.findAll(),
-    ProjectRepository.findAll(),
+    TaskRepository.findAll(session.user_id),
+    ProjectRepository.findAll(session.user_id),
     ProjectRepository.findUniqueCategories(),
     StatusRepository.findAll(),
     UserRepository.findAll(),

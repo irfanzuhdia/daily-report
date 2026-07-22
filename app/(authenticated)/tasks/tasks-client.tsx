@@ -40,222 +40,22 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import { FilterContainer, FilterSearch, FilterMultiSelect } from "@/components/ui/filter-bar"
 import type { Task, Status, Project, TaskTeam, ProjectTeam } from "@/lib/types"
 import { useViewDensity } from "@/lib/view-density"
+import dynamic from "next/dynamic"
 import { revalidatePathsAndTags } from "@/app/actions"
-
 import { statusVariant, statusLabel } from "@/lib/status-helpers"
 
-/* ─────────────────────── Sortable Task Card ─────────────────────── */
+const SortableTaskCard = dynamic(() => import("@/components/kanban").then(m => m.SortableTaskCard), {
+  loading: () => <div className="h-24 bg-muted/20 animate-pulse rounded-xl" />
+})
+const TaskDragOverlay = dynamic(() => import("@/components/kanban").then(m => m.TaskDragOverlay))
+const DroppableColumn = dynamic(() => import("@/components/kanban").then(m => m.DroppableColumn), {
+  loading: () => <div className="flex-1 min-h-[500px] bg-muted/10 animate-pulse rounded-2xl" />
+})
 
-function SortableTaskCard({
-  task,
-  projectMap,
-  taskHoursMap,
-  statuses,
-  updatingId,
-  onStatusChange,
-  onDelete,
-  isPinned,
-  onTogglePin,
-  isTaskTeamMember,
-  density,
-}: {
-  task: Task
-  projectMap: Record<string, string | null>
-  taskHoursMap: Record<string, number>
-  statuses: Status[]
-  updatingId: string | null
-  onStatusChange: (taskId: string, newStatus: string) => void
-  onDelete: (taskId: string) => void
-  isPinned: boolean
-  onTogglePin: (taskId: string) => void
-  isTaskTeamMember: boolean
-  density: "comfortable" | "compact"
-}) {
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: task.id })
 
-  const style = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.4 : 1,
-  }
-
-  const isCompact = density === "compact"
-
-  return (
-    <div ref={setNodeRef} style={style} {...attributes}>
-      <Card className={`shadow-sm hover:shadow-md transition-shadow relative overflow-hidden ${isDragging ? "ring-2 ring-primary" : ""}`}>
-        {updatingId === task.id && (
-          <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
-            <Loader2 className="h-5 w-5 animate-spin text-primary" />
-          </div>
-        )}
-        <CardContent className={isCompact ? "p-3 space-y-2" : "p-4 space-y-3"}>
-          <div className="flex items-start gap-2">
-            {isTaskTeamMember && (
-              <button
-                {...listeners}
-                className="mt-0.5 cursor-grab active:cursor-grabbing text-muted-foreground hover:text-foreground shrink-0 touch-none"
-                tabIndex={-1}
-              >
-                <GripVertical className="h-4 w-4" />
-              </button>
-            )}
-            <div className="space-y-1 min-w-0 flex-1">
-              <Link href={`/tasks/${task.id}`} className="font-medium text-sm hover:text-primary leading-snug whitespace-pre-wrap">
-                {task.task_description}
-              </Link>
-              <p className="text-[10px] text-muted-foreground truncate">
-                📁 {projectMap[task.project_id] ?? task.project_id}
-              </p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className={`h-6 w-6 shrink-0 ${isPinned ? "text-primary" : "text-muted-foreground opacity-30 hover:opacity-100"}`}
-              onClick={() => onTogglePin(task.id)}
-            >
-              <Pin className="h-3.5 w-3.5" style={isPinned ? { fill: "currentColor" } : {}} />
-            </Button>
-          </div>
-
-          <div className={`flex items-center justify-between text-xs text-muted-foreground pt-1 border-t ${isCompact ? "border-t-muted/30" : ""}`}>
-            <span>Progress: <span className="font-medium text-foreground">{task.task_latest_percentage ?? 0}%</span></span>
-            {taskHoursMap[task.id] > 0 && (
-              <span>Hours: <span className="font-medium text-foreground">{taskHoursMap[task.id]}h</span></span>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between gap-1 pt-1">
-            {/* Fast status switcher */}
-            <Select
-              value={task.task_status || "NS"}
-              onValueChange={(val) => onStatusChange(task.id, val)}
-              disabled={!isTaskTeamMember}
-            >
-              <SelectTrigger className={`text-[10px] px-2 py-0 ${isCompact ? "h-6 w-[95px]" : "h-7 w-[110px]"}`}>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {statuses.map((s) => (
-                  <SelectItem key={s.id} value={s.id} className="text-xs">
-                    {s.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            <div className="flex items-center gap-0.5">
-              <Link href={`/tasks/${task.id}`}>
-                <Button variant="ghost" size="icon-sm" className={isCompact ? "h-6 w-6" : "h-7 w-7"}>
-                  <Eye className="h-3 w-3" />
-                </Button>
-              </Link>
-              {isTaskTeamMember && (
-                <>
-                  <Link href={`/tasks/${task.id}/edit`}>
-                    <Button variant="ghost" size="icon-sm" className={isCompact ? "h-6 w-6" : "h-7 w-7"}>
-                      <Pencil className="h-3 w-3" />
-                    </Button>
-                  </Link>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className={`text-destructive hover:text-destructive ${isCompact ? "h-6 w-6" : "h-7 w-7"}`}
-                    onClick={() => onDelete(task.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
-                </>
-              )}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
-}
-
-/* ─────────────────────── Drag Overlay Card ─────────────────────── */
-
-function TaskDragOverlay({
-  task,
-  projectMap,
-  taskHoursMap,
-}: {
-  task: Task
-  projectMap: Record<string, string | null>
-  taskHoursMap: Record<string, number>
-}) {
-  return (
-    <Card className="shadow-xl ring-2 ring-primary/50 rotate-2 w-[280px]">
-      <CardContent className="p-4 space-y-2">
-        <p className="font-medium text-sm whitespace-pre-wrap">{task.task_description}</p>
-        <p className="text-[11px] text-muted-foreground truncate">
-          📁 {projectMap[task.project_id] ?? task.project_id}
-        </p>
-        <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t">
-          <span>{task.task_latest_percentage ?? 0}%</span>
-          {taskHoursMap[task.id] > 0 && <span>{taskHoursMap[task.id]}h</span>}
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-
-/* ─────────────────────── Droppable Column ─────────────────────── */
-
-function DroppableColumn({
-  column,
-  tasks,
-  children,
-}: {
-  column: { id: string; title: string }
-  tasks: Task[]
-  children: React.ReactNode
-}) {
-  const taskIds = tasks.map((t) => t.id)
-  const { setNodeRef } = useDroppable({
-    id: column.id,
-  })
-
-  return (
-    <div ref={setNodeRef} className="flex flex-col rounded-2xl border bg-muted/30 p-4 min-h-[500px]">
-      <div className="flex items-center justify-between mb-4 pb-2 border-b">
-        <div className="flex items-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${
-            column.id === "NS" ? "bg-slate-400" :
-            column.id === "OP" ? "bg-amber-500" :
-            column.id === "D" ? "bg-emerald-500" :
-            "bg-rose-500"
-          }`} />
-          <h3 className="font-semibold text-sm text-foreground">{column.title}</h3>
-        </div>
-        <Badge variant="secondary">{tasks.length}</Badge>
-      </div>
-
-      <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
-        <div className="flex-1 space-y-3 overflow-y-auto" data-column-id={column.id}>
-          {tasks.length === 0 ? (
-            <div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-xl bg-card/50">
-              <p className="text-xs text-muted-foreground">No tasks</p>
-            </div>
-          ) : (
-            children
-          )}
-        </div>
-      </SortableContext>
-    </div>
-  )
-}
 
 /* ─────────────────────── Main Component ─────────────────────── */
 
@@ -321,15 +121,15 @@ export function TasksClient({
 
   const router = useRouter()
   const [search, setSearch] = useState(currentSearch ?? "")
-  const [statusFilter, setStatusFilter] = useState(currentStatus ?? "")
-  const [projectFilter, setProjectFilter] = useState(currentProjectId ?? "")
-  const [createdByFilter, setCreatedByFilter] = useState(currentCreatedBy ?? "")
-  const [memberFilter, setMemberFilter] = useState(currentMemberId ?? "")
+  const [statusFilter, setStatusFilter] = useState<string[]>(currentStatus ? currentStatus.split(',') : [])
+  const [projectFilter, setProjectFilter] = useState<string[]>(currentProjectId ? currentProjectId.split(',') : [])
+  const [createdByFilter, setCreatedByFilter] = useState<string[]>(currentCreatedBy ? currentCreatedBy.split(',') : [])
+  const [memberFilter, setMemberFilter] = useState<string[]>(currentMemberId ? currentMemberId.split(',') : [])
 
-  const [dept, setDept] = useState(currentDept || defaultDept)
-  const [site, setSite] = useState(currentSite || defaultSite)
-  const [division, setDivision] = useState(currentDiv || defaultDiv)
-  const [team, setTeam] = useState(currentTeam || defaultTeam)
+  const [dept, setDept] = useState<string[]>(currentDept ? currentDept.split(',') : (defaultDept ? [defaultDept] : []))
+  const [site, setSite] = useState<string[]>(currentSite ? currentSite.split(',') : (defaultSite ? [defaultSite] : []))
+  const [division, setDivision] = useState<string[]>(currentDiv ? currentDiv.split(',') : (defaultDiv ? [defaultDiv] : []))
+  const [team, setTeam] = useState<string[]>(currentTeam ? currentTeam.split(',') : (defaultTeam ? [defaultTeam] : []))
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
   
@@ -397,15 +197,15 @@ export function TasksClient({
     }
     const params = new URLSearchParams()
     if (debouncedSearch) params.set("search", debouncedSearch)
-    if (statusFilter) params.set("status", statusFilter)
-    if (projectFilter) params.set("project_id", projectFilter)
+    if (statusFilter.length > 0) params.set("status", statusFilter.join(","))
+    if (projectFilter.length > 0) params.set("project_id", projectFilter.join(","))
     if (viewMode === "team") {
-      if (createdByFilter) params.set("created_by", createdByFilter)
-      if (memberFilter) params.set("member_id", memberFilter)
-      if (dept) params.set("dept_filter", dept)
-      if (site) params.set("site_filter", site)
-      if (division) params.set("div_filter", division)
-      if (team) params.set("team_filter", team)
+      if (createdByFilter.length > 0) params.set("created_by", createdByFilter.join(","))
+      if (memberFilter.length > 0) params.set("member_id", memberFilter.join(","))
+      if (dept.length > 0) params.set("dept_filter", dept.join(","))
+      if (site.length > 0) params.set("site_filter", site.join(","))
+      if (division.length > 0) params.set("div_filter", division.join(","))
+      if (team.length > 0) params.set("team_filter", team.join(","))
     }
     const query = params.toString()
     router.push(`/tasks${query ? "?" + query : ""}`)
@@ -678,18 +478,26 @@ export function TasksClient({
     }
   }
 
-  const uniqueDepts = Array.from(new Set(users.map((u) => u.user_departement).filter(Boolean))) as string[]
-  const uniqueSites = Array.from(new Set(users.map((u) => u.user_site).filter(Boolean))) as string[]
-  const uniqueDivs = Array.from(new Set(users.map((u) => u.user_division).filter(Boolean))) as string[]
-  const uniqueTeams = Array.from(new Set(users.map((u) => u.user_team).filter(Boolean))) as string[]
+  const { uniqueDepts, uniqueSites, uniqueDivs, uniqueTeams } = useMemo(() => {
+    return {
+      uniqueDepts: Array.from(new Set(users.map((u) => u.user_departement).filter(Boolean))) as string[],
+      uniqueSites: Array.from(new Set(users.map((u) => u.user_site).filter(Boolean))) as string[],
+      uniqueDivs: Array.from(new Set(users.map((u) => u.user_division).filter(Boolean))) as string[],
+      uniqueTeams: Array.from(new Set(users.map((u) => u.user_team).filter(Boolean))) as string[],
+    }
+  }, [users])
 
   // Only show users who have actually created a task
-  const creatorIds = new Set(tasks.map((t) => t.created_by).filter(Boolean))
-  const uniqueCreators = users.filter((u) => creatorIds.has(u.user_id))
+  const uniqueCreators = useMemo(() => {
+    const creatorIds = new Set(tasks.map((t) => t.created_by).filter(Boolean))
+    return users.filter((u) => creatorIds.has(u.user_id))
+  }, [tasks, users])
 
   // Only show users who are actually a team member on some task
-  const memberIds = new Set(taskTeams.map((tt) => tt.user_id).filter(Boolean))
-  const uniqueMembers = users.filter((u) => memberIds.has(u.user_id))
+  const uniqueMembers = useMemo(() => {
+    const memberIds = new Set(taskTeams.map((tt) => tt.user_id).filter(Boolean))
+    return users.filter((u) => memberIds.has(u.user_id))
+  }, [taskTeams, users])
 
   const activeTask = activeId ? activeTasks.find(t => t.id === activeId) : null
 
@@ -756,142 +564,98 @@ export function TasksClient({
       </div>
 
       {/* Filters */}
-      <div className="bg-zinc-950 border border-zinc-800 rounded-[1.25rem] p-2 shadow-sm mb-6 flex flex-col gap-2">
-        <div className="relative w-full">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Search tasks..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="pl-9 h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300 placeholder:text-zinc-500 w-full"
-              />
-            </div>
-        <div className="flex flex-row items-center flex-wrap gap-2">
-            
-            <Select value={projectFilter} onValueChange={setProjectFilter}>
-              <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
-                <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                <SelectValue placeholder="All projects" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">All projects</SelectItem>
-                {projects.map((p) => (
-                  <SelectItem key={p.project_id} value={p.project_id}>
-                    {p.project_name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+      <FilterContainer>
+        <FilterSearch
+          placeholder="Search tasks..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        <div className="flex flex-wrap items-center gap-2">
+            <FilterMultiSelect
+              placeholder="All projects"
+              icon={<Filter className="h-3.5 w-3.5" />}
+              options={projects.map((p) => ({ label: p.project_name || "Unnamed Project", value: p.project_id }))}
+              selectedValues={projectFilter}
+              onSelectedValuesChange={setProjectFilter}
+              className="w-full sm:w-[180px]"
+            />
             {layout === "list" && (
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger className="w-full sm:w-[160px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
-                  <SelectValue placeholder="All statuses" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All statuses</SelectItem>
-                  {statuses.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <FilterMultiSelect
+                placeholder="All statuses"
+                icon={<Filter className="h-3.5 w-3.5" />}
+                options={statuses.map((s) => ({ label: s.name, value: s.id }))}
+                selectedValues={statusFilter}
+                onSelectedValuesChange={setStatusFilter}
+                className="w-full sm:w-[160px]"
+              />
             )}
             {viewMode === "team" && (
               <>
-                <Select value={createdByFilter} onValueChange={setCreatedByFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
-                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                    <SelectValue placeholder="Created by" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All creators</SelectItem>
-                    {uniqueCreators.map((u) => (
-                      <SelectItem key={u.user_id} value={u.user_id}>
-                        {u.user_name || u.user_email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FilterMultiSelect
+                  placeholder="Created by"
+                  icon={<Filter className="h-3.5 w-3.5" />}
+                  options={uniqueCreators.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
+                  selectedValues={createdByFilter}
+                  onSelectedValuesChange={setCreatedByFilter}
+                  className="w-full sm:w-[180px]"
+                />
 
-                <Select value={memberFilter} onValueChange={setMemberFilter}>
-                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
-                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                    <SelectValue placeholder="Task team" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All members</SelectItem>
-                    {uniqueMembers.map((u) => (
-                      <SelectItem key={u.user_id} value={u.user_id}>
-                        {u.user_name || u.user_email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FilterMultiSelect
+                  placeholder="Task team"
+                  icon={<Filter className="h-3.5 w-3.5" />}
+                  options={uniqueMembers.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
+                  selectedValues={memberFilter}
+                  onSelectedValuesChange={setMemberFilter}
+                  className="w-full sm:w-[180px]"
+                />
 
-                <Select value={dept} onValueChange={setDept} disabled={isDeptDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
-                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                    <SelectValue placeholder="Department" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All Departments</SelectItem>
-                    {uniqueDepts.map((d) => (
-                      <SelectItem key={d} value={d}>
-                        {d}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {!isDeptDisabled && (
+                  <FilterMultiSelect
+                    placeholder="Department"
+                    icon={<Filter className="h-3.5 w-3.5" />}
+                    options={uniqueDepts.map((d) => ({ label: d, value: d }))}
+                    selectedValues={dept}
+                    onSelectedValuesChange={setDept}
+                    className="w-full sm:w-[180px]"
+                  />
+                )}
 
-                <Select value={site} onValueChange={setSite} disabled={isSiteDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
-                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                    <SelectValue placeholder="Site" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All Sites</SelectItem>
-                    {uniqueSites.map((s) => (
-                      <SelectItem key={s} value={s}>
-                        {s}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {!isSiteDisabled && (
+                  <FilterMultiSelect
+                    placeholder="Site"
+                    icon={<Filter className="h-3.5 w-3.5" />}
+                    options={uniqueSites.map((s) => ({ label: s, value: s }))}
+                    selectedValues={site}
+                    onSelectedValuesChange={setSite}
+                    className="w-full sm:w-[180px]"
+                  />
+                )}
 
-                <Select value={division} onValueChange={setDivision} disabled={isDivDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
-                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                    <SelectValue placeholder="Division" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All Divisions</SelectItem>
-                    {uniqueDivs.map((d) => (
-                      <SelectItem key={d} value={d}>
-                        {d}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {!isDivDisabled && (
+                  <FilterMultiSelect
+                    placeholder="Division"
+                    icon={<Filter className="h-3.5 w-3.5" />}
+                    options={uniqueDivs.map((d) => ({ label: d, value: d }))}
+                    selectedValues={division}
+                    onSelectedValuesChange={setDivision}
+                    className="w-full sm:w-[180px]"
+                  />
+                )}
 
-                <Select value={team} onValueChange={setTeam} disabled={isTeamDisabled}>
-                  <SelectTrigger className="w-full sm:w-[180px] h-9 rounded-full bg-zinc-900 border-zinc-800 hover:border-zinc-700 text-sm transition-colors text-zinc-300">
-                    <Filter className="mr-2 h-3.5 w-3.5 text-muted-foreground" />
-                    <SelectValue placeholder="Team" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="">All Teams</SelectItem>
-                    {uniqueTeams.map((t) => (
-                      <SelectItem key={t} value={t}>
-                        {t}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {!isTeamDisabled && (
+                  <FilterMultiSelect
+                    placeholder="Team"
+                    icon={<Filter className="h-3.5 w-3.5" />}
+                    options={uniqueTeams.map((t) => ({ label: t, value: t }))}
+                    selectedValues={team}
+                    onSelectedValuesChange={setTeam}
+                    className="w-full sm:w-[180px]"
+                  />
+                )}
               </>
             )}
           </div>
-      </div>
+      </FilterContainer>
 
       {/* Main Content Area */}
       {layout === "kanban" ? (
@@ -974,22 +738,22 @@ export function TasksClient({
                   projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
                   isSuperUser
                 return (
-                  <div key={task.id} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 gap-2.5 hover:bg-muted/30 transition-colors">
+                  <div key={task.id} onClick={() => router.push(`/tasks/${task.id}`)} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 gap-2.5 hover:bg-muted/30 transition-colors cursor-pointer">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <Badge variant="outline" className="shrink-0 text-[10px] font-mono py-0 px-1 bg-muted">
                         {task.id.substring(0, 6)}
                       </Badge>
                       <div className="min-w-0 flex-1">
-                        <Link href={`/tasks/${task.id}`} className="font-medium text-xs hover:text-primary leading-none block truncate">
+                        <span className="font-medium text-xs hover:text-primary leading-none block truncate">
                           {task.task_description}
-                        </Link>
+                        </span>
                         <p className="text-[10px] text-muted-foreground mt-0.5 max-w-xl truncate">
                           📁 {projectMap[task.project_id] ?? task.project_id}
                         </p>
                       </div>
                     </div>
                     
-                    <div className="flex flex-wrap items-center gap-2 shrink-0 text-xs">
+                    <div className="flex flex-wrap items-center gap-2 shrink-0 text-xs" onClick={(e) => e.stopPropagation()}>
                       <Badge
                         variant={statusVariant[task.task_status ?? "NS"] ?? "default"}
                         className="text-[9px] py-0 px-1.5 shrink-0"
@@ -1005,11 +769,6 @@ export function TasksClient({
                       </div>
 
                       <div className="flex items-center gap-0.5">
-                        <Link href={`/tasks/${task.id}`}>
-                          <Button variant="ghost" size="icon-sm" className="h-6 w-6">
-                            <Eye className="h-3 w-3" />
-                          </Button>
-                        </Link>
                         {isMember && (
                           <>
                             <Link href={`/tasks/${task.id}/edit`}>
@@ -1042,12 +801,12 @@ export function TasksClient({
                   projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
                   isSuperUser
                 return (
-                  <Card key={task.id} className="transition-shadow hover:shadow-md">
+                  <Card key={task.id} onClick={() => router.push(`/tasks/${task.id}`)} className="transition-shadow hover:shadow-md cursor-pointer hover:bg-muted/50">
                     <CardContent className="flex items-center justify-between p-4">
                       <div className="min-w-0 flex-1">
-                        <Link href={`/tasks/${task.id}`} className="font-medium hover:text-primary">
+                        <span className="font-medium hover:text-primary">
                           <p className="truncate">{task.task_description}</p>
-                        </Link>
+                        </span>
                         <p className="text-xs text-muted-foreground">
                           {projectMap[task.project_id] ?? task.project_id} •{" "}
                           {task.task_latest_percentage ?? 0}% complete
@@ -1056,18 +815,13 @@ export function TasksClient({
                           )}
                         </p>
                       </div>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         <Badge
                           variant={statusVariant[task.task_status ?? "NS"] ?? "default"}
                           className="shrink-0"
                         >
                           {statusLabel[task.task_status ?? "NS"] ?? task.task_status ?? "NS"}
                         </Badge>
-                        <Link href={`/tasks/${task.id}`}>
-                          <Button variant="ghost" size="icon-sm">
-                            <Eye className="h-3 w-3" />
-                          </Button>
-                        </Link>
                         {isMember && (
                           <>
                             <Link href={`/tasks/${task.id}/edit`}>
@@ -1145,7 +899,11 @@ export function TasksClient({
             ) : (
               <div className="space-y-3">
                 {cancelledTasks.map((task) => (
-                  <Card key={task.id} className="border bg-muted/10 relative overflow-hidden">
+                  <Card 
+                    key={task.id} 
+                    onClick={() => router.push(`/tasks/${task.id}`)}
+                    className="group hover:shadow-md transition-shadow relative overflow-hidden cursor-pointer hover:bg-muted/50 border bg-muted/10"
+                  >
                     {updatingId === task.id && (
                       <div className="absolute inset-0 bg-background/50 flex items-center justify-center z-10">
                         <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -1187,11 +945,6 @@ export function TasksClient({
                             ))}
                           </SelectContent>
                         </Select>
-                        <Link href={`/tasks/${task.id}`}>
-                          <Button variant="ghost" size="icon-sm" className="h-8 w-8">
-                            <Eye className="h-3.5 w-3.5" />
-                          </Button>
-                        </Link>
                       </div>
                     </CardContent>
                   </Card>

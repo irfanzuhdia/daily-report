@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/session"
 import { RoleLevelRepository, getUserLevel } from "@/lib/repositories"
@@ -12,7 +13,7 @@ export async function GET() {
     const roles = await RoleLevelRepository.findAll()
     return NextResponse.json(roles)
   } catch (e: any) {
-    console.error("Error fetching roles:", e)
+    logger.error("Error fetching roles:", e)
     return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 })
   }
 }
@@ -42,7 +43,7 @@ export async function POST(request: Request) {
     const role = await RoleLevelRepository.upsert(role_name, level)
     return NextResponse.json({ success: true, role })
   } catch (e: any) {
-    console.error("Error upserting role level:", e)
+    logger.error("Error upserting role level:", e)
     return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 })
   }
 }
@@ -78,7 +79,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Failed to delete role" }, { status: 500 })
     }
   } catch (e: any) {
-    console.error("Error deleting role:", e)
+    logger.error("Error deleting role:", e)
     return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 })
   }
 }

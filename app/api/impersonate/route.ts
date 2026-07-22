@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getSession } from '@/lib/session';
@@ -85,7 +86,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ success: true, user: targetUser });
   } catch (error) {
-    console.error('POST /api/impersonate error:', error);
+    logger.error('POST /api/impersonate error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
@@ -141,7 +142,7 @@ export async function DELETE() {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('DELETE /api/impersonate error:', error);
+    logger.error('DELETE /api/impersonate error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

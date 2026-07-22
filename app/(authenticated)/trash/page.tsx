@@ -1,11 +1,11 @@
 import { redirect } from "next/navigation"
 import { getSession } from "@/lib/session"
-import { revalidateTag } from "next/cache"
 import {
   findAllProjectsIncludingDeleted,
   findAllTasksIncludingDeleted,
   findAllReportsIncludingDeleted,
   getUserMap,
+  revalidateTag,
 } from "@/lib/repositories"
 import { sql } from "@/lib/db"
 import { TrashClient } from "./trash-client"
@@ -42,7 +42,7 @@ export default async function TrashPage() {
   )
   if (projectsToDelete.length > 0) {
     const ids = projectsToDelete.map((p) => p.project_id)
-    await sql`DELETE FROM projects WHERE project_id = ANY(${ids})`
+    await sql`DELETE FROM projects WHERE project_id = ANY(${ids}::text[])`
     projectsChanged = true
   }
 
@@ -51,7 +51,7 @@ export default async function TrashPage() {
   )
   if (tasksToDelete.length > 0) {
     const ids = tasksToDelete.map((t) => t.id)
-    await sql`DELETE FROM tasks WHERE id = ANY(${ids})`
+    await sql`DELETE FROM tasks WHERE id = ANY(${ids}::text[])`
     tasksChanged = true
   }
 
@@ -60,14 +60,14 @@ export default async function TrashPage() {
   )
   if (reportsToDelete.length > 0) {
     const ids = reportsToDelete.map((r) => r.report_id)
-    await sql`DELETE FROM daily_reports WHERE report_id = ANY(${ids})`
+    await sql`DELETE FROM daily_reports WHERE report_id = ANY(${ids}::text[])`
     reportsChanged = true
   }
 
   if (projectsChanged || tasksChanged || reportsChanged) {
-    if (projectsChanged) revalidateTag("projects", "max")
-    if (tasksChanged) revalidateTag("tasks", "max")
-    if (reportsChanged) revalidateTag("reports", "max")
+    if (projectsChanged) revalidateTag("projects")
+    if (tasksChanged) revalidateTag("tasks")
+    if (reportsChanged) revalidateTag("reports")
 
     // Re-fetch clean data
     ;[allProjects, allTasks, allReports] = await Promise.all([

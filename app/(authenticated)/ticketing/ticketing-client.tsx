@@ -3,6 +3,12 @@
 import React, { useState, useMemo, useCallback, useTransition, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useViewDensity } from "@/lib/view-density"
+import dynamic from "next/dynamic"
+
+const TicketingTable = dynamic(() => import("@/components/ticketing/ticketing-table").then(m => m.TicketingTable), {
+  loading: () => <div className="min-h-[300px] flex items-center justify-center text-muted-foreground animate-pulse bg-muted/20 rounded-xl border border-border" />
+})
+
 import {
   LifeBuoy,
   Search,
@@ -1374,108 +1380,13 @@ export function TicketingClient({
 
       {/* Tickets Directory Table */}
       <div className="rounded-xl border bg-card overflow-hidden shadow-sm">
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="border-b bg-muted/20 text-xs font-semibold text-muted-foreground uppercase tracking-wider select-none">
-                <th className="p-3 pl-4 cursor-pointer hover:text-foreground transition-colors" onClick={() => toggleSort("id")}>
-                  <div className="flex items-center gap-1">ID {renderSortIndicator("id")}</div>
-                </th>
-                <th className="p-3 cursor-pointer hover:text-foreground transition-colors" onClick={() => toggleSort("title")}>
-                  <div className="flex items-center gap-1">Title {renderSortIndicator("title")}</div>
-                </th>
-                <th className="p-3 cursor-pointer hover:text-foreground transition-colors" onClick={() => toggleSort("request_by")}>
-                  <div className="flex items-center gap-1">Requester {renderSortIndicator("request_by")}</div>
-                </th>
-                <th className="p-3 cursor-pointer hover:text-foreground transition-colors" onClick={() => toggleSort("request_to_division")}>
-                  <div className="flex items-center gap-1">Request To {renderSortIndicator("request_to_division")}</div>
-                </th>
-                <th className="p-3 cursor-pointer hover:text-foreground transition-colors" onClick={() => toggleSort("tag_person")}>
-                  <div className="flex items-center gap-1">Tagged Person {renderSortIndicator("tag_person")}</div>
-                </th>
-                <th className="p-3 cursor-pointer hover:text-foreground transition-colors" onClick={() => toggleSort("problem_type")}>
-                  <div className="flex items-center gap-1">Problem Type {renderSortIndicator("problem_type")}</div>
-                </th>
-                <th className="p-3 cursor-pointer hover:text-foreground transition-colors text-primary" onClick={() => toggleSort("due_date")}>
-                  <div className="flex items-center gap-1">Due Date {renderSortIndicator("due_date")}</div>
-                </th>
-                <th className="p-3 cursor-pointer hover:text-foreground transition-colors" onClick={() => toggleSort("priority")}>
-                  <div className="flex items-center gap-1">Priority {renderSortIndicator("priority")}</div>
-                </th>
-                <th className="p-3 cursor-pointer hover:text-foreground transition-colors" onClick={() => toggleSort("status")}>
-                  <div className="flex items-center gap-1">Status {renderSortIndicator("status")}</div>
-                </th>
-                <th className="p-3 text-right pr-4">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y text-sm">
-              {filteredTickets.length === 0 ? (
-                <tr>
-                  <td colSpan={10} className="p-8 text-center text-muted-foreground">
-                    No tickets found matching the filter criteria.
-                  </td>
-                </tr>
-              ) : (
-                filteredTickets.map((t) => (
-                  <tr
-                    key={t.id}
-                    className="hover:bg-muted/10 transition-colors group cursor-pointer"
-                    onClick={() => handleViewTicket(t)}
-                  >
-                    <td className="p-3 pl-4 font-semibold">
-                      <span className="font-mono text-xs bg-primary/10 text-primary px-2 py-0.5 rounded border border-primary/20">
-                        {t.id}
-                      </span>
-                    </td>
-                    <td className="p-3">
-                      <div className="font-medium text-foreground max-w-[200px] truncate" title={t.title}>
-                        {t.title}
-                      </div>
-                    </td>
-                    <td className="p-3 text-muted-foreground text-xs">
-                      {userMap.get(t.request_by) || t.request_by}
-                    </td>
-                    <td className="p-3">
-                      <span className="text-xs font-medium">
-                        {t.request_to_division || "—"}
-                      </span>
-                    </td>
-                    <td className="p-3 text-muted-foreground text-xs" title={(t.team_user_ids || []).map(uid => userMap.get(uid) || uid).join(", ")}>
-                      {(() => {
-                        const ids = t.team_user_ids || []
-                        if (ids.length === 0) {
-                          return t.tag_person ? (userMap.get(t.tag_person) || t.tag_person) : "—"
-                        }
-                        const names = ids.map(uid => userMap.get(uid) || uid)
-                        if (names.length === 1) return names[0]
-                        return `${names[0]} +${names.length - 1} more`
-                      })()}
-                    </td>
-                    <td className="p-3">
-                      <span className="text-xs text-muted-foreground font-medium">{t.problem_type}</span>
-                    </td>
-                    <td className="p-3 text-muted-foreground text-xs">
-                      {t.due_date ? new Date(t.due_date).toLocaleDateString() : "—"}
-                    </td>
-                    <td className="p-3">{getPriorityBadge(t.priority)}</td>
-                    <td className="p-3">{getStatusBadge(t.status)}</td>
-                    <td className="p-3 text-right pr-4" onClick={(e) => e.stopPropagation()}>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        className="opacity-0 group-hover:opacity-100 hover:bg-primary/10 hover:text-primary rounded-lg transition-all"
-                        onClick={() => handleViewTicket(t)}
-                        title="View Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+        <TicketingTable
+          tickets={filteredTickets}
+          userMap={userMap}
+          getPriorityBadge={getPriorityBadge}
+          getStatusBadge={getStatusBadge}
+          handleViewTicket={handleViewTicket}
+        />
       </div>
 
       {/* Create Ticket Dialog Modal */}

@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextResponse } from "next/server"
 import { getSession } from "@/lib/session"
 import { UserRepository, UserLogRepository, getUserLevel } from "@/lib/repositories"
@@ -150,7 +151,7 @@ export async function PUT(
       return NextResponse.json({ error: "Failed to update user" }, { status: 500 })
     }
   } catch (e: any) {
-    console.error("Error updating user:", e)
+    logger.error("Error updating user:", e)
     return NextResponse.json({ error: e.message || "Internal Server Error" }, { status: 500 })
   }
 }

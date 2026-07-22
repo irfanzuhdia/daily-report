@@ -40,7 +40,17 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { OrgTreeGraph } from "./org-tree-graph"
+import dynamic from "next/dynamic"
+
+const OrgTreeGraph = dynamic(() => import("./org-tree-graph").then(m => m.OrgTreeGraph), {
+  loading: () => <div className="min-h-[500px] flex items-center justify-center text-muted-foreground">Loading interactive chart...</div>
+})
+const RoleManagement = dynamic(() => import("@/components/users/role-management").then(m => m.RoleManagement), {
+  loading: () => <div className="min-h-[300px] flex items-center justify-center text-muted-foreground animate-pulse bg-muted/20 rounded-xl" />
+})
+const UsersTable = dynamic(() => import("@/components/users/users-table").then(m => m.UsersTable), {
+  loading: () => <div className="min-h-[300px] flex items-center justify-center text-muted-foreground animate-pulse bg-muted/20 rounded-xl" />
+})
 
 interface UserProfile {
   user_id: string
@@ -102,6 +112,12 @@ export function UsersClient({
   const [users, setUsers] = useState<UserProfile[]>(initialUsers)
   const [roleLevels, setRoleLevels] = useState<RoleLevel[]>(initialRoleLevels)
   const [userLogs, setUserLogs] = useState<UserLog[]>(initialUserLogs)
+  
+  // Dialog states for children
+  const [restoreUserId, setRestoreUserId] = useState<string | null>(null)
+  const [showRestoreDialog, setShowRestoreDialog] = useState(false)
+  const [deleteUserId, setDeleteUserId] = useState<string | null>(null)
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false)
 
   React.useEffect(() => {
     setUsers(initialUsers)
@@ -257,6 +273,10 @@ export function UsersClient({
       console.error(e)
       triggerNotice("error", "An error occurred during impersonation")
     }
+  }
+
+  const handleResetPasswordClick = async (userId: string) => {
+    // Logic for password reset...
   }
 
   // Dynamic cascading filter options
@@ -840,136 +860,20 @@ export function UsersClient({
           {/* Users Directory Table */}
           <Card className="overflow-hidden border shadow-sm">
             <CardContent className="p-0">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
-                  <thead>
-                    <tr className="border-b bg-muted/40 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                      <th className="p-4 font-medium">User Profile</th>
-                      <th className="p-4 font-medium">Occupation (Level)</th>
-                      <th className="p-4 font-medium">Site & Department</th>
-                      <th className="p-4 font-medium">Division, Team & Unit</th>
-                      <th className="p-4 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y text-sm">
-                    {filteredUsers.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="p-8 text-center text-muted-foreground">
-                          No users found matching your search.
-                        </td>
-                      </tr>
-                    ) : (
-                      filteredUsers.map((u) => {
-                        const isUserAdmin = ["super user", "co - super user"].includes((u.user_occupation || "").toLowerCase())
-                        const userLevel = isUserAdmin 
-                          ? 7 
-                          : (roleLevels.find((r) => r.role_name.toLowerCase() === (u.user_occupation || "").toLowerCase())?.level || 1)
-
-                        const targetIsSU = isSuperUser(u.user_occupation)
-                        const targetIsCOSU = isCoSuperUser(u.user_occupation)
-                        const canEdit = !targetIsSU && (!targetIsCOSU || callerIsSU)
-
-                        return (
-                          <tr key={u.user_id} className="hover:bg-muted/10 transition-colors">
-                            {/* User details */}
-                            <td className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div className="flex h-9 w-9 items-center justify-center rounded-full bg-primary/10 text-primary font-semibold shrink-0">
-                                  {(u.user_name || u.user_email).charAt(0).toUpperCase()}
-                                </div>
-                                <div className="min-w-0">
-                                  <div className="flex items-center gap-2">
-                                    <p className="font-medium truncate text-foreground">{u.user_name || "No Name"}</p>
-                                    {u.deleted_at && (
-                                      <span className="inline-flex items-center rounded-full bg-red-50 px-1.5 py-0.5 text-[10px] font-semibold text-red-700 ring-1 ring-inset ring-red-600/10 dark:bg-red-950/20 dark:text-red-400 dark:ring-red-500/25">
-                                        Inactive
-                                      </span>
-                                    )}
-                                  </div>
-                                  <p className="text-xs text-muted-foreground truncate">{u.user_email}</p>
-                                </div>
-                              </div>
-                            </td>
-                            {/* Occupation (Level) */}
-                            <td className="p-4">
-                              <div className="flex flex-col gap-1 items-start">
-                                <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${
-                                  isUserAdmin
-                                    ? "bg-violet-50 text-violet-700 dark:bg-violet-950/25 dark:text-violet-400"
-                                    : "bg-primary/10 text-primary"
-                                }`}>
-                                  {u.user_occupation || "Staff (Default)"}
-                                </span>
-                                <span className="text-xs text-muted-foreground font-medium">
-                                  Level {userLevel}
-                                </span>
-                              </div>
-                            </td>
-                            {/* Site & Department */}
-                            <td className="p-4">
-                              <div className="flex flex-col gap-0.5 text-xs">
-                                <span className="flex items-center gap-1 text-foreground">
-                                  <MapPin className="h-3 w-3 text-muted-foreground shrink-0" />
-                                  {u.user_site || "—"}
-                                </span>
-                                <span className="flex items-center gap-1 text-muted-foreground">
-                                  <Building className="h-3 w-3 shrink-0" />
-                                  {u.user_departement || "—"}
-                                </span>
-                              </div>
-                            </td>
-                            {/* Division & Team */}
-                            <td className="p-4">
-                              <div className="flex flex-col gap-0.5 text-xs">
-                                <span className="flex items-center gap-1 text-foreground">
-                                  <GitBranch className="h-3 w-3 text-muted-foreground shrink-0" />
-                                  {u.user_division || "—"}
-                                </span>
-                                <span className="flex items-center gap-1 text-muted-foreground">
-                                  <UserCheck className="h-3 w-3 shrink-0" />
-                                  {u.user_team || "—"}
-                                </span>
-                                {u.user_unit && (
-                                  <span className="flex items-center gap-1 text-muted-foreground/80 pl-4 text-[11px] italic">
-                                    Unit: {u.user_unit}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
-                            {/* Edit & Impersonate Action */}
-                            <td className="p-4 text-right">
-                              <div className="flex justify-end gap-1.5">
-                                {isSuperUserCaller && (
-                                  <Button
-                                    variant="outline"
-                                    size="icon-sm"
-                                    className="rounded-lg border-amber-500/20 text-amber-600 hover:bg-amber-500 hover:text-white dark:border-amber-500/30 dark:text-amber-400 dark:hover:bg-amber-500/20 disabled:opacity-40"
-                                    onClick={() => handleImpersonateClick(u.user_id)}
-                                    disabled={u.user_id === currentUserId}
-                                    title={u.user_id === currentUserId ? "Currently impersonating this user" : "Impersonate User"}
-                                  >
-                                    <Eye className="h-3.5 w-3.5" />
-                                  </Button>
-                                )}
-                                <Button
-                                  variant="outline"
-                                  size="icon-sm"
-                                  className="rounded-lg hover:bg-primary hover:text-primary-foreground disabled:opacity-40"
-                                  onClick={() => handleEditUserClick(u)}
-                                  disabled={!canEdit}
-                                  title={canEdit ? "Edit User Profile" : "Profile Locked"}
-                                >
-                                  <Edit2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </td>
-                          </tr>
-                        )
-                      })
-                    )}
-                  </tbody>
-                </table>
-              </div>
+              <UsersTable
+                users={filteredUsers}
+                roleLevels={roleLevels}
+                currentUserId={currentUserId}
+                isSuperUserCaller={isSuperUserCaller}
+                callerIsSU={callerIsSU}
+                handleImpersonateClick={handleImpersonateClick}
+                handleEditUserClick={handleEditUserClick}
+                handleResetPasswordClick={handleResetPasswordClick}
+                setRestoreUserId={setRestoreUserId}
+                setShowRestoreDialog={setShowRestoreDialog}
+                setDeleteUserId={setDeleteUserId}
+                setShowDeleteDialog={setShowDeleteDialog}
+              />
             </CardContent>
           </Card>
         </div>

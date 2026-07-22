@@ -266,37 +266,37 @@ export const ProjectRepository = {
     }
 
     if (filters.dept_filter) {
-       conditions.push(`LOWER(u.user_departement) = LOWER($${paramIndex})`);
+       conditions.push(`LOWER(u.user_departement) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
        params.push(filters.dept_filter);
        paramIndex++;
     }
     if (filters.site_filter) {
-       conditions.push(`LOWER(u.user_site) = LOWER($${paramIndex})`);
+       conditions.push(`LOWER(u.user_site) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
        params.push(filters.site_filter);
        paramIndex++;
     }
     if (filters.div_filter) {
-       conditions.push(`LOWER(u.user_division) = LOWER($${paramIndex})`);
+       conditions.push(`LOWER(u.user_division) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
        params.push(filters.div_filter);
        paramIndex++;
     }
     if (filters.team_filter) {
-       conditions.push(`LOWER(u.user_team) = LOWER($${paramIndex})`);
+       conditions.push(`LOWER(u.user_team) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
        params.push(filters.team_filter);
        paramIndex++;
     }
     if (filters.status) {
-       conditions.push(`p.project_status = $${paramIndex}`);
+       conditions.push(`p.project_status = ANY(string_to_array($${paramIndex}, ','))`);
        params.push(filters.status);
        paramIndex++;
     }
     if (filters.created_by) {
-       conditions.push(`p.created_by = $${paramIndex}`);
+       conditions.push(`p.created_by = ANY(string_to_array($${paramIndex}, ','))`);
        params.push(filters.created_by);
        paramIndex++;
     }
     if (filters.member_id) {
-       conditions.push(`(p.created_by = $${paramIndex} OR pt.user_id = $${paramIndex})`);
+       conditions.push(`(p.created_by = ANY(string_to_array($${paramIndex}, ',')) OR pt.user_id = ANY(string_to_array($${paramIndex}, ',')))`);
        params.push(filters.member_id);
        paramIndex++;
     }
@@ -309,6 +309,17 @@ export const ProjectRepository = {
          LOWER(mu.user_name) LIKE $${paramIndex}
        )`);
        params.push(q);
+       paramIndex++;
+    }
+    if (filters.start_date) {
+       conditions.push(`p.created_at >= $${paramIndex}`);
+       params.push(filters.start_date);
+       paramIndex++;
+    }
+    if (filters.end_date) {
+       // Append T23:59:59.999Z to include the entire end date
+       conditions.push(`p.created_at <= $${paramIndex}`);
+       params.push(filters.end_date + 'T23:59:59.999Z');
        paramIndex++;
     }
 
@@ -411,31 +422,30 @@ export const ProjectRepository = {
       deleted_at: null,
     };
 
-    await sql`
-      INSERT INTO projects (
-        project_id, project_name, project_description, project_start_date_plan, project_end_date_plan,
-        project_status, project_file, additional_link, category, ticket_reference, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
-      ) VALUES (
-        ${newProject.project_id}, ${newProject.project_name}, ${newProject.project_description},
-        ${newProject.project_start_date_plan}, ${newProject.project_end_date_plan}, ${newProject.project_status},
-        ${newProject.project_file}, ${newProject.additional_link}, ${newProject.category}, ${newProject.ticket_reference as string | null}, ${newProject.created_by}, ${newProject.created_at},
-        ${newProject.updated_by}, ${newProject.updated_at}, ${newProject.deleted_by}, ${newProject.deleted_at}
-      )
-    `;
+    await sql.begin(async (tx) => {
+      await tx`
+        INSERT INTO projects (
+          project_id, project_name, project_description, project_start_date_plan, project_end_date_plan,
+          project_status, project_file, additional_link, category, ticket_reference, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
+        ) VALUES (
+          ${newProject.project_id}, ${newProject.project_name}, ${newProject.project_description},
+          ${newProject.project_start_date_plan}, ${newProject.project_end_date_plan}, ${newProject.project_status},
+          ${newProject.project_file}, ${newProject.additional_link}, ${newProject.category}, ${newProject.ticket_reference as string | null}, ${newProject.created_by}, ${newProject.created_at},
+          ${newProject.updated_by}, ${newProject.updated_at}, ${newProject.deleted_by}, ${newProject.deleted_at}
+        )
+      `;
 
-    // Sync status to the linked ticket
-    if (newProject.ticket_reference) {
-      await syncTicketStatus(newProject.ticket_reference, newProject.project_status, createdBy);
-    }
+      // Sync status to the linked ticket
+      if (newProject.ticket_reference) {
+        // Warning: syncTicketStatus uses global sql, but it's an external API call anyway, so it's fine
+        await syncTicketStatus(newProject.ticket_reference, newProject.project_status, createdBy);
+      }
 
-    await ProjectLogRepository.create(
-      {
-        project_id: nextId,
-        project_status_old: 'CREATED',
-        project_status_new: newProject.project_status || STATUS.NOT_STARTED,
-      },
-      createdBy
-    );
+      await tx`
+        INSERT INTO project_logs (project_id, project_status_old, project_status_new, created_by, created_at)
+        VALUES (${nextId}, 'CREATED', ${newProject.project_status || STATUS.NOT_STARTED}, ${createdBy}, ${now})
+      `;
+    });
 
     revalidateTag('projects');
     revalidateTag('project_log');

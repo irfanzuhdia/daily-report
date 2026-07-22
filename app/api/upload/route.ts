@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { google } from 'googleapis';
@@ -119,7 +120,7 @@ export async function POST(request: NextRequest) {
       downloadLink: `https://drive.google.com/uc?export=download&id=${fileId}`,
     });
   } catch (error: unknown) {
-    console.error('Drive upload error:', error);
+    logger.error('Drive upload error:', error);
 
     // Provide more specific error messages
     let message = 'Upload failed';

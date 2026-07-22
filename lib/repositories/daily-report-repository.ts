@@ -80,6 +80,8 @@ export const DailyReportRepository = {
       div?: string;
       team?: string;
       viewMode?: string;
+      startDate?: string;
+      endDate?: string;
     }
   ) {
     const user = await UserRepository.findById(userId);
@@ -125,35 +127,43 @@ export const DailyReportRepository = {
     // Apply explicit filters
     if (filters?.dept) {
       params.push(filters.dept);
-      whereClauses.push(`u.user_departement = $${params.length}`);
+      whereClauses.push(`u.user_departement = ANY(string_to_array($${params.length}, ','))`);
     }
     if (filters?.site) {
       params.push(filters.site);
-      whereClauses.push(`u.user_site = $${params.length}`);
+      whereClauses.push(`u.user_site = ANY(string_to_array($${params.length}, ','))`);
     }
     if (filters?.div) {
       params.push(filters.div);
-      whereClauses.push(`u.user_division = $${params.length}`);
+      whereClauses.push(`u.user_division = ANY(string_to_array($${params.length}, ','))`);
     }
     if (filters?.team) {
       params.push(filters.team);
-      whereClauses.push(`u.user_team = $${params.length}`);
+      whereClauses.push(`u.user_team = ANY(string_to_array($${params.length}, ','))`);
     }
     if (filters?.taskId) {
       params.push(filters.taskId);
-      whereClauses.push(`dr.task_id = $${params.length}`);
+      whereClauses.push(`dr.task_id = ANY(string_to_array($${params.length}, ','))`);
     }
     if (filters?.projectId) {
       params.push(filters.projectId);
-      whereClauses.push(`t.project_id = $${params.length}`);
+      whereClauses.push(`t.project_id = ANY(string_to_array($${params.length}, ','))`);
     }
     if (filters?.memberId) {
       params.push(filters.memberId);
-      whereClauses.push(`dr.task_id IN (SELECT task_id FROM task_team WHERE user_id = $${params.length})`);
+      whereClauses.push(`dr.task_id IN (SELECT task_id FROM task_team WHERE user_id = ANY(string_to_array($${params.length}, ',')))`);
     }
     if (filters?.createdBy) {
       params.push(filters.createdBy);
-      whereClauses.push(`dr.user_id = $${params.length}`);
+      whereClauses.push(`dr.user_id = ANY(string_to_array($${params.length}, ','))`);
+    }
+    if (filters?.startDate) {
+      params.push(filters.startDate);
+      whereClauses.push(`dr.date >= $${params.length}`);
+    }
+    if (filters?.endDate) {
+      params.push(filters.endDate);
+      whereClauses.push(`dr.date <= $${params.length}`);
     }
 
     if (filters?.search) {

@@ -9,10 +9,6 @@ import {
   UserRepository,
   ProjectTeamRepository,
   TaskTeamRepository,
-  getContributionData,
-  filterProjectsByUser,
-  filterTasksByUser,
-  filterReportsByUser,
 } from "@/lib/repositories"
 import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
 import { DashboardClient } from "./dashboard-client"
@@ -39,10 +35,7 @@ export default async function DashboardPage({
   const userId = session.user_id
   const params = await searchParams
 
-  const [allProjects, allTasks, allReports, statuses, allUsers] = await Promise.all([
-    ProjectRepository.findAll(),
-    TaskRepository.findAll(),
-    DailyReportRepository.findAll(),
+  const [statuses, allUsers] = await Promise.all([
     StatusRepository.findAll(),
     UserRepository.findAll(),
   ])
@@ -51,78 +44,6 @@ export default async function DashboardPage({
   const userLevel = currentUser?.level || 1
   const effectiveViewMode = userLevel === 1 ? "my" : viewMode
 
-  // Filter by user based on visibility levels
-  let [projects, tasks, reports] = await Promise.all([
-    filterProjectsByUser(allProjects, userId),
-    filterTasksByUser(allTasks, userId),
-    filterReportsByUser(allReports, userId),
-  ])
-
-  if (effectiveViewMode === "my") {
-    const [projectTeam, taskTeam] = await Promise.all([
-      ProjectTeamRepository.findByUserId(userId),
-      TaskTeamRepository.findByUserId(userId),
-    ])
-    const myProjectIds = new Set(projectTeam.map((pt) => pt.project_id))
-    projects = projects.filter((p) => p.created_by === userId || myProjectIds.has(p.project_id))
-
-    const myTaskIds = new Set(taskTeam.map((tt) => tt.task_id))
-    tasks = tasks.filter((t) => t.created_by === userId || myTaskIds.has(t.id))
-
-    reports = reports.filter((r) => r.user_id === userId || r.created_by === userId)
-  }
-
-  // Pre-build user lookup map — O(n) once, then O(1) per lookup
-  const userById = new Map(allUsers.map(u => [u.user_id, u]))
-
-  // Apply enterprise filters on dashboard
-  const isDeptDisabled = userLevel < 6
-  const isSiteDisabled = userLevel < 5
-  const isDivDisabled = userLevel < 3
-  const isTeamDisabled = userLevel < 2
-
-  // Dept Filter
-  const targetDept = isDeptDisabled ? (currentUser?.user_departement || "") : (params.dept_filter !== undefined ? params.dept_filter : (currentUser?.user_departement || ""))
-  if (targetDept && targetDept !== "all") {
-    projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_departement || "") === targetDept)
-    tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_departement || "") === targetDept)
-    reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_departement || "") === targetDept)
-  }
-
-  // Site Filter
-  const targetSite = isSiteDisabled ? (currentUser?.user_site || "") : (params.site_filter !== undefined ? params.site_filter : (currentUser?.user_site || ""))
-  if (targetSite && targetSite !== "all") {
-    projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_site || "") === targetSite)
-    tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_site || "") === targetSite)
-    reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_site || "") === targetSite)
-  }
-
-  // Div Filter
-  const targetDiv = isDivDisabled ? (currentUser?.user_division || "") : (params.div_filter !== undefined ? params.div_filter : (currentUser?.user_division || ""))
-  if (targetDiv && targetDiv !== "all") {
-    projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_division || "") === targetDiv)
-    tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_division || "") === targetDiv)
-    reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_division || "") === targetDiv)
-  }
-
-  // Team Filter
-  const targetTeam = isTeamDisabled ? (currentUser?.user_team || "") : (params.team_filter !== undefined ? params.team_filter : (currentUser?.user_team || ""))
-  if (targetTeam && targetTeam !== "all") {
-    projects = projects.filter((p) => (userById.get(p.created_by || "")?.user_team || "") === targetTeam)
-    tasks = tasks.filter((t) => (userById.get(t.created_by || "")?.user_team || "") === targetTeam)
-    reports = reports.filter((r) => (userById.get(r.user_id || "")?.user_team || "") === targetTeam)
-  }
-
-  const userMap = new Map(allUsers.map((u) => [u.user_id, u.user_name || u.user_email || u.user_id]))
-
-  // Apply team view filters
-  if (effectiveViewMode === "team" && params.created_by) {
-    projects = projects.filter((p) => p.created_by === params.created_by)
-    tasks = tasks.filter((t) => t.created_by === params.created_by)
-    reports = reports.filter((r) => r.user_id === params.created_by || r.created_by === params.created_by)
-  }
-
-  // Apply date range filters
   const now = new Date()
   const defaultEndDate = now.toLocaleDateString('en-CA') // YYYY-MM-DD
   
@@ -133,16 +54,48 @@ export default async function DashboardPage({
   const targetStartDate = params.start_date || defaultStartDate
   const targetEndDate = params.end_date || defaultEndDate
 
-  if (targetStartDate) {
-    projects = projects.filter((p) => p.created_at && p.created_at.split('T')[0] >= targetStartDate)
-    tasks = tasks.filter((t) => t.created_at && t.created_at.split('T')[0] >= targetStartDate)
-    reports = reports.filter((r) => r.date && r.date >= targetStartDate)
+  const isDeptDisabled = userLevel < 6
+  const isSiteDisabled = userLevel < 5
+  const isDivDisabled = userLevel < 3
+  const isTeamDisabled = userLevel < 2
+
+  const currentUserData = allUsers.find((u) => u.user_id === userId)
+  const targetDept = isDeptDisabled ? (currentUserData?.user_departement || "") : (params.dept_filter !== undefined ? params.dept_filter : (currentUserData?.user_departement || ""))
+  const targetSite = isSiteDisabled ? (currentUserData?.user_site || "") : (params.site_filter !== undefined ? params.site_filter : (currentUserData?.user_site || ""))
+  const targetDiv = isDivDisabled ? (currentUserData?.user_division || "") : (params.div_filter !== undefined ? params.div_filter : (currentUserData?.user_division || ""))
+  const targetTeam = isTeamDisabled ? (currentUserData?.user_team || "") : (params.team_filter !== undefined ? params.team_filter : (currentUserData?.user_team || ""))
+
+  const filters = {
+    dept_filter: targetDept && targetDept !== "all" ? targetDept : undefined,
+    site_filter: targetSite && targetSite !== "all" ? targetSite : undefined,
+    div_filter: targetDiv && targetDiv !== "all" ? targetDiv : undefined,
+    team_filter: targetTeam && targetTeam !== "all" ? targetTeam : undefined,
+    start_date: targetStartDate,
+    end_date: targetEndDate,
+    viewMode: effectiveViewMode,
+    created_by: effectiveViewMode === "team" ? params.created_by : undefined,
   }
-  if (targetEndDate) {
-    projects = projects.filter((p) => p.created_at && p.created_at.split('T')[0] <= targetEndDate)
-    tasks = tasks.filter((t) => t.created_at && t.created_at.split('T')[0] <= targetEndDate)
-    reports = reports.filter((r) => r.date && r.date <= targetEndDate)
-  }
+
+  const limit = 100000;
+
+  let [
+    { data: projects },
+    { data: tasks },
+    { reports },
+  ] = await Promise.all([
+    ProjectRepository.findPaginated(userId, filters, limit, 0),
+    TaskRepository.findPaginated(userId, filters, limit, 0),
+    DailyReportRepository.findPaginatedEnriched(userId, limit, 0, {
+      dept: filters.dept_filter,
+      site: filters.site_filter,
+      div: filters.div_filter,
+      team: filters.team_filter,
+      startDate: targetStartDate,
+      endDate: targetEndDate,
+      viewMode: effectiveViewMode,
+      createdBy: filters.created_by
+    }),
+  ])
 
   // Build status lookup
   const statusMap = new Map(statuses.map((s) => [s.id, s.name]))
@@ -164,19 +117,18 @@ export default async function DashboardPage({
     })
   )
 
+  const userMap = new Map(allUsers.map((u) => [u.user_id, u.user_name || u.user_email || u.user_id]))
+
   // Recent reports with enriched data
   const recentReports = reports
     .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
     .slice(0, 5)
     .map((r) => {
-      const task = allTasks.find((t) => t.id === r.task_id)
-      const project = task
-        ? allProjects.find((p) => p.project_id === task.project_id)
-        : null
+      // For Dashboard stats, we already have enriched project_name and task_description
       return {
         ...r,
-        task_description: task?.task_description ?? undefined,
-        project_name: project?.project_name ?? undefined,
+        task_description: r.task_description ?? undefined,
+        project_name: r.project_name ?? undefined,
         user_name: userMap.get(r.user_id ?? "") ?? undefined,
       }
     })

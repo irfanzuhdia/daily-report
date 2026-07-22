@@ -50,6 +50,13 @@ export function AppLayout({
 
   return (
     <div className="min-h-screen bg-background">
+      {/* Skip-to-content link for keyboard accessibility (WCAG 2.4.1) */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-1/2 focus:-translate-x-1/2 focus:z-[60] focus:rounded-xl focus:bg-primary focus:px-4 focus:py-2 focus:text-sm focus:font-medium focus:text-primary-foreground focus:shadow-lg"
+      >
+        Skip to content
+      </a>
       <Sidebar 
         userName={userName} 
         userEmail={userEmail} 
@@ -59,7 +66,7 @@ export function AppLayout({
         isImpersonating={isImpersonating}
         realEmail={realEmail}
       />
-      <main className="lg:pl-64">
+      <main id="main-content" className="lg:pl-64">
         <div className="p-4 pt-16 lg:p-8 lg:pt-8">{children}</div>
       </main>
 

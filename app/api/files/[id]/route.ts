@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { FileRepository } from '@/lib/repositories';
@@ -69,7 +70,7 @@ export async function GET(
       headers,
     });
   } catch (error) {
-    console.error('GET /api/files/[id] error:', error);
+    logger.error('GET /api/files/[id] error:', error);
     return new Response('File not found or access denied', { status: 404 });
   }
 }
@@ -92,7 +93,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error('DELETE /api/files/[id] error:', error);
+    logger.error('DELETE /api/files/[id] error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

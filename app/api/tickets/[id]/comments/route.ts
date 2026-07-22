@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { TicketRepository } from '@/lib/repositories';
@@ -28,7 +29,7 @@ export async function POST(
 
     return NextResponse.json(comment, { status: 201 });
   } catch (error) {
-    console.error('POST /api/tickets/[id]/comments error:', error);
+    logger.error('POST /api/tickets/[id]/comments error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

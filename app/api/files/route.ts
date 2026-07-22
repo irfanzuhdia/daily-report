@@ -1,3 +1,4 @@
+import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { FileRepository, UserRepository } from '@/lib/repositories';
@@ -36,7 +37,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(enrichedFiles);
   } catch (error) {
-    console.error('GET /api/files error:', error);
+    logger.error('GET /api/files error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }
@@ -75,7 +76,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(file, { status: 201 });
   } catch (error: unknown) {
-    console.error('POST /api/files error:', error);
+    logger.error('POST /api/files error:', error);
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

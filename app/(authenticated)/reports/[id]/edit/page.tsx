@@ -14,8 +14,8 @@ export default async function EditReportPage({
   const { id } = await params
   const [report, tasks, projects, uniqueCategories, statuses, allUsers] = await Promise.all([
     DailyReportRepository.findById(id),
-    TaskRepository.findAll(),
-    ProjectRepository.findAll(),
+    TaskRepository.findAll(session.user_id),
+    ProjectRepository.findAll(session.user_id),
     ProjectRepository.findUniqueCategories(),
     StatusRepository.findAll(),
     UserRepository.findAll(),

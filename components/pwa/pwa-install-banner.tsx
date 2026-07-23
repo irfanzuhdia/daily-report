@@ -106,7 +106,17 @@ export function PWAInstallBanner() {
         setNotificationPermission(permission);
 
         if (permission === "granted") {
-          const vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+          let vapidKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+          if (!vapidKey) {
+            try {
+              const keyRes = await fetch("/api/push/public-key");
+              const keyData = await keyRes.json();
+              vapidKey = keyData.publicKey;
+            } catch (e) {
+              console.error("Failed to fetch VAPID public key from API:", e);
+            }
+          }
+
           if (!vapidKey) {
             alert("VAPID public key is missing.");
             setLoading(false);

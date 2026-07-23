@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    addPushSubscription(body);
+    await addPushSubscription(body);
 
     return NextResponse.json({
       success: true,
@@ -35,7 +35,7 @@ export async function DELETE(req: NextRequest) {
   try {
     const { endpoint } = await req.json();
     if (endpoint) {
-      removePushSubscription(endpoint);
+      await removePushSubscription(endpoint);
     }
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -1,6 +1,5 @@
 import webpush from "web-push";
-import fs from "fs";
-import path from "path";
+import { sql } from "@/lib/db";
 
 // Configure Web Push VAPID credentials
 const vapidPublicKey =
@@ -32,52 +31,51 @@ export interface PushSubscriptionPayload {
   keys: PushSubscriptionKeys;
 }
 
-// Persistent file storage path
-const STORE_PATH = path.join(process.cwd(), ".push-subscriptions.json");
-
-function loadSubscriptions(): Map<string, PushSubscriptionPayload> {
-  const map = new Map<string, PushSubscriptionPayload>();
+export async function addPushSubscription(
+  subscription: PushSubscriptionPayload,
+  userId?: string
+): Promise<void> {
   try {
-    if (fs.existsSync(STORE_PATH)) {
-      const data = JSON.parse(fs.readFileSync(STORE_PATH, "utf-8"));
-      if (Array.isArray(data)) {
-        data.forEach((sub) => {
-          if (sub && sub.endpoint) {
-            map.set(sub.endpoint, sub);
-          }
-        });
-      }
-    }
+    await sql`
+      INSERT INTO push_subscriptions (endpoint, p256dh, auth, user_id)
+      VALUES (
+        ${subscription.endpoint},
+        ${subscription.keys.p256dh},
+        ${subscription.keys.auth},
+        ${userId || null}
+      )
+      ON CONFLICT (endpoint) DO UPDATE SET
+        p256dh = ${subscription.keys.p256dh},
+        auth = ${subscription.keys.auth},
+        user_id = COALESCE(${userId || null}, push_subscriptions.user_id)
+    `;
   } catch (err) {
-    console.error("Failed to read push subscriptions file:", err);
-  }
-  return map;
-}
-
-function saveSubscriptions(map: Map<string, PushSubscriptionPayload>): void {
-  try {
-    const list = Array.from(map.values());
-    fs.writeFileSync(STORE_PATH, JSON.stringify(list, null, 2), "utf-8");
-  } catch (err) {
-    console.error("Failed to save push subscriptions file:", err);
+    console.error("Failed to save push subscription to Postgres DB:", err);
   }
 }
 
-export function addPushSubscription(subscription: PushSubscriptionPayload): void {
-  const map = loadSubscriptions();
-  map.set(subscription.endpoint, subscription);
-  saveSubscriptions(map);
+export async function removePushSubscription(endpoint: string): Promise<void> {
+  try {
+    await sql`DELETE FROM push_subscriptions WHERE endpoint = ${endpoint}`;
+  } catch (err) {
+    console.error("Failed to remove push subscription from Postgres DB:", err);
+  }
 }
 
-export function removePushSubscription(endpoint: string): void {
-  const map = loadSubscriptions();
-  map.delete(endpoint);
-  saveSubscriptions(map);
-}
-
-export function getAllPushSubscriptions(): PushSubscriptionPayload[] {
-  const map = loadSubscriptions();
-  return Array.from(map.values());
+export async function getAllPushSubscriptions(): Promise<PushSubscriptionPayload[]> {
+  try {
+    const rows = (await sql`SELECT endpoint, p256dh, auth FROM push_subscriptions`) as any[];
+    return rows.map((r) => ({
+      endpoint: r.endpoint,
+      keys: {
+        p256dh: r.p256dh,
+        auth: r.auth,
+      },
+    }));
+  } catch (err) {
+    console.error("Failed to load push subscriptions from Postgres DB:", err);
+    return [];
+  }
 }
 
 export async function sendPushNotificationToAll(
@@ -86,7 +84,7 @@ export async function sendPushNotificationToAll(
   url = "/",
   icon = "/icons/icon-192.png"
 ): Promise<{ successCount: number; failureCount: number; totalSubscribers: number }> {
-  const subscriptions = getAllPushSubscriptions();
+  const subscriptions = await getAllPushSubscriptions();
   const payload = JSON.stringify({
     title,
     body,
@@ -110,7 +108,7 @@ export async function sendPushNotificationToAll(
     } catch (err: any) {
       console.error("Error sending push notification to endpoint:", sub.endpoint, err?.message);
       if (err.statusCode === 410 || err.statusCode === 404) {
-        removePushSubscription(sub.endpoint);
+        await removePushSubscription(sub.endpoint);
       }
       failureCount++;
     }

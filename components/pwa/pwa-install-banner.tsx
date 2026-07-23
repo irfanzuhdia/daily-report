@@ -72,6 +72,15 @@ export function PWAInstallBanner() {
       const reg = await navigator.serviceWorker.ready;
       const sub = await reg.pushManager.getSubscription();
       setIsSubscribed(!!sub);
+
+      if (sub) {
+        // Sync active user_id with backend PostgreSQL database
+        fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sub),
+        }).catch((err) => console.error("Push sync error:", err));
+      }
     }
   };
 

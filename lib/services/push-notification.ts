@@ -80,6 +80,7 @@ export async function getAllPushSubscriptions(): Promise<PushSubscriptionPayload
 
 export async function getPushSubscriptionsForUser(targetUserId: string): Promise<PushSubscriptionPayload[]> {
   try {
+    // 1. First, search for subscriptions associated with targetUserId or target email
     const rows = (await sql`
       SELECT endpoint, p256dh, auth 
       FROM push_subscriptions 
@@ -88,12 +89,23 @@ export async function getPushSubscriptionsForUser(targetUserId: string): Promise
          OR user_id IN (SELECT user_id FROM users WHERE user_email = ${targetUserId})
     `) as any[];
 
-    return rows.map((r) => ({
+    if (rows.length > 0) {
+      return rows.map((r) => ({
+        endpoint: r.endpoint,
+        keys: { p256dh: r.p256dh, auth: r.auth },
+      }));
+    }
+
+    // 2. Fallback: if no specific user mapping exists, return unassigned (user_id IS NULL) subscriptions
+    const nullRows = (await sql`
+      SELECT endpoint, p256dh, auth 
+      FROM push_subscriptions 
+      WHERE user_id IS NULL
+    `) as any[];
+
+    return nullRows.map((r) => ({
       endpoint: r.endpoint,
-      keys: {
-        p256dh: r.p256dh,
-        auth: r.auth,
-      },
+      keys: { p256dh: r.p256dh, auth: r.auth },
     }));
   } catch (err) {
     console.error("Failed to load user push subscriptions from DB:", err);

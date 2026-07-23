@@ -125,11 +125,25 @@ export function Sidebar({
     
     window.addEventListener("notificationsUpdated", handleUpdate)
     const interval = setInterval(fetchUnreadCount, 4000)
+
+    // Supabase Realtime WebSocket for notification counter
+    const { supabase } = require("@/lib/supabase-client")
+    const channel = supabase
+      .channel('sidebar-notifications')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'notifications' },
+        () => {
+          fetchUnreadCount()
+        }
+      )
+      .subscribe()
     
     return () => {
       active = false
       window.removeEventListener("notificationsUpdated", handleUpdate)
       clearInterval(interval)
+      supabase.removeChannel(channel)
     }
   }, [])
 

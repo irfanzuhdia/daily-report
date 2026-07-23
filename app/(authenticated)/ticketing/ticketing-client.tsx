@@ -165,13 +165,29 @@ export function TicketingClient({
         'postgres_changes',
         { event: 'INSERT', schema: 'public', table: 'ticket_comments' },
         (payload: any) => {
-          if (selectedTicketIdRef.current && payload.new.ticket_id === selectedTicketIdRef.current) {
-             fetch(`/api/tickets/${selectedTicketIdRef.current}/details`)
+          if (selectedTicketIdRef.current && payload.new?.ticket_id === selectedTicketIdRef.current) {
+             fetch(`/api/tickets/${selectedTicketIdRef.current}`)
                .then(res => res.json())
                .then(data => {
                   if (data.comments) setComments(data.comments)
                   if (data.logs) setLogs(data.logs)
                })
+               .catch(err => console.error("WebSocket comment refresh error:", err))
+          }
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'INSERT', schema: 'public', table: 'ticket_logs' },
+        (payload: any) => {
+          if (selectedTicketIdRef.current && payload.new?.ticket_id === selectedTicketIdRef.current) {
+             fetch(`/api/tickets/${selectedTicketIdRef.current}`)
+               .then(res => res.json())
+               .then(data => {
+                  if (data.comments) setComments(data.comments)
+                  if (data.logs) setLogs(data.logs)
+               })
+               .catch(err => console.error("WebSocket log refresh error:", err))
           }
         }
       )

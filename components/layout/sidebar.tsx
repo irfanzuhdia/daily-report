@@ -33,6 +33,7 @@ import {
 import { useViewMode } from "@/lib/view-mode"
 import { useViewDensity } from "@/lib/view-density"
 import { useTheme } from "next-themes"
+import { MDMLogo } from "@/components/ui/mdm-logo"
 
 export function Sidebar({
   userName,
@@ -166,9 +167,12 @@ export function Sidebar({
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex h-16 items-center gap-2 border-b px-6">
-          <FileText className="h-5 w-5 text-primary" />
-          <span className="text-lg font-semibold">Daily Report</span>
+        <div className="flex h-16 items-center gap-2.5 border-b px-6">
+          <MDMLogo className="h-7 w-7 shrink-0" />
+          <div className="flex flex-col">
+            <span className="text-sm font-bold tracking-tight text-foreground leading-none">MDM</span>
+            <span className="text-xs text-muted-foreground font-medium">Daily Report</span>
+          </div>
         </div>
 
         <nav className="flex-1 space-y-1 p-4 overflow-y-auto">

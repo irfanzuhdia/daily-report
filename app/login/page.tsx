@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { getSession } from "@/lib/session"
 import { Button } from "@/components/ui/button"
+import { MDMLogo } from "@/components/ui/mdm-logo"
 
 export default async function LoginPage({
   searchParams,
@@ -28,22 +29,10 @@ export default async function LoginPage({
       <div className="w-full max-w-md">
         <div className="rounded-2xl border bg-card p-8 shadow-lg">
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-primary/10">
-              <svg
-                className="h-7 w-7 text-primary"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
-                />
-              </svg>
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center">
+              <MDMLogo className="h-14 w-14" />
             </div>
-            <h1 className="text-2xl font-bold">Daily Report</h1>
+            <h1 className="text-2xl font-bold tracking-tight">MDM Daily Report</h1>
             <p className="mt-2 text-sm text-muted-foreground">
               Sign in with your Google account to continue
             </p>

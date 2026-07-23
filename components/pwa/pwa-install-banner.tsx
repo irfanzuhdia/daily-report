@@ -165,6 +165,24 @@ export function PWAInstallBanner() {
   const sendTestNotification = async () => {
     try {
       setTestSent(false);
+
+      if (Notification.permission !== "granted") {
+        alert("Please click 'Enable Notifications' first to grant permission.");
+        return;
+      }
+
+      // 1. Trigger Service Worker local notification directly
+      if ("serviceWorker" in navigator) {
+        const reg = await navigator.serviceWorker.ready;
+        await reg.showNotification("Daily Report Alert 🚀", {
+          body: "Push notifications are working cleanly on your device!",
+          icon: "/icons/icon-192.png",
+          badge: "/icons/icon-192.png",
+          data: { url: "/reports" },
+        });
+      }
+
+      // 2. Dispatch Push API network payload to server
       const res = await fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -174,6 +192,7 @@ export function PWAInstallBanner() {
           url: "/reports",
         }),
       });
+
       const data = await res.json();
       if (data.success) {
         setTestSent(true);

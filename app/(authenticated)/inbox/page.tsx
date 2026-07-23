@@ -38,6 +38,11 @@ export default function InboxPage() {
 
     fetchNotifications()
 
+    // Interval polling for live notification updates
+    const pollInterval = setInterval(() => {
+      fetchNotifications()
+    }, 4000)
+
     // Realtime Websocket Supabase
     const { supabase } = require("@/lib/supabase-client")
     const channel = supabase
@@ -55,6 +60,7 @@ export default function InboxPage() {
 
     return () => {
       active = false
+      clearInterval(pollInterval)
       supabase.removeChannel(channel)
     }
   }, [])

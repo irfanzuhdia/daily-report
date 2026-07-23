@@ -864,6 +864,26 @@ export function TicketingClient({
     }
   }, [tickets])
 
+  // Live background auto-polling for comments & activity logs when ticket detail drawer is open
+  useEffect(() => {
+    if (!detailOpen || !selectedTicket?.id) return
+
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch(`/api/tickets/${selectedTicket.id}`)
+        if (res.ok) {
+          const data = await res.json()
+          if (data.comments) setComments(data.comments)
+          if (data.logs) setLogs(data.logs)
+        }
+      } catch (e) {
+        // Silent background poll error
+      }
+    }, 3500)
+
+    return () => clearInterval(interval)
+  }, [detailOpen, selectedTicket?.id])
+
   // Create / Edit Ticket Submission
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

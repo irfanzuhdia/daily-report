@@ -696,20 +696,40 @@ export const TicketRepository = {
         }
       }
 
-      // Mention parsing
-      const usersRows = await sql`SELECT user_id, user_name, user_email FROM users WHERE deleted_at IS NULL`;
-      const lowerContent = content.toLowerCase();
-      const mentionedUsers = usersRows.filter(u => {
-        // Don't notify the commenter
-        if (u.user_id === createdBy) return false;
+      // Fetch all active users for robust mention matching & user identification
+      const usersRows = (await sql`SELECT user_id, user_name, user_email FROM users WHERE deleted_at IS NULL`) as { user_id: string; user_name: string; user_email: string }[];
+      
+      // Helper function to check if two user identifiers belong to the same person (id or email)
+      const isSameUser = (idOrEmail1: string, idOrEmail2: string) => {
+        if (!idOrEmail1 || !idOrEmail2) return false;
+        const norm1 = idOrEmail1.trim().toLowerCase();
+        const norm2 = idOrEmail2.trim().toLowerCase();
+        if (norm1 === norm2) return true;
+        const u1 = usersRows.find(u => u.user_id.toLowerCase() === norm1 || u.user_email.toLowerCase() === norm1);
+        const u2 = usersRows.find(u => u.user_id.toLowerCase() === norm2 || u.user_email.toLowerCase() === norm2);
+        if (u1 && u2 && u1.user_id === u2.user_id) return true;
+        return false;
+      };
 
-        const namePart = u.user_name ? u.user_name.toLowerCase() : '';
+      const lowerContent = content.toLowerCase();
+
+      // Mention parsing matching first name, full name, email username, email, or user_id
+      const mentionedUsers = usersRows.filter(u => {
+        // Never tag/notify the commenter themselves!
+        if (isSameUser(u.user_id, createdBy) || isSameUser(u.user_email, createdBy)) return false;
+
+        const nameFull = u.user_name ? u.user_name.toLowerCase() : '';
+        const firstName = nameFull.split(' ')[0];
         const emailPart = u.user_email.toLowerCase();
+        const emailUsername = emailPart.split('@')[0];
+        const userId = u.user_id.toLowerCase();
 
         return (
-          (namePart && lowerContent.includes(`@${namePart}`)) ||
+          (nameFull && lowerContent.includes(`@${nameFull}`)) ||
+          (firstName && firstName.length >= 2 && lowerContent.includes(`@${firstName}`)) ||
           lowerContent.includes(`@${emailPart}`) ||
-          lowerContent.includes(`@${u.user_id.toLowerCase()}`)
+          (emailUsername && emailUsername.length >= 2 && lowerContent.includes(`@${emailUsername}`)) ||
+          lowerContent.includes(`@${userId}`)
         );
       });
 
@@ -727,16 +747,26 @@ export const TicketRepository = {
         });
       }
 
-      // Filter recipients to exclude mentioned users to prevent duplicate inbox messages
-      for (const recipientId of recipients) {
-        if (recipientId !== createdBy && !mentionedIds.has(recipientId)) {
-          await NotificationRepository.create({
-            user_id: recipientId,
-            type: 'ticket_comment',
-            title: 'New Comment on Ticket',
-            content: `${senderName} commented on ticket ${ticket.id}: "${truncatedComment}"`,
-            link: `/ticketing?ticketId=${ticket.id}`
-          });
+      // Filter recipients to exclude the commenter & mentioned users
+      for (const recipientIdOrEmail of recipients) {
+        if (!isSameUser(recipientIdOrEmail, createdBy)) {
+          // Resolve canonical user_id for the recipient
+          const matchedUser = usersRows.find(u => 
+            u.user_id.toLowerCase() === recipientIdOrEmail.toLowerCase() || 
+            u.user_email.toLowerCase() === recipientIdOrEmail.toLowerCase()
+          );
+          const targetUserId = matchedUser ? matchedUser.user_id : recipientIdOrEmail;
+
+          // Check if already notified via @mention
+          if (!mentionedIds.has(targetUserId)) {
+            await NotificationRepository.create({
+              user_id: targetUserId,
+              type: 'ticket_comment',
+              title: 'New Comment on Ticket',
+              content: `${senderName} commented on ticket ${ticket.id}: "${truncatedComment}"`,
+              link: `/ticketing?ticketId=${ticket.id}`
+            });
+          }
         }
       }
     }

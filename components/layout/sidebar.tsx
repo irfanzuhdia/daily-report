@@ -124,7 +124,7 @@ export function Sidebar({
     }
     
     window.addEventListener("notificationsUpdated", handleUpdate)
-    const interval = setInterval(fetchUnreadCount, 10000)
+    const interval = setInterval(fetchUnreadCount, 4000)
     
     return () => {
       active = false

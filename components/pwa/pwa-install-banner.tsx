@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Download, Bell, BellOff, Share, Smartphone, Check, Send } from "lucide-react";
+import { Download, Bell, BellOff, Share, Smartphone, Check, Send, X, ChevronDown, ChevronUp } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -28,10 +28,19 @@ export function PWAInstallBanner() {
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testSent, setTestSent] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
+    // Check saved collapse state
+    const savedCollapse = localStorage.getItem("pwa_banner_collapsed");
+    if (savedCollapse === "true") {
+      setIsCollapsed(true);
+    }
+
     // Check if running in standalone PWA mode
-    const checkStandalone = window.matchMedia("(display-mode: standalone)").matches || (window.navigator as any).standalone === true;
+    const checkStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true;
     setIsStandalone(checkStandalone);
 
     // Detect iOS
@@ -64,6 +73,11 @@ export function PWAInstallBanner() {
       const sub = await reg.pushManager.getSubscription();
       setIsSubscribed(!!sub);
     }
+  };
+
+  const toggleCollapse = (collapsed: boolean) => {
+    setIsCollapsed(collapsed);
+    localStorage.setItem("pwa_banner_collapsed", String(collapsed));
   };
 
   const handleInstallClick = async () => {
@@ -170,83 +184,124 @@ export function PWAInstallBanner() {
     }
   };
 
+  // Compact Collapsed Pill View
+  if (isCollapsed) {
+    return (
+      <div className="flex items-center justify-end">
+        <Button
+          onClick={() => toggleCollapse(false)}
+          variant="outline"
+          size="sm"
+          className="gap-2 text-xs rounded-full border-border bg-card hover:bg-accent text-card-foreground shadow-sm transition-all"
+        >
+          <Smartphone className="w-3.5 h-3.5 text-indigo-500" />
+          <span>App & Notifications</span>
+          {isSubscribed && (
+            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+          )}
+          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-1" />
+        </Button>
+      </div>
+    );
+  }
+
+  // Expanded Full Banner View
   return (
-    <Card className="p-4 bg-zinc-900 border-zinc-800 text-zinc-100 shadow-xl space-y-3">
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <h3 className="font-semibold text-base">App Installation & Push Alerts</h3>
+    <Card className="p-4 bg-card text-card-foreground border-border shadow-sm space-y-3 relative transition-all">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1 pr-6">
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="font-semibold text-sm sm:text-base text-foreground">
+              App Installation & Push Alerts
+            </h3>
             {isStandalone ? (
-              <Badge className="bg-emerald-600/20 text-emerald-400 border-emerald-500/30">Installed App</Badge>
+              <Badge variant="secondary" className="bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/20 text-xs">
+                Installed App
+              </Badge>
             ) : (
-              <Badge className="bg-blue-600/20 text-blue-400 border-blue-500/30">Web App</Badge>
+              <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 dark:text-blue-400 border-blue-500/20 text-xs">
+                Web App
+              </Badge>
             )}
           </div>
-          <p className="text-xs text-zinc-400">
+          <p className="text-xs text-muted-foreground">
             Install on PC/Phone & enable notifications for instant daily report updates.
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {!isStandalone && (deferredPrompt || isIOS) && (
-            <Button
-              onClick={handleInstallClick}
-              size="sm"
-              className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5"
-            >
-              <Download className="w-4 h-4" />
-              Install App
-            </Button>
-          )}
+        {/* Collapse Button */}
+        <Button
+          onClick={() => toggleCollapse(true)}
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
+          title="Collapse Banner"
+        >
+          <ChevronUp className="w-4 h-4" />
+        </Button>
+      </div>
 
+      <div className="flex flex-wrap items-center gap-2 pt-1">
+        {!isStandalone && (deferredPrompt || isIOS) && (
           <Button
-            onClick={togglePushNotifications}
-            disabled={loading}
+            onClick={handleInstallClick}
             size="sm"
-            variant={isSubscribed ? "outline" : "default"}
-            className={
-              isSubscribed
-                ? "border-zinc-700 hover:bg-zinc-800 text-zinc-200 gap-1.5"
-                : "bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5"
-            }
+            className="bg-indigo-600 hover:bg-indigo-500 text-white gap-1.5 text-xs h-8"
           >
-            {isSubscribed ? <BellOff className="w-4 h-4 text-emerald-400" /> : <Bell className="w-4 h-4" />}
-            {isSubscribed ? "Notifications Enabled" : "Enable Notifications"}
+            <Download className="w-3.5 h-3.5" />
+            Install App
           </Button>
+        )}
 
-          {isSubscribed && (
-            <Button
-              onClick={sendTestNotification}
-              size="sm"
-              variant="ghost"
-              className="text-zinc-300 hover:text-white hover:bg-zinc-800 gap-1.5"
-            >
-              {testSent ? <Check className="w-4 h-4 text-emerald-400" /> : <Send className="w-4 h-4 text-blue-400" />}
-              {testSent ? "Notification Sent!" : "Test Alert"}
-            </Button>
-          )}
-        </div>
+        <Button
+          onClick={togglePushNotifications}
+          disabled={loading}
+          size="sm"
+          variant={isSubscribed ? "outline" : "default"}
+          className={
+            isSubscribed
+              ? "border-border hover:bg-accent text-foreground gap-1.5 text-xs h-8"
+              : "bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 text-xs h-8"
+          }
+        >
+          {isSubscribed ? <BellOff className="w-3.5 h-3.5 text-emerald-500" /> : <Bell className="w-3.5 h-3.5" />}
+          {isSubscribed ? "Notifications Enabled" : "Enable Notifications"}
+        </Button>
+
+        {isSubscribed && (
+          <Button
+            onClick={sendTestNotification}
+            size="sm"
+            variant="ghost"
+            className="text-muted-foreground hover:text-foreground gap-1.5 text-xs h-8"
+          >
+            {testSent ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Send className="w-3.5 h-3.5 text-blue-500" />}
+            {testSent ? "Notification Sent!" : "Test Alert"}
+          </Button>
+        )}
       </div>
 
       {/* iOS Instructions Banner/Modal */}
       {showIOSModal && (
-        <div className="mt-3 p-3 rounded-lg bg-zinc-800/90 border border-zinc-700 text-xs text-zinc-300 space-y-2">
+        <div className="mt-3 p-3 rounded-xl bg-muted/60 border border-border text-xs text-foreground space-y-2">
           <div className="flex items-center justify-between">
-            <span className="font-semibold text-zinc-100 flex items-center gap-1.5">
-              <Smartphone className="w-4 h-4 text-indigo-400" /> How to Install on iOS (iPhone / iPad)
+            <span className="font-semibold text-foreground flex items-center gap-1.5">
+              <Smartphone className="w-4 h-4 text-indigo-500" /> How to Install on iOS (iPhone / iPad)
             </span>
-            <button
+            <Button
               onClick={() => setShowIOSModal(false)}
-              className="text-zinc-400 hover:text-zinc-100 font-bold"
+              variant="ghost"
+              size="icon"
+              className="h-6 w-6 text-muted-foreground hover:text-foreground"
             >
-              ✕
-            </button>
+              <X className="w-3.5 h-3.5" />
+            </Button>
           </div>
-          <ol className="list-decimal list-inside space-y-1 text-zinc-300">
+          <ol className="list-decimal list-inside space-y-1 text-muted-foreground">
             <li>Open this website in <strong>Safari</strong> on your iPhone/iPad.</li>
-            <li>Tap the <strong>Share</strong> button <Share className="inline w-3.5 h-3.5 mx-0.5 text-blue-400" /> at the bottom menu.</li>
+            <li>Tap the <strong>Share</strong> button <Share className="inline w-3.5 h-3.5 mx-0.5 text-blue-500" /> at the bottom menu.</li>
             <li>Scroll down and tap <strong>&quot;Add to Home Screen&quot;</strong>.</li>
-            <li>Open the installed icon from your Home Screen to enable Push Notifications!</li>
+            <li>Open the installed app from your Home Screen to enable Push Notifications!</li>
           </ol>
         </div>
       )}

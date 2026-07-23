@@ -1,7 +1,7 @@
 import { sql } from '../db';
 import type { Notification } from '../types';
 import { randomUUID } from 'crypto';
-import { sendPushNotificationToAll } from '../services/push-notification';
+import { sendPushNotificationToUser } from '../services/push-notification';
 
 // ============ NOTIFICATION REPOSITORY ============
 
@@ -68,9 +68,10 @@ export const NotificationRepository = {
       )
     `;
 
-    // Dispatch Web Push notification to computer/phone devices
+    // Dispatch targeted Web Push notification ONLY to recipient device
     try {
-      await sendPushNotificationToAll(
+      await sendPushNotificationToUser(
+        notification.user_id,
         notification.title || "Daily Report Notification",
         notification.content || "You have a new update in Daily Report.",
         notification.link || "/inbox"

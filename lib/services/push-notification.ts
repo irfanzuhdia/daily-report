@@ -78,6 +78,76 @@ export async function getAllPushSubscriptions(): Promise<PushSubscriptionPayload
   }
 }
 
+export async function getPushSubscriptionsForUser(targetUserId: string): Promise<PushSubscriptionPayload[]> {
+  try {
+    const rows = (await sql`
+      SELECT endpoint, p256dh, auth 
+      FROM push_subscriptions 
+      WHERE user_id = ${targetUserId} 
+         OR user_id IN (SELECT user_email FROM users WHERE user_id = ${targetUserId})
+         OR user_id IN (SELECT user_id FROM users WHERE user_email = ${targetUserId})
+    `) as any[];
+
+    return rows.map((r) => ({
+      endpoint: r.endpoint,
+      keys: {
+        p256dh: r.p256dh,
+        auth: r.auth,
+      },
+    }));
+  } catch (err) {
+    console.error("Failed to load user push subscriptions from DB:", err);
+    return [];
+  }
+}
+
+export async function sendPushNotificationToUser(
+  targetUserId: string,
+  title: string,
+  body: string,
+  url = "/",
+  icon = "/icons/icon-192.png"
+): Promise<{ successCount: number; failureCount: number; totalSubscribers: number }> {
+  const subscriptions = await getPushSubscriptionsForUser(targetUserId);
+
+  if (subscriptions.length === 0) {
+    return { successCount: 0, failureCount: 0, totalSubscribers: 0 };
+  }
+
+  const payload = JSON.stringify({
+    title,
+    body,
+    url,
+    icon,
+  });
+
+  let successCount = 0;
+  let failureCount = 0;
+
+  const promises = subscriptions.map(async (sub) => {
+    try {
+      await webpush.sendNotification(
+        {
+          endpoint: sub.endpoint,
+          keys: sub.keys,
+        },
+        payload
+      );
+      successCount++;
+    } catch (err: any) {
+      console.error("Error sending push notification to endpoint:", sub.endpoint, err?.message);
+      if (err.statusCode === 410 || err.statusCode === 404) {
+        await removePushSubscription(sub.endpoint);
+      }
+      failureCount++;
+    }
+  });
+
+  await Promise.all(promises);
+
+  return { successCount, failureCount, totalSubscribers: subscriptions.length };
+}
+
 export async function sendPushNotificationToAll(
   title: string,
   body: string,

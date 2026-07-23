@@ -4,6 +4,7 @@ import {
   removePushSubscription,
   PushSubscriptionPayload,
 } from "@/lib/services/push-notification";
+import { getSession } from "@/lib/session";
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,7 +17,10 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    await addPushSubscription(body);
+    const session = await getSession();
+    const userId = session?.user_id || session?.email || undefined;
+
+    await addPushSubscription(body, userId);
 
     return NextResponse.json({
       success: true,

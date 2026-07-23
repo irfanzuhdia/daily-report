@@ -1,6 +1,7 @@
 import { sql } from '../db';
 import type { Notification } from '../types';
 import { randomUUID } from 'crypto';
+import { sendPushNotificationToAll } from '../services/push-notification';
 
 // ============ NOTIFICATION REPOSITORY ============
 
@@ -66,6 +67,17 @@ export const NotificationRepository = {
         ${newNotification.content}, ${newNotification.link}, ${newNotification.is_read}, ${newNotification.created_at}
       )
     `;
+
+    // Dispatch Web Push notification to computer/phone devices
+    try {
+      await sendPushNotificationToAll(
+        notification.title || "Daily Report Notification",
+        notification.content || "You have a new update in Daily Report.",
+        notification.link || "/inbox"
+      );
+    } catch (e) {
+      console.error("Failed to send web push notification:", e);
+    }
 
     return newNotification;
   },

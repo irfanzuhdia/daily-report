@@ -59,3 +59,32 @@ export async function PUT(request: NextRequest) {
     return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
   }
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    const session = await getSession()
+    if (!session) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { user_id, type, title, content, link } = body
+
+    if (!user_id || !title || !content) {
+      return NextResponse.json({ error: 'user_id, title, and content are required' }, { status: 400 })
+    }
+
+    const notification = await NotificationRepository.create({
+      user_id,
+      type: type || 'info',
+      title,
+      content,
+      link: link || '/inbox',
+    })
+
+    return NextResponse.json({ success: true, notification })
+  } catch (error) {
+    logger.error('POST /api/notifications error:', error)
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 })
+  }
+}

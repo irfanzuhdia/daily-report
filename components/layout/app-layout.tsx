@@ -5,6 +5,7 @@ import { ReactNode, useState } from "react"
 import { Sidebar } from "@/components/layout/sidebar"
 import { Button } from "@/components/ui/button"
 import { Eye, Undo2 } from "lucide-react"
+import { PWAInstallBanner } from "@/components/pwa/pwa-install-banner"
 
 export function AppLayout({
   children,
@@ -67,7 +68,10 @@ export function AppLayout({
         realEmail={realEmail}
       />
       <main id="main-content" className="lg:pl-64">
-        <div className="p-4 pt-16 lg:p-8 lg:pt-8">{children}</div>
+        <div className="p-4 pt-16 lg:p-8 lg:pt-8 space-y-6">
+          <PWAInstallBanner />
+          {children}
+        </div>
       </main>
 
       {/* Impersonation Floating Banner */}

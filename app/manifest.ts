@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "MDM Daily Report & Payroll",
+    name: "MDM Daily Report",
     short_name: "DailyReport",
-    description: "Daily work reporting, task tracking, and payroll management system for MDM.",
+    description: "Daily work reporting, task tracking, and project management system for MDM.",
     start_url: "/",
     display: "standalone",
     background_color: "#09090b",

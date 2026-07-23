@@ -19,8 +19,8 @@ const fontMono = Geist_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "MDM Daily Report & Payroll",
-  description: "Daily work reporting, task tracking, and payroll management system.",
+  title: "MDM Daily Report",
+  description: "Daily work reporting, task tracking, and project management system.",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,

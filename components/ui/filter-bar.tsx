@@ -6,7 +6,7 @@ import { cn } from "@/lib/utils"
 
 export function FilterContainer({ children, className }: { children: React.ReactNode, className?: string }) {
   return (
-    <div className={cn("bg-card border border-border rounded-[1.25rem] p-2 shadow-sm mb-6 flex flex-col gap-2", className)}>
+    <div className={cn("bg-card border border-border rounded-[1.25rem] p-2 sm:p-3 shadow-sm mb-6 flex flex-col gap-2.5", className)}>
       {children}
     </div>
   )
@@ -21,7 +21,7 @@ export function FilterSearch({ className, ...props }: FilterSearchProps) {
       <Input
         {...props}
         className={cn(
-          "pl-9 h-9 rounded-full bg-muted/50 border-border hover:border-border/80 text-sm transition-colors text-foreground placeholder:text-muted-foreground w-full",
+          "pl-9 h-10 sm:h-9 rounded-full bg-muted/50 border-border hover:border-border/80 text-sm transition-colors text-foreground placeholder:text-muted-foreground w-full",
           className
         )}
       />
@@ -36,7 +36,7 @@ export const FilterSelectTrigger = React.forwardRef<
   <SelectTrigger
     ref={ref}
     className={cn(
-      "h-9 rounded-full bg-muted/50 border-border hover:border-border/80 text-sm transition-colors text-foreground",
+      "h-10 sm:h-9 rounded-full bg-muted/50 border-border hover:border-border/80 text-sm transition-colors text-foreground shrink-0",
       className
     )}
     {...props}
@@ -95,12 +95,13 @@ export function FilterMultiSelect({
   const hasSelections = selectedValues.length > 0;
   
   return (
-    <div className="relative" ref={containerRef}>
+    <div className="relative shrink-0" ref={containerRef}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
         className={cn(
-          "flex h-9 w-full min-w-[180px] items-center justify-between rounded-full bg-muted/50 border border-border px-3 py-2 text-sm shadow-sm transition-colors hover:border-border/80 focus:outline-none focus:ring-2 focus:ring-ring/30",
+          "flex h-10 sm:h-9 w-full min-w-[140px] sm:min-w-[160px] items-center justify-between rounded-full bg-muted/50 border border-border px-3 py-2 text-xs sm:text-sm shadow-sm transition-colors hover:border-border/80 focus:outline-none focus:ring-2 focus:ring-ring/30",
+          hasSelections ? "border-primary/50 bg-primary/10 text-primary font-medium" : "",
           className
         )}
       >

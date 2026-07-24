@@ -614,14 +614,14 @@ export function ReportsClient({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none max-w-full">
             <FilterMultiSelect
               placeholder="All projects"
               icon={<Filter className="h-3.5 w-3.5" />}
               options={projects?.map((p: any) => ({ label: p.project_name, value: p.project_id })) || []}
               selectedValues={projectFilter}
               onSelectedValuesChange={setProjectFilter}
-              className="w-full sm:w-[200px]"
+              className="w-[150px] sm:w-[200px]"
             />
 
             <FilterMultiSelect
@@ -633,7 +633,7 @@ export function ReportsClient({
               })}
               selectedValues={taskFilter}
               onSelectedValuesChange={setTaskFilter}
-              className="w-full sm:w-[200px]"
+              className="w-[150px] sm:w-[200px]"
             />
             {viewMode === "team" && (
               <>
@@ -643,7 +643,7 @@ export function ReportsClient({
                   options={uniqueReporters.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
                   selectedValues={createdByFilter}
                   onSelectedValuesChange={setCreatedByFilter}
-                  className="w-full sm:w-[180px]"
+                  className="w-[150px] sm:w-[180px]"
                 />
 
                 <FilterMultiSelect
@@ -652,7 +652,7 @@ export function ReportsClient({
                   options={uniqueReporters.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
                   selectedValues={memberFilter}
                   onSelectedValuesChange={setMemberFilter}
-                  className="w-full sm:w-[180px]"
+                  className="w-[150px] sm:w-[180px]"
                 />
 
                 {!isDeptDisabled && (
@@ -662,7 +662,7 @@ export function ReportsClient({
                     options={uniqueDepts.map((d) => ({ label: d, value: d }))}
                     selectedValues={dept}
                     onSelectedValuesChange={setDept}
-                    className="w-full sm:w-[180px]"
+                    className="w-[150px] sm:w-[180px]"
                   />
                 )}
 
@@ -673,7 +673,7 @@ export function ReportsClient({
                     options={uniqueSites.map((s) => ({ label: s, value: s }))}
                     selectedValues={site}
                     onSelectedValuesChange={setSite}
-                    className="w-full sm:w-[180px]"
+                    className="w-[150px] sm:w-[180px]"
                   />
                 )}
 
@@ -684,7 +684,7 @@ export function ReportsClient({
                     options={uniqueDivs.map((d) => ({ label: d, value: d }))}
                     selectedValues={division}
                     onSelectedValuesChange={setDivision}
-                    className="w-full sm:w-[180px]"
+                    className="w-[150px] sm:w-[180px]"
                   />
                 )}
 
@@ -695,7 +695,7 @@ export function ReportsClient({
                     options={uniqueTeams.map((t) => ({ label: t, value: t }))}
                     selectedValues={team}
                     onSelectedValuesChange={setTeam}
-                    className="w-full sm:w-[180px]"
+                    className="w-[150px] sm:w-[180px]"
                   />
                 )}
               </>
@@ -714,11 +714,12 @@ export function ReportsClient({
           onDragOver={handleDragOver}
           onDragEnd={handleDragEnd}
         >
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-4">
+          <div className="flex overflow-x-auto snap-x snap-mandatory gap-4 pb-4 md:grid md:grid-cols-2 lg:grid-cols-4 md:overflow-visible -mx-4 px-4 md:mx-0 md:px-0">
             {columns.map((col) => {
               const colReports = getSortedColumnReports(col.id)
               return (
-                <DroppableColumn key={col.id} column={col} reports={colReports}>
+                <div key={col.id} className="w-[85vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none">
+                <DroppableColumn column={col} reports={colReports}>
                   {colReports.map((report) => (
                     <SortableReportCard
                       key={report.report_id}
@@ -732,6 +733,7 @@ export function ReportsClient({
                     />
                   ))}
                 </DroppableColumn>
+                </div>
               )
             })}
           </div>

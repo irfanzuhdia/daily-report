@@ -7,6 +7,7 @@ if (!process.env.JWT_SECRET) {
 const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET);
 
 const COOKIE_NAME = 'dr_session';
+export const SESSION_MAX_AGE = 60 * 60 * 24 * 30; // 30 Days (Instagram-like persistent session)
 
 export interface SessionPayload {
   email: string;
@@ -28,7 +29,7 @@ export interface SessionPayload {
 export async function createSession(payload: Omit<SessionPayload, 'exp'>): Promise<string> {
   const token = await new SignJWT({ ...payload })
     .setProtectedHeader({ alg: 'HS256' })
-    .setExpirationTime('8h')
+    .setExpirationTime('30d')
     .sign(JWT_SECRET);
   return token;
 }

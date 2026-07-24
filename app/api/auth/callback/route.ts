@@ -1,7 +1,7 @@
 import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { createSession, getCookieName } from '@/lib/auth';
+import { createSession, getCookieName, SESSION_MAX_AGE } from '@/lib/auth';
 import { UserRepository } from '@/lib/repositories';
 
 const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
@@ -93,7 +93,7 @@ export async function GET(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 8, // 8 hours
+      maxAge: SESSION_MAX_AGE, // 30 Days
       path: '/',
     });
 

@@ -2,7 +2,7 @@ import { logger } from '@/lib/logger';
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { getSession } from '@/lib/session';
-import { createSession, getCookieName } from '@/lib/auth';
+import { createSession, getCookieName, SESSION_MAX_AGE } from '@/lib/auth';
 import { UserRepository } from '@/lib/repositories';
 
 const SUPER_USER_EMAIL = 'gadmin@multidayamitra.co.id';
@@ -80,7 +80,7 @@ export async function POST(request: NextRequest) {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 8, // 8 hours
+      maxAge: SESSION_MAX_AGE, // 30 Days
       path: '/',
     });
 
@@ -136,7 +136,7 @@ export async function DELETE() {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
-      maxAge: 60 * 60 * 8, // 8 hours
+      maxAge: SESSION_MAX_AGE, // 30 Days
       path: '/',
     });
 

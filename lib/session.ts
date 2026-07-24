@@ -1,5 +1,5 @@
 import { cookies } from 'next/headers';
-import { verifySession, getCookieName } from '@/lib/auth';
+import { verifySession, getCookieName, SESSION_MAX_AGE } from '@/lib/auth';
 import type { SessionPayload } from '@/lib/auth';
 import { UserRepository } from '@/lib/repositories/user-repository';
 
@@ -20,6 +20,19 @@ export async function getSession(): Promise<SessionPayload | null> {
     } catch (e) {
       console.error('Failed to resolve session user_id:', e);
     }
+  }
+
+  // Sliding session: refresh cookie maxAge on active requests so active users stay logged in
+  try {
+    cookieStore.set(getCookieName(), token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: SESSION_MAX_AGE,
+      path: '/',
+    });
+  } catch {
+    // Ignore if cookies cannot be modified in immutable Server Component renders
   }
 
   return session;

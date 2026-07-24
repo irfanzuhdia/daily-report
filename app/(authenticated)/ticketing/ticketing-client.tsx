@@ -39,6 +39,7 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Download,
   Upload
 } from "lucide-react"
 import Link from "next/link"
@@ -1239,6 +1240,61 @@ export function TicketingClient({
     return currentUserDivision.toLowerCase() === reqToDiv.toLowerCase()
   }
 
+  const [exportingCSV, setExportingCSV] = useState(false)
+
+  const handleExportCSV = async () => {
+    try {
+      setExportingCSV(true)
+      const res = await fetch("/api/export/tickets")
+      const result = await res.json()
+      if (!res.ok || !result.data) throw new Error(result.error || "Export failed")
+
+      const { generateCSV, downloadCSV, formatDate, formatDateTime, todayString } = await import("@/lib/utils/csv-export")
+
+      const headers = [
+        "Ticket ID",
+        "Title",
+        "Status",
+        "Priority",
+        "Problem Type",
+        "Division Category",
+        "Requested To Division",
+        "Requested By",
+        "Assigned To",
+        "Due Date",
+        "Description",
+        "Total Comments",
+        "Created At",
+        "Last Updated",
+      ]
+
+      const rows = result.data.map((t: any) => [
+        t.ticket_id,
+        t.title || "",
+        t.status || "",
+        t.priority || "",
+        t.problem_type || "",
+        t.division_category || "",
+        t.request_to_division || "",
+        t.requester_name || "",
+        t.assigned_to || "",
+        formatDate(t.due_date),
+        t.description || "",
+        t.total_comments || "0",
+        formatDateTime(t.created_at),
+        formatDateTime(t.updated_at),
+      ])
+
+      const csvString = generateCSV(headers, rows)
+      downloadCSV(csvString, `tickets_report_${todayString()}.csv`)
+    } catch (e: any) {
+      console.error("Export error:", e)
+      alert(e.message || "Failed to export tickets CSV")
+    } finally {
+      setExportingCSV(false)
+    }
+  }
+
   return (
     <div className={density === "compact" ? "space-y-4" : "space-y-6"}>
       {/* Page Header */}
@@ -1252,10 +1308,26 @@ export function TicketingClient({
             Submit operational tickets, request divisional assistance, and monitor resolution timelines.
           </p>
         </div>
-        <Button onClick={handleOpenCreate} className="gap-1.5 h-10 px-4">
-          <Plus className="h-4 w-4" />
-          Create New Ticket
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleExportCSV}
+            disabled={exportingCSV}
+            className="gap-1.5 h-10 px-3 text-xs"
+          >
+            {exportingCSV ? (
+              <Loader2 className="h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="h-4 w-4 text-emerald-600 dark:text-emerald-400" />
+            )}
+            {exportingCSV ? "Exporting..." : "Export CSV"}
+          </Button>
+          <Button onClick={handleOpenCreate} className="gap-1.5 h-10 px-4">
+            <Plus className="h-4 w-4" />
+            Create New Ticket
+          </Button>
+        </div>
       </div>
 
       {/* Notice Banner */}

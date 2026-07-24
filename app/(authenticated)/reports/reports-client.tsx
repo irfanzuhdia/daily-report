@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, GripVertical, Pin, Loader2 } from "lucide-react"
+import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, GripVertical, Pin, Loader2, Download } from "lucide-react"
 import {
   DndContext,
   DragOverlay,
@@ -480,7 +480,53 @@ export function ReportsClient({
 
   // Only show users who have actually created a report
   const reporterIds = new Set(reports.map((r) => r.created_by || r.user_id).filter(Boolean))
-  const uniqueReporters = users.filter((u) => reporterIds.has(u.user_id))
+  const uniqueReporters = users.filter((u: any) => reporterIds.has(u.user_id))
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportCSV = async () => {
+    try {
+      setExporting(true)
+      const res = await fetch("/api/export/reports")
+      const result = await res.json()
+      if (!res.ok || !result.data) throw new Error(result.error || "Export failed")
+
+      const { generateCSV, downloadCSV, formatDate, formatDateTime, todayString } = await import("@/lib/utils/csv-export")
+
+      const headers = [
+        "Report ID",
+        "Date",
+        "Project Name",
+        "Task Description",
+        "Reporter Name",
+        "Reporter Email",
+        "Progress (%)",
+        "Total Hours",
+        "Remarks",
+        "Created At",
+      ]
+
+      const rows = result.data.map((r: any) => [
+        r.report_id,
+        formatDate(r.date),
+        r.project_name || "",
+        r.task_description || "",
+        r.reporter_name || "",
+        r.reporter_email || "",
+        r.progress_percentage || "0",
+        r.total_hours || "0",
+        r.remarks || "",
+        formatDateTime(r.created_at),
+      ])
+
+      const csvString = generateCSV(headers, rows)
+      downloadCSV(csvString, `daily_reports_${todayString()}.csv`)
+    } catch (e: any) {
+      console.error("Export error:", e)
+      alert(e.message || "Failed to export daily reports CSV")
+    } finally {
+      setExporting(false)
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -496,6 +542,23 @@ export function ReportsClient({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Export CSV Button */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 sm:px-3 text-xs gap-1.5"
+            onClick={handleExportCSV}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            )}
+            <span className="hidden sm:inline">{exporting ? "Exporting..." : "Export CSV"}</span>
+          </Button>
+
           {/* Layout Toggle */}
           <div className="flex rounded-xl border p-1 bg-muted/20 mr-1 sm:mr-2">
             <Button

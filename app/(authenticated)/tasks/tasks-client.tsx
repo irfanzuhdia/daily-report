@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin } from "lucide-react"
+import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin, Download } from "lucide-react"
 import {
   DndContext,
   DragOverlay,
@@ -501,6 +501,57 @@ export function TasksClient({
 
   const activeTask = activeId ? activeTasks.find(t => t.id === activeId) : null
 
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportCSV = async () => {
+    try {
+      setExporting(true)
+      const res = await fetch("/api/export/tasks")
+      const result = await res.json()
+      if (!res.ok || !result.data) throw new Error(result.error || "Export failed")
+
+      const { generateCSV, downloadCSV, formatStatus, formatDate, formatDateTime, todayString } = await import("@/lib/utils/csv-export")
+
+      const headers = [
+        "Task ID",
+        "Project Name",
+        "Task Description",
+        "Status",
+        "Progress (%)",
+        "Hours Logged",
+        "Assigned To",
+        "Latest Reporter",
+        "Latest Report Date",
+        "Latest Remarks",
+        "Created By",
+        "Created At",
+      ]
+
+      const rows = result.data.map((t: any) => [
+        t.task_id,
+        t.project_name || "",
+        t.task_description || "",
+        formatStatus(t.task_status),
+        t.task_latest_percentage || "0",
+        t.total_hours || "0",
+        t.assigned_to || "",
+        t.latest_reporter || "",
+        formatDate(t.latest_report_date),
+        t.latest_remarks || "",
+        t.creator_name || "",
+        formatDateTime(t.created_at),
+      ])
+
+      const csvString = generateCSV(headers, rows)
+      downloadCSV(csvString, `tasks_report_${todayString()}.csv`)
+    } catch (e: any) {
+      console.error("Export error:", e)
+      alert(e.message || "Failed to export tasks CSV")
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -515,6 +566,23 @@ export function TasksClient({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Export CSV Button */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 sm:px-3 text-xs gap-1.5"
+            onClick={handleExportCSV}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            )}
+            <span className="hidden sm:inline">{exporting ? "Exporting..." : "Export CSV"}</span>
+          </Button>
+
           {/* Layout Toggle */}
           <div className="flex rounded-xl border p-1 bg-muted/20 mr-1 sm:mr-2">
             <Button

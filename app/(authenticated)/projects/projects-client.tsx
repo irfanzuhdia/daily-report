@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin, LifeBuoy } from "lucide-react"
+import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin, LifeBuoy, Download } from "lucide-react"
 import {
   DndContext,
   DragOverlay,
@@ -503,6 +503,61 @@ export function ProjectsClient({
 
   const activeProject = activeId ? activeProjects.find(p => p.project_id === activeId) : null
 
+  const [exporting, setExporting] = useState(false)
+
+  const handleExportCSV = async () => {
+    try {
+      setExporting(true)
+      const res = await fetch("/api/export/projects")
+      const result = await res.json()
+      if (!res.ok || !result.data) throw new Error(result.error || "Export failed")
+
+      const { generateCSV, downloadCSV, formatStatus, formatDate, formatDateTime, todayString } = await import("@/lib/utils/csv-export")
+
+      const headers = [
+        "Project ID",
+        "Project Name",
+        "Category",
+        "Status",
+        "Description",
+        "Start Date (Plan)",
+        "End Date (Plan)",
+        "Team Members",
+        "Total Tasks",
+        "Completed Tasks",
+        "Total Hours",
+        "Reporter Contribution Breakdown",
+        "Created By",
+        "Created At",
+      ]
+
+      const rows = result.data.map((p: any) => [
+        p.project_id,
+        p.project_name || "",
+        p.category || "",
+        formatStatus(p.project_status),
+        p.project_description || "",
+        formatDate(p.project_start_date_plan),
+        formatDate(p.project_end_date_plan),
+        p.team_members || "",
+        p.total_tasks || "0",
+        p.completed_tasks || "0",
+        p.total_hours || "0",
+        p.reporter_breakdown || "",
+        p.creator_name || "",
+        formatDateTime(p.created_at),
+      ])
+
+      const csvString = generateCSV(headers, rows)
+      downloadCSV(csvString, `projects_report_${todayString()}.csv`)
+    } catch (e: any) {
+      console.error("Export error:", e)
+      alert(e.message || "Failed to export projects CSV")
+    } finally {
+      setExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
@@ -517,6 +572,23 @@ export function ProjectsClient({
           </p>
         </div>
         <div className="flex items-center gap-2">
+          {/* Export CSV Button */}
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8 px-2 sm:px-3 text-xs gap-1.5"
+            onClick={handleExportCSV}
+            disabled={exporting}
+          >
+            {exporting ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+            )}
+            <span className="hidden sm:inline">{exporting ? "Exporting..." : "Export CSV"}</span>
+          </Button>
+
           {/* Layout Toggle */}
           <div className="flex rounded-xl border p-1 bg-muted/20 mr-1 sm:mr-2">
             <Button

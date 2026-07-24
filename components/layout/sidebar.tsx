@@ -147,9 +147,13 @@ export function Sidebar({
       )
       .subscribe()
     
+    const handleOpenMobile = () => setMobileOpen(true)
+    window.addEventListener("openMobileSidebar", handleOpenMobile)
+
     return () => {
       active = false
       window.removeEventListener("notificationsUpdated", handleUpdate)
+      window.removeEventListener("openMobileSidebar", handleOpenMobile)
       clearInterval(interval)
       supabase.removeChannel(channel)
     }

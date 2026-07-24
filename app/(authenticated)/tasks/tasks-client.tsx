@@ -638,14 +638,14 @@ export function TasksClient({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none max-w-full">
+        <div className="flex flex-wrap items-center gap-2 w-full">
             <FilterMultiSelect
               placeholder="All projects"
               icon={<Filter className="h-3.5 w-3.5" />}
               options={projects.map((p) => ({ label: p.project_name || "Unnamed Project", value: p.project_id }))}
               selectedValues={projectFilter}
               onSelectedValuesChange={setProjectFilter}
-              className="w-[150px] sm:w-[180px]"
+              className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
             />
             {layout === "list" && (
               <FilterMultiSelect
@@ -654,7 +654,7 @@ export function TasksClient({
                 options={statuses.map((s) => ({ label: s.name, value: s.id }))}
                 selectedValues={statusFilter}
                 onSelectedValuesChange={setStatusFilter}
-                className="w-[140px] sm:w-[160px]"
+                className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[160px]"
               />
             )}
             {viewMode === "team" && (
@@ -665,7 +665,7 @@ export function TasksClient({
                   options={uniqueCreators.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
                   selectedValues={createdByFilter}
                   onSelectedValuesChange={setCreatedByFilter}
-                  className="w-[150px] sm:w-[180px]"
+                  className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                 />
 
                 <FilterMultiSelect
@@ -674,7 +674,7 @@ export function TasksClient({
                   options={uniqueMembers.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
                   selectedValues={memberFilter}
                   onSelectedValuesChange={setMemberFilter}
-                  className="w-[150px] sm:w-[180px]"
+                  className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                 />
 
                 {!isDeptDisabled && (
@@ -684,7 +684,7 @@ export function TasksClient({
                     options={uniqueDepts.map((d) => ({ label: d, value: d }))}
                     selectedValues={dept}
                     onSelectedValuesChange={setDept}
-                    className="w-[150px] sm:w-[180px]"
+                    className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                   />
                 )}
 
@@ -695,7 +695,7 @@ export function TasksClient({
                     options={uniqueSites.map((s) => ({ label: s, value: s }))}
                     selectedValues={site}
                     onSelectedValuesChange={setSite}
-                    className="w-[150px] sm:w-[180px]"
+                    className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                   />
                 )}
 
@@ -706,7 +706,7 @@ export function TasksClient({
                     options={uniqueDivs.map((d) => ({ label: d, value: d }))}
                     selectedValues={division}
                     onSelectedValuesChange={setDivision}
-                    className="w-[150px] sm:w-[180px]"
+                    className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                   />
                 )}
 
@@ -717,7 +717,7 @@ export function TasksClient({
                     options={uniqueTeams.map((t) => ({ label: t, value: t }))}
                     selectedValues={team}
                     onSelectedValuesChange={setTeam}
-                    className="w-[150px] sm:w-[180px]"
+                    className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                   />
                 )}
               </>
@@ -872,7 +872,7 @@ export function TasksClient({
                   isSuperUser
                 return (
                   <Card key={task.id} onClick={() => router.push(`/tasks/${task.id}`)} className="transition-shadow hover:shadow-md cursor-pointer hover:bg-muted/50">
-                    <CardContent className="flex items-center justify-between p-4">
+                    <CardContent className="flex flex-col sm:flex-row sm:items-center justify-between p-3 sm:p-4 gap-3">
                       <div className="min-w-0 flex-1">
                         <span className="font-medium hover:text-primary">
                           <p className="truncate">{task.task_description}</p>

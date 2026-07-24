@@ -644,7 +644,7 @@ export function ProjectsClient({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none max-w-full">
+        <div className="flex flex-wrap items-center gap-2 w-full">
         {layout === "list" && (
           <FilterMultiSelect
             placeholder="All statuses"
@@ -652,7 +652,7 @@ export function ProjectsClient({
             options={statuses.map((s) => ({ label: s.name, value: s.id }))}
             selectedValues={statusFilter}
             onSelectedValuesChange={setStatusFilter}
-            className="w-[150px] sm:w-[180px]"
+            className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
           />
         )}
         {viewMode === "team" && (
@@ -663,7 +663,7 @@ export function ProjectsClient({
               options={uniqueCreators.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
               selectedValues={createdByFilter}
               onSelectedValuesChange={setCreatedByFilter}
-              className="w-[150px] sm:w-[180px]"
+              className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
             />
 
             <FilterMultiSelect
@@ -672,7 +672,7 @@ export function ProjectsClient({
               options={uniqueMembers.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
               selectedValues={memberFilter}
               onSelectedValuesChange={setMemberFilter}
-              className="w-[150px] sm:w-[180px]"
+              className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
             />
 
             {!isDeptDisabled && (
@@ -682,7 +682,7 @@ export function ProjectsClient({
                 options={uniqueDepts.map((d) => ({ label: d, value: d }))}
                 selectedValues={dept}
                 onSelectedValuesChange={setDept}
-                className="w-[150px] sm:w-[180px]"
+                className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
               />
             )}
 
@@ -693,7 +693,7 @@ export function ProjectsClient({
                 options={uniqueSites.map((s) => ({ label: s, value: s }))}
                 selectedValues={site}
                 onSelectedValuesChange={setSite}
-                className="w-[150px] sm:w-[180px]"
+                className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
               />
             )}
 
@@ -704,7 +704,7 @@ export function ProjectsClient({
                 options={uniqueDivs.map((d) => ({ label: d, value: d }))}
                 selectedValues={division}
                 onSelectedValuesChange={setDivision}
-                className="w-[150px] sm:w-[180px]"
+                className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
               />
             )}
 
@@ -715,7 +715,7 @@ export function ProjectsClient({
                 options={uniqueTeams.map((t) => ({ label: t, value: t }))}
                 selectedValues={team}
                 onSelectedValuesChange={setTeam}
-                className="w-[150px] sm:w-[180px]"
+                className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
               />
             )}
           </>

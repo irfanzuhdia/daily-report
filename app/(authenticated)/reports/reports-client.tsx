@@ -614,14 +614,14 @@ export function ReportsClient({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 scrollbar-none max-w-full">
+        <div className="flex flex-wrap items-center gap-2 w-full">
             <FilterMultiSelect
               placeholder="All projects"
               icon={<Filter className="h-3.5 w-3.5" />}
               options={projects?.map((p: any) => ({ label: p.project_name, value: p.project_id })) || []}
               selectedValues={projectFilter}
               onSelectedValuesChange={setProjectFilter}
-              className="w-[150px] sm:w-[200px]"
+              className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[200px]"
             />
 
             <FilterMultiSelect
@@ -633,7 +633,7 @@ export function ReportsClient({
               })}
               selectedValues={taskFilter}
               onSelectedValuesChange={setTaskFilter}
-              className="w-[150px] sm:w-[200px]"
+              className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[200px]"
             />
             {viewMode === "team" && (
               <>
@@ -643,7 +643,7 @@ export function ReportsClient({
                   options={uniqueReporters.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
                   selectedValues={createdByFilter}
                   onSelectedValuesChange={setCreatedByFilter}
-                  className="w-[150px] sm:w-[180px]"
+                  className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                 />
 
                 <FilterMultiSelect
@@ -652,7 +652,7 @@ export function ReportsClient({
                   options={uniqueReporters.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
                   selectedValues={memberFilter}
                   onSelectedValuesChange={setMemberFilter}
-                  className="w-[150px] sm:w-[180px]"
+                  className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                 />
 
                 {!isDeptDisabled && (
@@ -662,7 +662,7 @@ export function ReportsClient({
                     options={uniqueDepts.map((d) => ({ label: d, value: d }))}
                     selectedValues={dept}
                     onSelectedValuesChange={setDept}
-                    className="w-[150px] sm:w-[180px]"
+                    className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                   />
                 )}
 
@@ -673,7 +673,7 @@ export function ReportsClient({
                     options={uniqueSites.map((s) => ({ label: s, value: s }))}
                     selectedValues={site}
                     onSelectedValuesChange={setSite}
-                    className="w-[150px] sm:w-[180px]"
+                    className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                   />
                 )}
 
@@ -684,7 +684,7 @@ export function ReportsClient({
                     options={uniqueDivs.map((d) => ({ label: d, value: d }))}
                     selectedValues={division}
                     onSelectedValuesChange={setDivision}
-                    className="w-[150px] sm:w-[180px]"
+                    className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                   />
                 )}
 
@@ -695,7 +695,7 @@ export function ReportsClient({
                     options={uniqueTeams.map((t) => ({ label: t, value: t }))}
                     selectedValues={team}
                     onSelectedValuesChange={setTeam}
-                    className="w-[150px] sm:w-[180px]"
+                    className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
                   />
                 )}
               </>
@@ -769,7 +769,7 @@ export function ReportsClient({
                 onClick={() => router.push(`/reports/${report.report_id}`)}
                 className="group hover:shadow-md transition-shadow relative overflow-hidden cursor-pointer hover:bg-muted/50"
               >
-                <CardContent className={`flex items-center justify-between gap-3 ${density === "compact" ? "p-2.5" : "p-4"}`}>
+                <CardContent className={`flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${density === "compact" ? "p-2.5" : "p-4"}`}>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <Badge variant="outline" className="text-[9px] py-0 px-1">

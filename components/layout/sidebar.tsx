@@ -160,7 +160,10 @@ export function Sidebar({
       )
       .subscribe()
     
-    const handleOpenMobile = () => setMobileOpen(true)
+    const handleOpenMobile = () => {
+      setMobileOpen(true)
+      window.dispatchEvent(new Event("mobileSidebarOpened"))
+    }
     window.addEventListener("openMobileSidebar", handleOpenMobile)
 
     return () => {
@@ -184,20 +187,25 @@ export function Sidebar({
     onLogout()
   }
 
+  const handleCloseMobile = () => {
+    setMobileOpen(false)
+    window.dispatchEvent(new Event("mobileSidebarClosed"))
+  }
+
   return (
     <>
       {/* Overlay */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 z-30 bg-black/50 lg:hidden"
-          onClick={() => setMobileOpen(false)}
+          className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm lg:hidden transition-opacity"
+          onClick={handleCloseMobile}
         />
       )}
 
       {/* Sidebar */}
       <aside
         className={cn(
-          "fixed top-0 left-0 z-40 flex h-full w-64 flex-col border-r bg-card transition-transform lg:translate-x-0",
+          "fixed top-0 left-0 z-50 flex h-full w-64 flex-col border-r bg-card transition-transform duration-300 lg:translate-x-0 shadow-2xl",
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
@@ -211,7 +219,7 @@ export function Sidebar({
           </div>
           <button
             type="button"
-            onClick={() => setMobileOpen(false)}
+            onClick={handleCloseMobile}
             className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted lg:hidden"
           >
             <X className="h-5 w-5" />

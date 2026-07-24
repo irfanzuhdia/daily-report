@@ -1809,9 +1809,6 @@ export function TicketingClient({
                       Delete
                     </Button>
                   )}
-                  <Button variant="outline" size="sm" onClick={() => setDetailOpen(false)}>
-                    Close
-                  </Button>
                 </div>
               </DialogHeader>
 

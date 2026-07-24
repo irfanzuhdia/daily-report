@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Download, Bell, BellOff, Share, Smartphone, Check, Send, X, ChevronDown, ChevronUp } from "lucide-react";
+import { useEffect, useState, useCallback } from "react";
+import { Download, Bell, BellOff, Share, Smartphone, Check, Send, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
-function urlBase64ToUint8Array(base64String: string) {
+export function urlBase64ToUint8Array(base64String: string) {
   const padding = "=".repeat((4 - (base64String.length % 4)) % 4);
   const base64 = (base64String + padding)
     .replace(/-/g, "+")
@@ -19,52 +19,18 @@ function urlBase64ToUint8Array(base64String: string) {
   return outputArray;
 }
 
-export function PWAInstallBanner() {
-  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
-  const [isStandalone, setIsStandalone] = useState(false);
-  const [isIOS, setIsIOS] = useState(false);
-  const [showIOSModal, setShowIOSModal] = useState(false);
+/** Shared hook for push notification state & actions. Used by both PWA banner and Settings dialog. */
+export function usePushNotifications() {
   const [notificationPermission, setNotificationPermission] = useState<NotificationPermission>("default");
   const [isSubscribed, setIsSubscribed] = useState(false);
   const [loading, setLoading] = useState(false);
   const [testSent, setTestSent] = useState(false);
-  const [isCollapsed, setIsCollapsed] = useState(false);
 
   useEffect(() => {
-    // Check saved collapse state
-    const savedCollapse = localStorage.getItem("pwa_banner_collapsed");
-    if (savedCollapse === "true") {
-      setIsCollapsed(true);
-    }
-
-    // Check if running in standalone PWA mode
-    const checkStandalone =
-      window.matchMedia("(display-mode: standalone)").matches ||
-      (window.navigator as any).standalone === true;
-    setIsStandalone(checkStandalone);
-
-    // Detect iOS
-    const userAgent = window.navigator.userAgent.toLowerCase();
-    const iosDevice = /iphone|ipad|ipod/.test(userAgent);
-    setIsIOS(iosDevice);
-
-    // Listen for Chrome/Android install prompt
-    const handleBeforeInstallPrompt = (e: any) => {
-      e.preventDefault();
-      setDeferredPrompt(e);
-    };
-
-    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-
-    // Check notification permission status
-    if ("Notification" in window) {
+    if (typeof window !== "undefined" && "Notification" in window) {
       setNotificationPermission(Notification.permission);
       checkExistingSubscription();
     }
-
-    return () => {
-      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
-    };
   }, []);
 
   const checkExistingSubscription = async () => {
@@ -74,7 +40,6 @@ export function PWAInstallBanner() {
       setIsSubscribed(!!sub);
 
       if (sub) {
-        // Sync active user_id with backend PostgreSQL database
         fetch("/api/push/subscribe", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -84,25 +49,7 @@ export function PWAInstallBanner() {
     }
   };
 
-  const toggleCollapse = (collapsed: boolean) => {
-    setIsCollapsed(collapsed);
-    localStorage.setItem("pwa_banner_collapsed", String(collapsed));
-  };
-
-  const handleInstallClick = async () => {
-    if (deferredPrompt) {
-      deferredPrompt.prompt();
-      const { outcome } = await deferredPrompt.userChoice;
-      if (outcome === "accepted") {
-        setDeferredPrompt(null);
-        setIsStandalone(true);
-      }
-    } else if (isIOS) {
-      setShowIOSModal(true);
-    }
-  };
-
-  const togglePushNotifications = async () => {
+  const togglePushNotifications = useCallback(async () => {
     if (!("Notification" in window) || !("serviceWorker" in navigator)) {
       alert("Push notifications are not supported by this browser.");
       return;
@@ -111,7 +58,6 @@ export function PWAInstallBanner() {
     setLoading(true);
     try {
       if (isSubscribed) {
-        // Unsubscribe
         const reg = await navigator.serviceWorker.ready;
         const sub = await reg.pushManager.getSubscription();
         if (sub) {
@@ -124,7 +70,6 @@ export function PWAInstallBanner() {
         }
         setIsSubscribed(false);
       } else {
-        // Request Permission & Subscribe
         const permission = await Notification.requestPermission();
         setNotificationPermission(permission);
 
@@ -169,9 +114,9 @@ export function PWAInstallBanner() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [isSubscribed]);
 
-  const sendTestNotification = async () => {
+  const sendTestNotification = useCallback(async () => {
     try {
       setTestSent(false);
 
@@ -180,7 +125,6 @@ export function PWAInstallBanner() {
         return;
       }
 
-      // 1. Trigger Service Worker local notification directly
       if ("serviceWorker" in navigator) {
         const reg = await navigator.serviceWorker.ready;
         await reg.showNotification("Daily Report Alert 🚀", {
@@ -191,7 +135,6 @@ export function PWAInstallBanner() {
         });
       }
 
-      // 2. Dispatch Push API network payload to server
       const res = await fetch("/api/push/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -210,30 +153,79 @@ export function PWAInstallBanner() {
     } catch (e) {
       console.error("Failed to send test push:", e);
     }
+  }, []);
+
+  return {
+    notificationPermission,
+    isSubscribed,
+    loading,
+    testSent,
+    togglePushNotifications,
+    sendTestNotification,
+  };
+}
+
+/** One-time dismissible PWA banner. Once closed, it never shows again. */
+export function PWAInstallBanner() {
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [isStandalone, setIsStandalone] = useState(false);
+  const [isIOS, setIsIOS] = useState(false);
+  const [showIOSModal, setShowIOSModal] = useState(false);
+  const [isDismissed, setIsDismissed] = useState(true); // default hidden until checked
+
+  const { isSubscribed, loading, testSent, togglePushNotifications, sendTestNotification } = usePushNotifications();
+
+  useEffect(() => {
+    // Check if banner was permanently dismissed
+    const dismissed = localStorage.getItem("pwa_banner_dismissed");
+    if (dismissed === "true") {
+      setIsDismissed(true);
+      return;
+    }
+    setIsDismissed(false);
+
+    const checkStandalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (window.navigator as any).standalone === true;
+    setIsStandalone(checkStandalone);
+
+    const userAgent = window.navigator.userAgent.toLowerCase();
+    const iosDevice = /iphone|ipad|ipod/.test(userAgent);
+    setIsIOS(iosDevice);
+
+    const handleBeforeInstallPrompt = (e: any) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+    };
+
+    window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+
+    return () => {
+      window.removeEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
+    };
+  }, []);
+
+  const handleDismiss = () => {
+    setIsDismissed(true);
+    localStorage.setItem("pwa_banner_dismissed", "true");
   };
 
-  // Compact Collapsed Pill View
-  if (isCollapsed) {
-    return (
-      <div className="flex items-center justify-end">
-        <Button
-          onClick={() => toggleCollapse(false)}
-          variant="outline"
-          size="sm"
-          className="gap-2 text-xs rounded-full border-border bg-card hover:bg-accent text-card-foreground shadow-sm transition-all"
-        >
-          <Smartphone className="w-3.5 h-3.5 text-indigo-500" />
-          <span>App & Notifications</span>
-          {isSubscribed && (
-            <span className="flex h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-          )}
-          <ChevronDown className="w-3.5 h-3.5 text-muted-foreground ml-1" />
-        </Button>
-      </div>
-    );
-  }
+  const handleInstallClick = async () => {
+    if (deferredPrompt) {
+      deferredPrompt.prompt();
+      const { outcome } = await deferredPrompt.userChoice;
+      if (outcome === "accepted") {
+        setDeferredPrompt(null);
+        setIsStandalone(true);
+      }
+    } else if (isIOS) {
+      setShowIOSModal(true);
+    }
+  };
 
-  // Expanded Full Banner View
+  // Don't render if dismissed
+  if (isDismissed) return null;
+
   return (
     <Card className="p-4 bg-card text-card-foreground border-border shadow-sm space-y-3 relative transition-all">
       <div className="flex items-start justify-between gap-3">
@@ -253,19 +245,19 @@ export function PWAInstallBanner() {
             )}
           </div>
           <p className="text-xs text-muted-foreground">
-            Install on PC/Phone & enable notifications for instant daily report updates.
+            Install on PC/Phone & enable notifications for instant daily report updates. You can always find these options in Settings.
           </p>
         </div>
 
-        {/* Collapse Button */}
+        {/* Dismiss Button (permanent close) */}
         <Button
-          onClick={() => toggleCollapse(true)}
+          onClick={handleDismiss}
           variant="ghost"
           size="icon"
           className="h-7 w-7 text-muted-foreground hover:text-foreground shrink-0"
-          title="Collapse Banner"
+          title="Dismiss"
         >
-          <ChevronUp className="w-4 h-4" />
+          <X className="w-4 h-4" />
         </Button>
       </div>
 
@@ -309,7 +301,7 @@ export function PWAInstallBanner() {
         )}
       </div>
 
-      {/* iOS Instructions Banner/Modal */}
+      {/* iOS Instructions */}
       {showIOSModal && (
         <div className="mt-3 p-3 rounded-xl bg-muted/60 border border-border text-xs text-foreground space-y-2">
           <div className="flex items-center justify-between">

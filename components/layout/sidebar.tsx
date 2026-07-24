@@ -21,6 +21,12 @@ import {
   Settings,
   LifeBuoy,
   ChevronDown,
+  Bell,
+  BellOff,
+  Send,
+  Check,
+  Download,
+  Smartphone,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -34,6 +40,7 @@ import { useViewMode } from "@/lib/view-mode"
 import { useViewDensity } from "@/lib/view-density"
 import { useTheme } from "next-themes"
 import { MDMLogo } from "@/components/ui/mdm-logo"
+import { usePushNotifications } from "@/components/pwa/pwa-install-banner"
 
 export function Sidebar({
   userName,
@@ -86,6 +93,7 @@ export function Sidebar({
   const [mobileOpen, setMobileOpen] = React.useState(false)
   const [logoutConfirm, setLogoutConfirm] = React.useState(false)
   const [settingsOpen, setSettingsOpen] = React.useState(false)
+  const pushNotif = usePushNotifications()
   const { viewMode, setViewMode } = useViewMode()
   const { density, setDensity } = useViewDensity()
   const [mounted, setMounted] = React.useState(false)
@@ -447,6 +455,46 @@ export function Sidebar({
                 >
                   Compact
                 </button>
+              </div>
+            </div>
+
+            {/* App & Notifications */}
+            <div className="space-y-3 border-t pt-3">
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium flex items-center gap-1.5">
+                  <Smartphone className="h-3.5 w-3.5 text-indigo-500" />
+                  App & Notifications
+                </p>
+                <p className="text-[10px] text-muted-foreground">Install app & manage push notifications</p>
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  onClick={pushNotif.togglePushNotifications}
+                  disabled={pushNotif.loading}
+                  size="sm"
+                  variant={pushNotif.isSubscribed ? "outline" : "default"}
+                  className={
+                    pushNotif.isSubscribed
+                      ? "border-border hover:bg-accent text-foreground gap-1.5 text-xs h-8"
+                      : "bg-emerald-600 hover:bg-emerald-500 text-white gap-1.5 text-xs h-8"
+                  }
+                >
+                  {pushNotif.isSubscribed ? <BellOff className="w-3.5 h-3.5 text-emerald-500" /> : <Bell className="w-3.5 h-3.5" />}
+                  {pushNotif.isSubscribed ? "Notifications On" : "Enable Notifications"}
+                </Button>
+
+                {pushNotif.isSubscribed && (
+                  <Button
+                    onClick={pushNotif.sendTestNotification}
+                    size="sm"
+                    variant="ghost"
+                    className="text-muted-foreground hover:text-foreground gap-1.5 text-xs h-8"
+                  >
+                    {pushNotif.testSent ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Send className="w-3.5 h-3.5 text-blue-500" />}
+                    {pushNotif.testSent ? "Sent!" : "Test Alert"}
+                  </Button>
+                )}
               </div>
             </div>
           </div>

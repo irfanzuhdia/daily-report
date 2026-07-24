@@ -22,19 +22,6 @@ export async function getSession(): Promise<SessionPayload | null> {
     }
   }
 
-  // Sliding session: refresh cookie maxAge on active requests so active users stay logged in
-  try {
-    cookieStore.set(getCookieName(), token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === 'production',
-      sameSite: 'lax',
-      maxAge: SESSION_MAX_AGE,
-      path: '/',
-    });
-  } catch {
-    // Ignore if cookies cannot be modified in immutable Server Component renders
-  }
-
   return session;
 }
 

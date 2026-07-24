@@ -37,12 +37,25 @@ export function BottomNav({
 
     fetchUnread()
     const handleUpdate = () => fetchUnread()
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchUnread()
+      }
+    }
+
     window.addEventListener("notificationsUpdated", handleUpdate)
-    const interval = setInterval(fetchUnread, 5000)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchUnread()
+      }
+    }, 15000)
 
     return () => {
       active = false
       window.removeEventListener("notificationsUpdated", handleUpdate)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
       clearInterval(interval)
     }
   }, [])

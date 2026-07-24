@@ -131,8 +131,21 @@ export function Sidebar({
       fetchUnreadCount()
     }
     
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchUnreadCount()
+      }
+    }
+
     window.addEventListener("notificationsUpdated", handleUpdate)
-    const interval = setInterval(fetchUnreadCount, 4000)
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
+    // Poll every 15s only when tab is active/visible
+    const interval = setInterval(() => {
+      if (document.visibilityState === "visible") {
+        fetchUnreadCount()
+      }
+    }, 15000)
 
     // Supabase Realtime WebSocket for notification counter
     const { supabase } = require("@/lib/supabase-client")
@@ -153,9 +166,12 @@ export function Sidebar({
     return () => {
       active = false
       window.removeEventListener("notificationsUpdated", handleUpdate)
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
       window.removeEventListener("openMobileSidebar", handleOpenMobile)
       clearInterval(interval)
-      supabase.removeChannel(channel)
+      if (supabase && channel) {
+        supabase.removeChannel(channel)
+      }
     }
   }, [])
 

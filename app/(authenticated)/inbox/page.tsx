@@ -39,9 +39,18 @@ export default function InboxPage() {
     fetchNotifications()
 
     // Interval polling for live notification updates
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchNotifications()
+      }
+    }
+    document.addEventListener("visibilitychange", handleVisibilityChange)
+
     const pollInterval = setInterval(() => {
-      fetchNotifications()
-    }, 4000)
+      if (document.visibilityState === "visible") {
+        fetchNotifications()
+      }
+    }, 15000)
 
     // Realtime Websocket Supabase
     const { supabase } = require("@/lib/supabase-client")
@@ -60,8 +69,11 @@ export default function InboxPage() {
 
     return () => {
       active = false
+      document.removeEventListener("visibilitychange", handleVisibilityChange)
       clearInterval(pollInterval)
-      supabase.removeChannel(channel)
+      if (supabase && channel) {
+        supabase.removeChannel(channel)
+      }
     }
   }, [])
 

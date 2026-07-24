@@ -1,19 +1,19 @@
 import { z } from "zod";
 
-// Base common fields
+// Base common fields — IDs in this project use custom formats (e.g. U-0001, T-00001, P-0001)
 const baseEntity = z.object({
-  id: z.string().uuid().optional(),
-  created_by: z.string().uuid().nullable().optional(),
-  created_at: z.string().datetime().nullable().optional(),
-  updated_by: z.string().uuid().nullable().optional(),
-  updated_at: z.string().datetime().nullable().optional(),
-  deleted_by: z.string().uuid().nullable().optional(),
-  deleted_at: z.string().datetime().nullable().optional(),
+  id: z.string().optional(),
+  created_by: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+  updated_by: z.string().nullable().optional(),
+  updated_at: z.string().nullable().optional(),
+  deleted_by: z.string().nullable().optional(),
+  deleted_at: z.string().nullable().optional(),
 });
 
 // User Validation Schema
 export const userSchema = z.object({
-  user_id: z.string().uuid(),
+  user_id: z.string().min(1),
   user_email: z.string().email({ message: "Invalid email address" }),
   user_name: z.string().min(2, { message: "Name must be at least 2 characters" }).nullable().optional(),
   user_occupation: z.string().nullable().optional(),
@@ -38,32 +38,32 @@ export const projectSchema = z.object({
   additional_link: z.string().url().nullable().optional().or(z.literal("")),
   category: z.string().nullable().optional(),
   ticket_reference: z.string().nullable().optional(),
-  team_user_ids: z.array(z.string().uuid()).optional(),
+  team_user_ids: z.array(z.string()).optional(),
 }).merge(baseEntity);
 
 export type ProjectInput = z.infer<typeof projectSchema>;
 
 // Task Validation Schema
 export const taskSchema = z.object({
-  project_id: z.string().uuid({ message: "Valid Project ID is required" }),
+  project_id: z.string().min(1, { message: "Valid Project ID is required" }),
   task_description: z.string().min(5, { message: "Task description must be at least 5 characters" }),
   task_status: z.enum(["NS", "OP", "D", "H", "CC", "C"]),
   task_latest_percentage: z.string().regex(/^\d{1,3}$/, { message: "Percentage must be a number between 0-100" }).nullable().optional(),
   task_file: z.string().url().nullable().optional(),
   additional_link: z.string().url().nullable().optional().or(z.literal("")),
-  task_user_ids: z.array(z.string().uuid()).optional(),
+  task_user_ids: z.array(z.string()).optional(),
 }).merge(baseEntity);
 
 export type TaskInput = z.infer<typeof taskSchema>;
 
 // Daily Report Validation Schema
 export const dailyReportSchema = z.object({
-  task_id: z.string().uuid({ message: "Valid Task ID is required" }),
+  task_id: z.string().min(1, { message: "Valid Task ID is required" }),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Date must be in YYYY-MM-DD format" }),
   progress_percentage: z.string().regex(/^\d{1,3}$/, { message: "Percentage must be between 0-100" }),
   total_hours: z.string().regex(/^\d+(\.\d+)?$/, { message: "Total hours must be a valid number" }),
-  remarks: z.string().min(5, { message: "Remarks must be at least 5 characters" }).nullable().optional(),
-  user_id: z.string().uuid({ message: "Valid User ID is required" }).nullable().optional(),
+  remarks: z.string().nullable().optional(),
+  user_id: z.string().nullable().optional(),
 }).merge(baseEntity.omit({ updated_at: true, updated_by: true }));
 
 export type DailyReportInput = z.infer<typeof dailyReportSchema>;
@@ -72,10 +72,10 @@ export type DailyReportInput = z.infer<typeof dailyReportSchema>;
 export const ticketSchema = z.object({
   title: z.string().min(5, { message: "Title must be at least 5 characters long" }),
   description: z.string().min(10, { message: "Description must be at least 10 characters long" }),
-  request_by: z.string().uuid(),
+  request_by: z.string().min(1),
   request_to_division: z.string().nullable().optional(),
   tag_person: z.string().nullable().optional(),
-  team_user_ids: z.array(z.string().uuid()).optional(),
+  team_user_ids: z.array(z.string()).optional(),
   problem_type: z.string().min(1, { message: "Problem type is required" }),
   division_category: z.string().nullable().optional(),
   due_date: z.string().nullable().optional(),

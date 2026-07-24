@@ -165,7 +165,14 @@ export function usePushNotifications() {
   };
 }
 
-/** One-time dismissible PWA banner. Once closed, it never shows again. */
+/**
+ * PWA Banner logic:
+ * - Shows after login if app is NOT installed or notifications NOT enabled.
+ * - If user closes the banner but hasn't completed both (install + notif):
+ *   → hides for 1 day, then shows again next time they open the app.
+ * - If user has both installed the app AND enabled notifications:
+ *   → banner is permanently dismissed forever.
+ */
 export function PWAInstallBanner() {
   const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
   const [isStandalone, setIsStandalone] = useState(false);
@@ -176,28 +183,22 @@ export function PWAInstallBanner() {
   const { isSubscribed, loading, testSent, togglePushNotifications, sendTestNotification } = usePushNotifications();
 
   useEffect(() => {
-    // Check if banner was permanently dismissed
-    const dismissed = localStorage.getItem("pwa_banner_dismissed");
-    if (dismissed === "true") {
-      setIsDismissed(true);
-      return;
-    }
-    setIsDismissed(false);
-
+    // Check standalone mode
     const checkStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
       (window.navigator as any).standalone === true;
     setIsStandalone(checkStandalone);
 
+    // Detect iOS
     const userAgent = window.navigator.userAgent.toLowerCase();
     const iosDevice = /iphone|ipad|ipod/.test(userAgent);
     setIsIOS(iosDevice);
 
+    // Listen for Chrome/Android install prompt
     const handleBeforeInstallPrompt = (e: any) => {
       e.preventDefault();
       setDeferredPrompt(e);
     };
-
     window.addEventListener("beforeinstallprompt", handleBeforeInstallPrompt);
 
     return () => {
@@ -205,9 +206,49 @@ export function PWAInstallBanner() {
     };
   }, []);
 
+  // Determine banner visibility based on install + notif status and dismiss timestamp
+  useEffect(() => {
+    const permanentlyDismissed = localStorage.getItem("pwa_banner_dismissed");
+    if (permanentlyDismissed === "true") {
+      setIsDismissed(true);
+      return;
+    }
+
+    // If both installed AND subscribed → auto-dismiss permanently
+    if (isStandalone && isSubscribed) {
+      setIsDismissed(true);
+      localStorage.setItem("pwa_banner_dismissed", "true");
+      return;
+    }
+
+    // Check temporary dismiss (1 day cooldown)
+    const tempDismissedAt = localStorage.getItem("pwa_banner_temp_dismissed_at");
+    if (tempDismissedAt) {
+      const dismissedTime = parseInt(tempDismissedAt, 10);
+      const oneDayMs = 24 * 60 * 60 * 1000;
+      if (Date.now() - dismissedTime < oneDayMs) {
+        // Still within 1-day cooldown
+        setIsDismissed(true);
+        return;
+      }
+      // Cooldown expired, clear it
+      localStorage.removeItem("pwa_banner_temp_dismissed_at");
+    }
+
+    // Show banner
+    setIsDismissed(false);
+  }, [isStandalone, isSubscribed]);
+
   const handleDismiss = () => {
     setIsDismissed(true);
-    localStorage.setItem("pwa_banner_dismissed", "true");
+
+    // If both conditions met → permanent dismiss
+    if (isStandalone && isSubscribed) {
+      localStorage.setItem("pwa_banner_dismissed", "true");
+    } else {
+      // Temporary dismiss — show again after 1 day
+      localStorage.setItem("pwa_banner_temp_dismissed_at", String(Date.now()));
+    }
   };
 
   const handleInstallClick = async () => {

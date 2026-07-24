@@ -309,7 +309,7 @@ export const DailyReportRepository = {
     },
     createdBy: string
   ): Promise<DailyReport> {
-    const lastRow = await sql`SELECT report_id FROM daily_reports ORDER BY report_id DESC LIMIT 1`;
+    const lastRow = await sql`SELECT report_id FROM daily_reports WHERE report_id ~ '^R-[0-9]+$' ORDER BY CAST(SUBSTRING(report_id FROM 3) AS INTEGER) DESC LIMIT 1`;
     const lastId = lastRow[0]?.report_id || 'R-0000';
     const lastNum = parseInt(lastId.replace('R-', ''), 10) || 0;
     const nextId = 'R-' + String(lastNum + 1).padStart(4, '0');

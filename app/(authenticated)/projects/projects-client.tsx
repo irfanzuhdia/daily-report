@@ -560,91 +560,99 @@ export function ProjectsClient({
 
   return (
     <div className="space-y-6">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight">
-            {viewMode === "my" ? "My Projects" : "Projects"}
-          </h1>
-          <p className="text-muted-foreground">
-            {viewMode === "my"
-              ? "Projects you are assigned to"
-              : "Manage all projects and track progress"}
-          </p>
+      <div className="flex flex-col gap-3">
+        {/* Top Row: Page Title + Primary Action */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold tracking-tight">
+              {viewMode === "my" ? "My Projects" : "Projects"}
+            </h1>
+            <p className="text-xs text-muted-foreground hidden sm:block">
+              {viewMode === "my"
+                ? "Projects you are assigned to"
+                : "Manage all projects and track progress"}
+            </p>
+          </div>
+          <Link href="/projects/new">
+            <Button size="sm" className="h-9 px-3 sm:px-4 text-xs font-semibold shadow-sm">
+              <Plus className="h-4 w-4 mr-1 sm:mr-1.5" />
+              <span>New Project</span>
+            </Button>
+          </Link>
         </div>
-        <div className="flex items-center gap-2">
-          {/* Export CSV Button */}
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="h-8 px-2 sm:px-3 text-xs gap-1.5"
-            onClick={handleExportCSV}
-            disabled={exporting}
-          >
-            {exporting ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
-            )}
-            <span className="hidden sm:inline">{exporting ? "Exporting..." : "Export CSV"}</span>
-          </Button>
 
+        {/* Sub Header: View Toggle + Secondary Actions */}
+        <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2 sm:border-none sm:pt-0">
           {/* Layout Toggle */}
-          <div className="flex rounded-xl border p-1 bg-muted/20 mr-1 sm:mr-2">
+          <div className="flex rounded-xl border p-0.5 bg-muted/20">
             <Button
               type="button"
               variant={layout === "kanban" ? "secondary" : "ghost"}
               size="sm"
-              className="h-8 px-2 sm:px-3 rounded-lg text-xs"
+              className="h-8 px-2.5 rounded-lg text-xs font-medium"
               onClick={() => setLayout("kanban")}
             >
-              <Kanban className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Kanban</span>
+              <Kanban className="h-3.5 w-3.5 mr-1" />
+              <span>Kanban</span>
             </Button>
             <Button
               type="button"
               variant={layout === "list" ? "secondary" : "ghost"}
               size="sm"
-              className="h-8 px-2 sm:px-3 rounded-lg text-xs"
+              className="h-8 px-2.5 rounded-lg text-xs font-medium"
               onClick={() => setLayout("list")}
             >
-              <List className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">List</span>
+              <List className="h-3.5 w-3.5 mr-1" />
+              <span>List</span>
             </Button>
           </div>
 
-          {/* Complete & Cancel Folder Button */}
-          {layout === "kanban" && (
+          <div className="flex items-center gap-1.5">
+            {/* Complete & Cancel Folder Button */}
+            {layout === "kanban" && (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="h-8 px-2.5 text-xs border-dashed gap-1.5"
+                onClick={() => setShowArchive(true)}
+                title="Complete & Cancel Archive"
+              >
+                <Archive className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                <span className="hidden xs:inline text-[11px]">Archive</span>
+                <span className="text-[10px] font-semibold text-muted-foreground">({cancelledProjects.length})</span>
+              </Button>
+            )}
+
+            {/* Export CSV Button */}
             <Button
               type="button"
               variant="outline"
               size="sm"
-              className="h-8 px-2 sm:px-3 text-xs border-dashed"
-              onClick={() => setShowArchive(true)}
+              className="h-8 w-8 p-0 sm:w-auto sm:px-3 text-xs gap-1.5"
+              onClick={handleExportCSV}
+              disabled={exporting}
+              title="Export CSV"
             >
-              <Archive className="h-3.5 w-3.5 text-primary sm:mr-1.5" />
-              <span className="hidden sm:inline">Complete &amp; Cancel </span>
-              <span>({cancelledProjects.length})</span>
+              {exporting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Download className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />
+              )}
+              <span className="hidden sm:inline">{exporting ? "Exporting..." : "Export CSV"}</span>
             </Button>
-          )}
-
-          <Link href="/projects/new">
-            <Button size="sm" className="h-8 px-2 sm:px-4 sm:h-9">
-              <Plus className="h-4 w-4 sm:mr-2" />
-              <span className="hidden sm:inline">New Project</span>
-            </Button>
-          </Link>
+          </div>
         </div>
       </div>
 
-      {/* Filters */}
+      {/* Filters (Compact Horizontal Scroll) */}
       <FilterContainer>
         <FilterSearch
           placeholder="Search projects..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="flex flex-wrap items-center gap-2 w-full">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full max-w-full">
         {layout === "list" && (
           <FilterMultiSelect
             placeholder="All statuses"
@@ -652,7 +660,7 @@ export function ProjectsClient({
             options={statuses.map((s) => ({ label: s.name, value: s.id }))}
             selectedValues={statusFilter}
             onSelectedValuesChange={setStatusFilter}
-            className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
+            className="shrink-0 min-w-[130px] sm:min-w-[160px]"
           />
         )}
         {viewMode === "team" && (
@@ -663,7 +671,7 @@ export function ProjectsClient({
               options={uniqueCreators.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
               selectedValues={createdByFilter}
               onSelectedValuesChange={setCreatedByFilter}
-              className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
+              className="shrink-0 min-w-[130px] sm:min-w-[160px]"
             />
 
             <FilterMultiSelect
@@ -672,7 +680,7 @@ export function ProjectsClient({
               options={uniqueMembers.map((u) => ({ label: u.user_name || u.user_email, value: u.user_id }))}
               selectedValues={memberFilter}
               onSelectedValuesChange={setMemberFilter}
-              className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
+              className="shrink-0 min-w-[130px] sm:min-w-[160px]"
             />
 
             {!isDeptDisabled && (
@@ -682,7 +690,7 @@ export function ProjectsClient({
                 options={uniqueDepts.map((d) => ({ label: d, value: d }))}
                 selectedValues={dept}
                 onSelectedValuesChange={setDept}
-                className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
+                className="shrink-0 min-w-[130px] sm:min-w-[160px]"
               />
             )}
 
@@ -693,7 +701,7 @@ export function ProjectsClient({
                 options={uniqueSites.map((s) => ({ label: s, value: s }))}
                 selectedValues={site}
                 onSelectedValuesChange={setSite}
-                className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
+                className="shrink-0 min-w-[130px] sm:min-w-[160px]"
               />
             )}
 
@@ -704,7 +712,7 @@ export function ProjectsClient({
                 options={uniqueDivs.map((d) => ({ label: d, value: d }))}
                 selectedValues={division}
                 onSelectedValuesChange={setDivision}
-                className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
+                className="shrink-0 min-w-[130px] sm:min-w-[160px]"
               />
             )}
 
@@ -715,7 +723,7 @@ export function ProjectsClient({
                 options={uniqueTeams.map((t) => ({ label: t, value: t }))}
                 selectedValues={team}
                 onSelectedValuesChange={setTeam}
-                className="flex-1 sm:flex-initial min-w-[130px] sm:min-w-[180px]"
+                className="shrink-0 min-w-[130px] sm:min-w-[160px]"
               />
             )}
           </>

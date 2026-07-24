@@ -10,6 +10,7 @@ import {
   FileText,
   TrendingUp,
   ArrowRight,
+  ArrowUpRight,
   Clock,
   BarChart3,
   Filter,
@@ -663,32 +664,41 @@ export function DashboardClient({
         </Card>
       </div>
 
-      {/* Quick Actions */}
-      <div className="flex flex-wrap gap-3">
-        <Link href="/projects">
-          <Button>
-            <FolderKanban className="mr-2 h-4 w-4" />
-            View Projects
-          </Button>
-        </Link>
-        <Link href="/tasks">
-          <Button variant="outline">
-            <ListTodo className="mr-2 h-4 w-4" />
-            View Tasks
-          </Button>
-        </Link>
-        <Link href="/reports">
-          <Button variant="outline">
-            <FileText className="mr-2 h-4 w-4" />
-            View Reports
-          </Button>
-        </Link>
-        <Link href="/reports/analytics">
-          <Button variant="outline">
-            <BarChart3 className="mr-2 h-4 w-4" />
-            Analytics
-          </Button>
-        </Link>
+      {/* Quick Page Shortcuts */}
+      <div className="space-y-2">
+        <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
+          Quick Page Shortcuts
+        </p>
+        <div className="flex flex-wrap gap-2.5">
+          <Link href="/projects">
+            <Button variant="outline" size="sm" className="h-9 rounded-xl text-xs gap-1.5 hover:border-primary/50 hover:bg-primary/5 transition-all">
+              <FolderKanban className="h-4 w-4 text-primary shrink-0" />
+              <span>Projects</span>
+              <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            </Button>
+          </Link>
+          <Link href="/tasks">
+            <Button variant="outline" size="sm" className="h-9 rounded-xl text-xs gap-1.5 hover:border-primary/50 hover:bg-primary/5 transition-all">
+              <ListTodo className="h-4 w-4 text-primary shrink-0" />
+              <span>Tasks</span>
+              <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            </Button>
+          </Link>
+          <Link href="/reports">
+            <Button variant="outline" size="sm" className="h-9 rounded-xl text-xs gap-1.5 hover:border-primary/50 hover:bg-primary/5 transition-all">
+              <FileText className="h-4 w-4 text-primary shrink-0" />
+              <span>Daily Reports</span>
+              <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            </Button>
+          </Link>
+          <Link href="/reports/analytics">
+            <Button variant="outline" size="sm" className="h-9 rounded-xl text-xs gap-1.5 hover:border-primary/50 hover:bg-primary/5 transition-all">
+              <BarChart3 className="h-4 w-4 text-primary shrink-0" />
+              <span>Analytics</span>
+              <ArrowUpRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Contribution Heatmap Preview */}

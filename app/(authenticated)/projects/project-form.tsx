@@ -73,6 +73,7 @@ export function ProjectForm({
   )
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [teamUserIds, setTeamUserIds] = useState<string[]>(initialTeamUserIds)
   const [ticketReference, setTicketReference] = useState<string | null>(
@@ -154,8 +155,9 @@ export function ProjectForm({
           body: JSON.stringify(payload),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-          throw new Error(err.error || `Update failed (${res.status})`)
+          const err = await res.json().catch(() => ({}))
+          const errMsg = typeof err.error === 'string' ? err.error : (err.error?.message || err.message || `Update failed (${res.status})`)
+          throw new Error(errMsg)
         }
         await revalidatePathsAndTags(
           ['/projects', `/projects/${project.project_id}`, '/reports/dashboard'],
@@ -169,8 +171,9 @@ export function ProjectForm({
           body: JSON.stringify(payload),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-          throw new Error(err.error || `Create failed (${res.status})`)
+          const err = await res.json().catch(() => ({}))
+          const errMsg = typeof err.error === 'string' ? err.error : (err.error?.message || err.message || `Create failed (${res.status})`)
+          throw new Error(errMsg)
         }
         const data = await res.json()
         await revalidatePathsAndTags(
@@ -179,9 +182,9 @@ export function ProjectForm({
         )
         router.push(`/projects`)
       }
-      router.refresh()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save project:", error)
+      setSubmitError(error.message || "Failed to save project")
     } finally {
       setSaving(false)
     }
@@ -207,6 +210,11 @@ export function ProjectForm({
             <CardTitle>Project Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {submitError && (
+              <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+                {submitError}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="name">Project Name *</Label>
               <Input

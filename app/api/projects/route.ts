@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
     const { team_user_ids, ...projectData } = validationResult
     
     const currentUser = {
-      id: session.real_user_id ?? session.user_id,
-      name: session.real_name ?? session.name ?? session.email ?? 'Someone'
+      id: session.user_id,
+      name: session.name ?? session.email ?? 'Someone'
     }
 
     const project = await ProjectService.createProject(projectData, team_user_ids, currentUser)

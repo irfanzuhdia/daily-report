@@ -29,7 +29,7 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const validationResult = dailyReportSchema.parse(body)
 
-    const currentUser = { id: session.real_user_id ?? session.user_id }
+    const currentUser = { id: session.user_id }
     const report = await ReportService.createReport(validationResult, currentUser)
     
     return createSuccessResponse(report, 201)

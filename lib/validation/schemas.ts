@@ -30,14 +30,14 @@ export type UserInput = z.infer<typeof userSchema>;
 // Project Validation Schema
 export const projectSchema = z.object({
   project_name: z.string().min(3, { message: "Project name must be at least 3 characters" }),
-  project_description: z.string().nullable().optional(),
-  project_start_date_plan: z.string().nullable().optional(),
-  project_end_date_plan: z.string().nullable().optional(),
+  project_description: z.string().nullable().optional().or(z.literal("")),
+  project_start_date_plan: z.string().nullable().optional().or(z.literal("")),
+  project_end_date_plan: z.string().nullable().optional().or(z.literal("")),
   project_status: z.enum(["NS", "OP", "D", "H", "CC"]),
-  project_file: z.string().url().nullable().optional(),
-  additional_link: z.string().url().nullable().optional().or(z.literal("")),
-  category: z.string().nullable().optional(),
-  ticket_reference: z.string().nullable().optional(),
+  project_file: z.string().nullable().optional().or(z.literal("")),
+  additional_link: z.string().nullable().optional().or(z.literal("")),
+  category: z.string().nullable().optional().or(z.literal("")),
+  ticket_reference: z.string().nullable().optional().or(z.literal("")),
   team_user_ids: z.array(z.string()).optional(),
 }).merge(baseEntity);
 
@@ -48,9 +48,9 @@ export const taskSchema = z.object({
   project_id: z.string().min(1, { message: "Valid Project ID is required" }),
   task_description: z.string().min(5, { message: "Task description must be at least 5 characters" }),
   task_status: z.enum(["NS", "OP", "D", "H", "CC", "C"]),
-  task_latest_percentage: z.string().regex(/^\d{1,3}$/, { message: "Percentage must be a number between 0-100" }).nullable().optional(),
-  task_file: z.string().url().nullable().optional(),
-  additional_link: z.string().url().nullable().optional().or(z.literal("")),
+  task_latest_percentage: z.string().regex(/^\d{1,3}$/, { message: "Percentage must be a number between 0-100" }).nullable().optional().or(z.literal("")),
+  task_file: z.string().nullable().optional().or(z.literal("")),
+  additional_link: z.string().nullable().optional().or(z.literal("")),
   task_user_ids: z.array(z.string()).optional(),
 }).merge(baseEntity);
 
@@ -61,9 +61,9 @@ export const dailyReportSchema = z.object({
   task_id: z.string().min(1, { message: "Valid Task ID is required" }),
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, { message: "Date must be in YYYY-MM-DD format" }),
   progress_percentage: z.string().regex(/^\d{1,3}$/, { message: "Percentage must be between 0-100" }),
-  total_hours: z.string().regex(/^\d+(\.\d+)?$/, { message: "Total hours must be a valid number" }),
-  remarks: z.string().nullable().optional(),
-  user_id: z.string().nullable().optional(),
+  total_hours: z.string().nullable().optional().or(z.literal("")),
+  remarks: z.string().nullable().optional().or(z.literal("")),
+  user_id: z.string().nullable().optional().or(z.literal("")),
 }).merge(baseEntity.omit({ updated_at: true, updated_by: true }));
 
 export type DailyReportInput = z.infer<typeof dailyReportSchema>;

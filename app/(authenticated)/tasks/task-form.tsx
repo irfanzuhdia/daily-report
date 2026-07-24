@@ -68,6 +68,7 @@ export function TaskForm({
   )
   const [uploading, setUploading] = useState(false)
   const [uploadError, setUploadError] = useState<string | null>(null)
+  const [submitError, setSubmitError] = useState<string | null>(null)
   const [additionalLink, setAdditionalLink] = useState(task?.additional_link ?? "")
 
   function extractFileName(url: string): string {
@@ -143,8 +144,9 @@ export function TaskForm({
           body: JSON.stringify(payload),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-          throw new Error(err.error || `Update failed (${res.status})`)
+          const err = await res.json().catch(() => ({}))
+          const errMsg = typeof err.error === 'string' ? err.error : (err.error?.message || err.message || `Update failed (${res.status})`)
+          throw new Error(errMsg)
         }
         await revalidatePathsAndTags(
           ['/tasks', `/tasks/${task.id}`, `/projects/${task.project_id}`, '/projects', '/reports/dashboard'],
@@ -162,8 +164,9 @@ export function TaskForm({
           body: JSON.stringify(payload),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-          throw new Error(err.error || `Create failed (${res.status})`)
+          const err = await res.json().catch(() => ({}))
+          const errMsg = typeof err.error === 'string' ? err.error : (err.error?.message || err.message || `Create failed (${res.status})`)
+          throw new Error(errMsg)
         }
         const data = await res.json()
         await revalidatePathsAndTags(
@@ -176,9 +179,9 @@ export function TaskForm({
           router.push(`/tasks`)
         }
       }
-      router.refresh()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save task:", error)
+      setSubmitError(error.message || "Failed to save task")
     } finally {
       setSaving(false)
     }
@@ -204,6 +207,11 @@ export function TaskForm({
             <CardTitle>Task Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {submitError && (
+              <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+                {submitError}
+              </div>
+            )}
             <div className="space-y-2">
               <Label htmlFor="project">Project *</Label>
               <div className="flex gap-2">

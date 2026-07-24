@@ -74,6 +74,7 @@ export function ReportForm({
   )
   const [remarks, setRemarks] = useState(report?.remarks ?? "")
   const [saving, setSaving] = useState(false)
+  const [submitError, setSubmitError] = useState<string | null>(null)
 
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [showTaskModal, setShowTaskModal] = useState(false)
@@ -119,8 +120,9 @@ export function ReportForm({
           }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-          throw new Error(err.error || `Update failed (${res.status})`)
+          const err = await res.json().catch(() => ({}))
+          const errMsg = typeof err.error === 'string' ? err.error : (err.error?.message || err.message || `Update failed (${res.status})`)
+          throw new Error(errMsg)
         }
         const currentTask = tasks.find((t) => t.id === report.task_id)
         const projectId = currentTask?.project_id
@@ -150,8 +152,9 @@ export function ReportForm({
           }),
         })
         if (!res.ok) {
-          const err = await res.json().catch(() => ({ error: 'Unknown error' }))
-          throw new Error(err.error || `Create failed (${res.status})`)
+          const err = await res.json().catch(() => ({}))
+          const errMsg = typeof err.error === 'string' ? err.error : (err.error?.message || err.message || `Create failed (${res.status})`)
+          throw new Error(errMsg)
         }
         const data = await res.json()
         const currentTask = tasks.find((t) => t.id === taskId)
@@ -170,9 +173,9 @@ export function ReportForm({
           router.push(`/reports`)
         }
       }
-      router.refresh()
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save report:", error)
+      setSubmitError(error.message || "Failed to save report")
     } finally {
       setSaving(false)
     }
@@ -198,6 +201,11 @@ export function ReportForm({
             <CardTitle>Report Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
+            {submitError && (
+              <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+                {submitError}
+              </div>
+            )}
             {/* Project Selection */}
             <div className="space-y-2">
               <Label htmlFor="project">Project *</Label>

@@ -32,8 +32,8 @@ export async function POST(request: NextRequest) {
     const { task_user_ids, ...taskData } = validationResult
     
     const currentUser = {
-      id: session.real_user_id ?? session.user_id,
-      name: session.real_name ?? session.name ?? session.email ?? 'Someone'
+      id: session.user_id,
+      name: session.name ?? session.email ?? 'Someone'
     }
 
     const task = await TaskService.createTask(taskData, task_user_ids, currentUser)

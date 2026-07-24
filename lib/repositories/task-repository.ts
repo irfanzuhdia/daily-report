@@ -303,7 +303,7 @@ export const TaskRepository = {
     },
     createdBy: string
   ): Promise<Task> {
-    const lastRow = await sql`SELECT id FROM tasks ORDER BY id DESC LIMIT 1`;
+    const lastRow = await sql`SELECT id FROM tasks WHERE id ~ '^T-[0-9]+$' ORDER BY CAST(SUBSTRING(id FROM 3) AS INTEGER) DESC LIMIT 1`;
     const lastId = lastRow[0]?.id || 'T-00000';
     const lastNum = parseInt(lastId.replace('T-', ''), 10) || 0;
     const nextId = 'T-' + String(lastNum + 1).padStart(5, '0');

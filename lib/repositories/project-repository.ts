@@ -396,7 +396,7 @@ export const ProjectRepository = {
       }
     }
 
-    const lastRow = await sql`SELECT project_id FROM projects ORDER BY project_id DESC LIMIT 1`;
+    const lastRow = await sql`SELECT project_id FROM projects WHERE project_id ~ '^P-[0-9]+$' ORDER BY CAST(SUBSTRING(project_id FROM 3) AS INTEGER) DESC LIMIT 1`;
     const lastId = lastRow[0]?.project_id || 'P-260000';
     const lastNum = parseInt(lastId.replace('P-', ''), 10) || 260000;
     const nextVal = lastNum < 260000 ? 260001 : lastNum + 1;

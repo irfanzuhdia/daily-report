@@ -439,10 +439,10 @@ export function ContributionCalendar({
       else params.delete("team_filter")
     }
 
-    if (startDate && startDate !== defaultStartDate) params.set("start_date", startDate)
+    if (startDate) params.set("start_date", startDate)
     else params.delete("start_date")
     
-    if (endDate && endDate !== defaultEndDate) params.set("end_date", endDate)
+    if (endDate) params.set("end_date", endDate)
     else params.delete("end_date")
 
     if (preset) params.set("preset", preset)
@@ -765,14 +765,20 @@ export function ContributionCalendar({
                 <Input
                   type="date"
                   value={inputStart}
-                  onChange={(e) => setInputStart(e.target.value)}
+                  onChange={(e) => {
+                    setInputStart(e.target.value)
+                    setPreset("custom")
+                  }}
                   className="h-8 border-0 bg-transparent w-[130px] text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
                 <span className="text-muted-foreground text-xs">—</span>
                 <Input
                   type="date"
                   value={inputEnd}
-                  onChange={(e) => setInputEnd(e.target.value)}
+                  onChange={(e) => {
+                    setInputEnd(e.target.value)
+                    setPreset("custom")
+                  }}
                   className="h-8 border-0 bg-transparent w-[130px] text-xs focus-visible:ring-0 focus-visible:ring-offset-0"
                 />
               </div>

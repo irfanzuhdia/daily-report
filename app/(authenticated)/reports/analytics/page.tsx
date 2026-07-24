@@ -106,11 +106,17 @@ export default async function AnalyticsPage({
 
   // Apply Date Filter
   const now = new Date()
-  const defaultEndDate = now.toLocaleDateString('en-CA') // YYYY-MM-DD
-  
+  const toYMD = (d: Date) => {
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
+  const defaultEndDate = toYMD(now)
   const oneYearAgo = new Date(now)
   oneYearAgo.setDate(oneYearAgo.getDate() - 364)
-  const defaultStartDate = oneYearAgo.toLocaleDateString('en-CA')
+  const defaultStartDate = toYMD(oneYearAgo)
 
   const targetStartDate = params.start_date || defaultStartDate
   const targetEndDate = params.end_date || defaultEndDate

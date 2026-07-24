@@ -69,7 +69,7 @@ export function BottomNav({
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-14 items-center justify-around border-t border-border/60 bg-background/90 px-2 backdrop-blur-xl sm:hidden shadow-2xl safe-area-pb pb-[env(safe-area-inset-bottom,4px)]">
+    <nav className="fixed bottom-2.5 left-3 right-3 z-40 flex h-[54px] items-center justify-around rounded-2xl border border-border/80 bg-background/95 px-1.5 backdrop-blur-xl sm:hidden shadow-2xl transition-all">
       {navItems.map((item) => {
         const Icon = item.icon
         const isActive =

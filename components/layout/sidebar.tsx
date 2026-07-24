@@ -186,14 +186,6 @@ export function Sidebar({
 
   return (
     <>
-      {/* Mobile toggle */}
-      <button
-        onClick={() => setMobileOpen(!mobileOpen)}
-        className="fixed top-4 left-4 z-50 rounded-xl border bg-background p-2 shadow-sm lg:hidden"
-      >
-        {mobileOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-      </button>
-
       {/* Overlay */}
       {mobileOpen && (
         <div
@@ -209,12 +201,21 @@ export function Sidebar({
           mobileOpen ? "translate-x-0" : "-translate-x-full"
         )}
       >
-        <div className="flex h-16 items-center gap-2.5 border-b px-6">
-          <MDMLogo className="h-7 w-7 shrink-0" />
-          <div className="flex flex-col">
-            <span className="text-sm font-bold tracking-tight text-foreground leading-none">MDM</span>
-            <span className="text-xs text-muted-foreground font-medium">Daily Report</span>
+        <div className="flex h-16 items-center justify-between border-b px-6">
+          <div className="flex items-center gap-2.5">
+            <MDMLogo className="h-7 w-7 shrink-0" />
+            <div className="flex flex-col">
+              <span className="text-sm font-bold tracking-tight text-foreground leading-none">MDM</span>
+              <span className="text-xs text-muted-foreground font-medium">Daily Report</span>
+            </div>
           </div>
+          <button
+            type="button"
+            onClick={() => setMobileOpen(false)}
+            className="rounded-lg p-1.5 text-muted-foreground hover:bg-muted lg:hidden"
+          >
+            <X className="h-5 w-5" />
+          </button>
         </div>
 
         <nav className="flex-1 space-y-1 p-4 overflow-y-auto">

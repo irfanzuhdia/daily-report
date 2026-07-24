@@ -61,7 +61,7 @@ export function BottomNav({
   }, [])
 
   const navItems = [
-    { href: "/reports/dashboard", label: "Dashboard", icon: LayoutDashboard },
+    { href: "/reports/dashboard", label: "Home", icon: LayoutDashboard },
     { href: "/projects", label: "Projects", icon: FolderKanban },
     { href: "/tasks", label: "Tasks", icon: ListTodo },
     { href: "/reports", label: "Reports", icon: FileText },
@@ -69,7 +69,7 @@ export function BottomNav({
   ]
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-16 items-center justify-around border-t border-border/80 bg-background/95 px-1 backdrop-blur-lg sm:hidden shadow-lg supports-[backdrop-filter]:bg-background/80 safe-area-pb">
+    <nav className="fixed bottom-0 left-0 right-0 z-40 flex h-14 items-center justify-around border-t border-border/60 bg-background/90 px-2 backdrop-blur-xl sm:hidden shadow-2xl safe-area-pb pb-[env(safe-area-inset-bottom,4px)]">
       {navItems.map((item) => {
         const Icon = item.icon
         const isActive =
@@ -82,22 +82,24 @@ export function BottomNav({
             key={item.href}
             href={item.href}
             className={cn(
-              "relative flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium transition-colors hover:text-primary",
-              isActive ? "text-primary font-semibold" : "text-muted-foreground"
+              "relative flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium transition-all duration-200",
+              isActive ? "text-primary font-semibold" : "text-muted-foreground hover:text-foreground"
             )}
           >
-            <div className="relative">
-              <Icon className={cn("h-5 w-5 transition-transform", isActive && "scale-110")} />
+            <div
+              className={cn(
+                "relative flex items-center justify-center px-3 py-1 rounded-full transition-all duration-200",
+                isActive ? "bg-primary/10 text-primary scale-105" : ""
+              )}
+            >
+              <Icon className="h-5 w-5" />
               {!!item.badge && item.badge > 0 && (
-                <span className="absolute -top-1 -right-2 flex h-4 min-w-4 items-center justify-center rounded-full bg-red-500 px-1 text-[9px] font-bold text-white shadow-sm">
+                <span className="absolute -top-0.5 -right-1 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-red-500 px-1 text-[8px] font-bold text-white shadow-sm animate-in zoom-in-50">
                   {item.badge > 99 ? "99+" : item.badge}
                 </span>
               )}
             </div>
-            <span className="mt-1 leading-none">{item.label}</span>
-            {isActive && (
-              <span className="absolute bottom-1.5 h-1 w-1 rounded-full bg-primary" />
-            )}
+            <span className="mt-0.5 leading-none text-[9px]">{item.label}</span>
           </Link>
         )
       })}
@@ -105,10 +107,12 @@ export function BottomNav({
       <button
         type="button"
         onClick={onOpenMobileMenu}
-        className="flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-colors"
+        className="flex flex-col items-center justify-center flex-1 h-full py-1 text-[10px] font-medium text-muted-foreground hover:text-foreground transition-all duration-200"
       >
-        <Menu className="h-5 w-5" />
-        <span className="mt-1 leading-none">Menu</span>
+        <div className="flex items-center justify-center px-3 py-1 rounded-full">
+          <Menu className="h-5 w-5" />
+        </div>
+        <span className="mt-0.5 leading-none text-[9px]">Menu</span>
       </button>
     </nav>
   )

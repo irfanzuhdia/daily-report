@@ -70,7 +70,7 @@ export function AppLayout({
         realEmail={realEmail}
       />
       <main id="main-content" className="lg:pl-64">
-        <div className="p-4 pt-16 pb-20 lg:p-8 lg:pt-8 lg:pb-8 space-y-6">
+        <div className="p-4 pt-4 pb-20 sm:p-6 lg:p-8 lg:pt-8 lg:pb-8 space-y-6">
           <PWAInstallBanner />
           {children}
         </div>

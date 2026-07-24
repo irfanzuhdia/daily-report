@@ -442,8 +442,8 @@ export const ProjectRepository = {
       }
 
       await tx`
-        INSERT INTO project_logs (project_id, project_status_old, project_status_new, created_by, created_at)
-        VALUES (${nextId}, 'CREATED', ${newProject.project_status || STATUS.NOT_STARTED}, ${createdBy}, ${now})
+        INSERT INTO project_logs (id, project_id, project_status_old, project_status_new, created_by, created_at)
+        VALUES (${'pl-' + randomUUID()}, ${nextId}, 'CREATED', ${newProject.project_status || STATUS.NOT_STARTED}, ${createdBy}, ${now})
       `;
     });
 

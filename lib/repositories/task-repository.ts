@@ -339,8 +339,8 @@ export const TaskRepository = {
 
       // Log task creation
       await tx`
-        INSERT INTO task_logs (task_id, task_status_old, task_status_new, created_by, created_at)
-        VALUES (${nextId}, 'CREATED', ${newTask.task_status || STATUS.NOT_STARTED}, ${createdBy}, ${now})
+        INSERT INTO task_logs (id, task_id, task_status_old, task_status_new, created_by, created_at)
+        VALUES (${'tl-' + randomUUID()}, ${nextId}, 'CREATED', ${newTask.task_status || STATUS.NOT_STARTED}, ${createdBy}, ${now})
       `;
     });
 

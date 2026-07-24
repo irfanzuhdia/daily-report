@@ -22,7 +22,11 @@ export function unstable_cache<T extends (...args: any[]) => Promise<any>>(
 /* eslint-enable @typescript-eslint/no-explicit-any */
 
 export function revalidateTag(tag: string) {
-  nextRevalidateTag(tag, 'max');
+  try {
+    nextRevalidateTag(tag, 'max');
+  } catch {
+    // Ignore when called outside Next.js request context
+  }
 }
 
 // ============ STATUS & PROGRESS CALCULATION HELPERS ============

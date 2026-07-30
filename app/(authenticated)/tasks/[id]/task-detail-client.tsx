@@ -1,19 +1,26 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import { ArrowLeft, Plus, Pencil, FileText, Users, X, History, Loader2, FileDown, ExternalLink } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import type { Task, Project, DailyReport, Status, EnrichedTaskLog } from "@/lib/types"
 import { formatDate, formatDateTime } from "@/lib/format"
 import { revalidatePathsAndTags } from "@/app/actions"
 import { FileSection } from "@/components/file-section"
 import { CommentsSection } from "@/components/comments-section"
 import { SearchableUserSelect, getSelectableUsers, type UserSelectItem } from "@/components/ui/searchable-user-select"
-import { statusVariant } from "@/lib/status-helpers"
+import { statusVariant, getPriorityBadgeClass } from "@/lib/status-helpers"
 
 export function TaskDetailClient({
   task,
@@ -43,11 +50,17 @@ export function TaskDetailClient({
   projectTeamUserIds: string[]
 }) {
   const router = useRouter()
-  const statusName = statuses.find((s) => s.id === task.task_status)?.name ?? task.task_status
   const [teamMembers, setTeamMembers] = useState(initialTeamMembers)
   const [selectedNewUserIds, setSelectedNewUserIds] = useState<string[]>([])
   const [adding, setAdding] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
+
+  const [updatingStatus, setUpdatingStatus] = useState(false)
+  const [currentStatus, setCurrentStatus] = useState(task.task_status ?? "NS")
+
+  useEffect(() => {
+    setCurrentStatus(task.task_status ?? "NS")
+  }, [task.task_status])
 
   const currentUser = useMemo(() => allUsers.find((u) => u.user_id === currentUserId), [allUsers, currentUserId])
   const normOcc = currentUser?.user_occupation?.toLowerCase().replace(/\s+/g, "") ?? ""
@@ -64,6 +77,30 @@ export function TaskDetailClient({
     const teamSet = new Set(teamMembers.map((m) => m.user_id))
     return allUsers.filter((u) => !teamSet.has(u.user_id))
   }, [allUsers, teamMembers])
+
+  const handleStatusChange = async (newStatus: string) => {
+    if (newStatus === currentStatus) return
+    setUpdatingStatus(true)
+    try {
+      const res = await fetch(`/api/tasks/${task.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_status: newStatus }),
+      })
+      if (res.ok) {
+        setCurrentStatus(newStatus)
+        await revalidatePathsAndTags(
+          [`/tasks/${task.id}`, '/tasks', '/reports/dashboard'],
+          ['tasks', 'task_log']
+        )
+        router.refresh()
+      }
+    } catch (error) {
+      console.error("Failed to update status:", error)
+    } finally {
+      setUpdatingStatus(false)
+    }
+  }
 
   const handleSaveNewMembers = async () => {
     if (selectedNewUserIds.length === 0) return
@@ -122,6 +159,8 @@ export function TaskDetailClient({
     }
   }
 
+  const currentStatusName = statuses.find((s) => s.id === currentStatus)?.name ?? currentStatus
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -138,11 +177,33 @@ export function TaskDetailClient({
         <CardHeader>
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
-              <div className="mb-2 flex items-center gap-2">
+              <div className="mb-2 flex flex-wrap items-center gap-2">
                 <h1 className="text-2xl font-bold whitespace-pre-wrap">{task.task_description}</h1>
-                <Badge variant={statusVariant[task.task_status ?? "NS"] ?? "default"}>
-                  {statusName}
-                </Badge>
+                <div className="relative">
+                  {updatingStatus && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded-md z-10">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    </div>
+                  )}
+                  {!hasEditPermission ? (
+                    <Badge variant={statusVariant[currentStatus] || "default"}>
+                      {currentStatusName}
+                    </Badge>
+                  ) : (
+                    <Select value={currentStatus} onValueChange={handleStatusChange}>
+                      <SelectTrigger className="h-7 text-xs w-[130px] px-2 py-0">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {statuses.map((s) => (
+                          <SelectItem key={s.id} value={s.id} className="text-xs">
+                            {s.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
               </div>
               {project && (
                 <Link
@@ -164,7 +225,7 @@ export function TaskDetailClient({
           </div>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
             <div>
               <p className="text-xs font-medium text-muted-foreground">Progress</p>
               <p className="text-sm font-medium">{task.task_latest_percentage ?? 0}%</p>
@@ -180,12 +241,26 @@ export function TaskDetailClient({
               </p>
             </div>
             <div>
+              <p className="text-xs font-medium text-muted-foreground">Priority</p>
+              <Badge variant="outline" className={`text-xs px-2 py-0.5 mt-0.5 font-medium ${getPriorityBadgeClass(task.priority)}`}>
+                {task.priority || "Medium"}
+              </Badge>
+            </div>
+            <div>
               <p className="text-xs font-medium text-muted-foreground">Status</p>
-              <p className="text-sm font-medium">{statusName}</p>
+              <p className="text-sm font-medium">{currentStatusName}</p>
             </div>
           </div>
 
-          <div className="mt-4 border-t pt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-4 border-t pt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-6">
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Start Date</p>
+              <p className="text-sm font-medium">{task.start_date ? formatDate(task.start_date) : "-"}</p>
+            </div>
+            <div>
+              <p className="text-xs font-medium text-muted-foreground">Due Date</p>
+              <p className="text-sm font-medium">{task.due_date ? formatDate(task.due_date) : "-"}</p>
+            </div>
             <div>
               <p className="text-xs font-medium text-muted-foreground">Created By</p>
               <p className="text-sm">{createdByName}</p>

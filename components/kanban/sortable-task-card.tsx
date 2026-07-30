@@ -8,6 +8,7 @@ import { CSS } from "@dnd-kit/utilities"
 import { GripVertical, Pin, Pencil, Trash2, Loader2 } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
   Select,
@@ -17,6 +18,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import type { Task, Status } from "@/lib/types"
+import { getPriorityBadgeClass } from "@/lib/status-helpers"
 
 interface SortableTaskCardProps {
   task: Task
@@ -90,9 +92,16 @@ export const SortableTaskCard = memo(function SortableTaskCard({
               <span className="font-medium text-sm hover:text-primary leading-snug block whitespace-pre-wrap">
                 {task.task_description}
               </span>
-              <p className="text-[10px] text-muted-foreground truncate">
-                📁 {projectMap[task.project_id] ?? task.project_id}
-              </p>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="text-[10px] text-muted-foreground truncate">
+                  📁 {projectMap[task.project_id] ?? task.project_id}
+                </p>
+                {task.priority && (
+                  <Badge variant="outline" className={`text-[9px] py-0 px-1.5 font-medium ${getPriorityBadgeClass(task.priority)}`}>
+                    {task.priority}
+                  </Badge>
+                )}
+              </div>
             </div>
             <Button
               variant="ghost"
@@ -106,6 +115,13 @@ export const SortableTaskCard = memo(function SortableTaskCard({
               <Pin className="h-3.5 w-3.5" style={isPinned ? { fill: "currentColor" } : {}} />
             </Button>
           </div>
+
+          {!isCompact && (task.start_date || task.due_date) && (
+            <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
+              {task.start_date && <span>📅 Start: {task.start_date}</span>}
+              {task.due_date && <span>🏁 Due: {task.due_date}</span>}
+            </div>
+          )}
 
           <div className={`flex items-center justify-between text-xs text-muted-foreground pt-1 border-t ${isCompact ? "border-t-muted/30" : ""}`}>
             <span>Progress: <span className="font-medium text-foreground">{task.task_latest_percentage ?? 0}%</span></span>

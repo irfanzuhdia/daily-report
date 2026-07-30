@@ -322,7 +322,7 @@ export const DailyReportRepository = {
       progress_percentage: report.progress_percentage,
       total_hours: report.total_hours ?? null,
       remarks: report.remarks ?? null,
-      user_id: report.user_id,
+      user_id: report.user_id || createdBy,
       created_by: createdBy,
       created_at: now,
       deleted_by: null,

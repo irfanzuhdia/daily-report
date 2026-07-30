@@ -139,11 +139,11 @@ export const UserRepository = {
 
     const newUser: User = {
       user_id: nextId,
-      user_email: user.user_email,
-      user_name: user.user_name,
-      user_occupation: user.user_occupation,
-      user_division: user.user_division,
-      user_departement: user.user_departement,
+      user_email: user.user_email || '',
+      user_name: user.user_name || '',
+      user_occupation: user.user_occupation || '',
+      user_division: user.user_division || '',
+      user_departement: user.user_departement || '',
       user_site: user.user_site || null,
       user_team: user.user_team || null,
       user_unit: user.user_unit || null,

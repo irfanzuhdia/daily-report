@@ -50,11 +50,11 @@ export const NotificationRepository = {
 
     const newNotification: Notification = {
       id: nextId,
-      user_id: notification.user_id,
-      type: notification.type,
-      title: notification.title,
-      content: notification.content,
-      link: notification.link,
+      user_id: notification.user_id || '',
+      type: notification.type || 'info',
+      title: notification.title || 'Notification',
+      content: notification.content || '',
+      link: notification.link || '',
       is_read: false,
       created_at: now,
     };

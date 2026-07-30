@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ArrowLeft, Save, FileText, X, Upload, Loader2 } from "lucide-react"
@@ -49,11 +49,36 @@ export function TaskForm({
   const [projectId, setProjectId] = useState(
     task?.project_id ?? defaultProjectId ?? ""
   )
+  const selectedProject = localProjects.find((p) => p.project_id === projectId)
+
   const [description, setDescription] = useState(task?.task_description ?? "")
   const [status, setStatus] = useState(task?.task_status ?? "NS")
   const [percentage, setPercentage] = useState(
     task?.task_latest_percentage ?? "0"
   )
+  const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>(
+    (task?.priority as any) ?? (selectedProject?.priority as any) ?? "Medium"
+  )
+  const [startDate, setStartDate] = useState(
+    task?.start_date ?? selectedProject?.project_start_date_plan ?? ""
+  )
+  const [dueDate, setDueDate] = useState(
+    task?.due_date ?? selectedProject?.project_end_date_plan ?? selectedProject?.due_date ?? ""
+  )
+
+  useEffect(() => {
+    if (!isEdit && selectedProject) {
+      if (selectedProject.priority) {
+        setPriority(selectedProject.priority as 'Low' | 'Medium' | 'High' | 'Critical')
+      }
+      if (selectedProject.project_start_date_plan) {
+        setStartDate(selectedProject.project_start_date_plan)
+      }
+      if (selectedProject.project_end_date_plan || selectedProject.due_date) {
+        setDueDate(selectedProject.project_end_date_plan || selectedProject.due_date || "")
+      }
+    }
+  }, [projectId, selectedProject, isEdit])
 
   const [showProjectModal, setShowProjectModal] = useState(false)
   const [showCreateProjectModal, setShowCreateProjectModal] = useState(false)
@@ -132,6 +157,9 @@ export function TaskForm({
         task_description: description,
         task_status: status,
         task_latest_percentage: percentage,
+        priority: priority,
+        start_date: startDate || undefined,
+        due_date: dueDate || undefined,
         task_file: taskFile || undefined,
         additional_link: additionalLink || undefined,
         task_user_ids: teamUserIds,
@@ -267,7 +295,43 @@ export function TaskForm({
                   </SelectContent>
                 </Select>
               </div>
+
               <div className="space-y-2">
+                <Label htmlFor="priority">Priority Level</Label>
+                <Select value={priority} onValueChange={(val: any) => setPriority(val)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                    <SelectItem value="Critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="startDate">Start Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={startDate}
+                  onChange={(e) => setStartDate(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="dueDate">Due Date</Label>
+                <Input
+                  id="dueDate"
+                  type="date"
+                  value={dueDate}
+                  onChange={(e) => setDueDate(e.target.value)}
+                />
+              </div>
+
+              <div className="space-y-2 sm:col-span-2">
                 <Label htmlFor="percentage">Progress (%)</Label>
                 <Input
                   id="percentage"

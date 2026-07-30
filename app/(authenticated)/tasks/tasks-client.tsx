@@ -178,7 +178,7 @@ export function TasksClient({
       .channel('realtime-tasks')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'tasks' },
+        { event: '*', schema: 'daily_report', table: 'tasks' },
         () => {
           router.refresh()
         }
@@ -487,17 +487,8 @@ export function TasksClient({
     }
   }, [users])
 
-  // Only show users who have actually created a task
-  const uniqueCreators = useMemo(() => {
-    const creatorIds = new Set(tasks.map((t) => t.created_by).filter(Boolean))
-    return users.filter((u) => creatorIds.has(u.user_id))
-  }, [tasks, users])
-
-  // Only show users who are actually a team member on some task
-  const uniqueMembers = useMemo(() => {
-    const memberIds = new Set(taskTeams.map((tt) => tt.user_id).filter(Boolean))
-    return users.filter((u) => memberIds.has(u.user_id))
-  }, [taskTeams, users])
+  const uniqueCreators = useMemo(() => users, [users])
+  const uniqueMembers = useMemo(() => users, [users])
 
   const activeTask = activeId ? activeTasks.find(t => t.id === activeId) : null
 
@@ -646,7 +637,7 @@ export function TasksClient({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full max-w-full">
+        <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-2 px-1 -mx-1 scrollbar-none w-full max-w-full">
             <FilterMultiSelect
               placeholder="All projects"
               icon={<Filter className="h-3.5 w-3.5" />}
@@ -808,7 +799,7 @@ export function TasksClient({
           </Card>
         ) : (
           density === "compact" ? (
-            <div className="flex flex-col border rounded-xl divide-y divide-border/55 bg-card overflow-hidden">
+            <div className="flex flex-col gap-2.5 sm:gap-3">
               {localTasks.map((task) => {
                 const isMember = taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
                   projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||
@@ -816,7 +807,7 @@ export function TasksClient({
                   projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
                   isSuperUser
                 return (
-                  <div key={task.id} onClick={() => router.push(`/tasks/${task.id}`)} className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 gap-2.5 hover:bg-muted/30 transition-colors cursor-pointer">
+                  <div key={task.id} onClick={() => router.push(`/tasks/${task.id}`)} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-2.5 border rounded-xl bg-card hover:bg-muted/30 transition-colors cursor-pointer shadow-xs">
                     <div className="flex items-center gap-2 min-w-0 flex-1">
                       <Badge variant="outline" className="shrink-0 text-[10px] font-mono py-0 px-1 bg-muted">
                         {task.id.substring(0, 6)}
@@ -871,7 +862,7 @@ export function TasksClient({
               })}
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="flex flex-col gap-3.5 sm:gap-4">
               {localTasks.map((task) => {
                 const isMember = taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
                   projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||

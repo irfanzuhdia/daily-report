@@ -54,6 +54,9 @@ export function TaskCreateModal({
       task_description: "",
       task_status: "NS",
       task_latest_percentage: "0",
+      priority: "Medium",
+      start_date: "",
+      due_date: "",
       additional_link: "",
       task_user_ids: [currentUserId],
       task_file: "",
@@ -62,6 +65,7 @@ export function TaskCreateModal({
 
   // Watch custom controlled fields
   const status = watch("task_status")
+  const priority = watch("priority") || "Medium"
   const teamUserIds = watch("task_user_ids") || []
   const taskFile = watch("task_file")
 
@@ -77,6 +81,9 @@ export function TaskCreateModal({
         task_description: "",
         task_status: "NS",
         task_latest_percentage: "0",
+        priority: "Medium",
+        start_date: "",
+        due_date: "",
         additional_link: "",
         task_user_ids: [currentUserId],
         task_file: "",
@@ -139,6 +146,8 @@ export function TaskCreateModal({
         task_latest_percentage: data.task_latest_percentage || "0",
         additional_link: data.additional_link || undefined,
         task_file: data.task_file || undefined,
+        start_date: data.start_date || undefined,
+        due_date: data.due_date || undefined,
       }
 
       const res = await fetch("/api/tasks", {
@@ -226,7 +235,44 @@ export function TaskCreateModal({
               </Select>
               {errors.task_status && <p className="text-[10px] text-destructive">{errors.task_status.message}</p>}
             </div>
+
             <div className="space-y-2">
+              <Label htmlFor="modalTaskPriority">Priority Level</Label>
+              <Select 
+                value={priority} 
+                onValueChange={(val) => setValue("priority", val as any)}
+              >
+                <SelectTrigger id="modalTaskPriority">
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Low">Low</SelectItem>
+                  <SelectItem value="Medium">Medium</SelectItem>
+                  <SelectItem value="High">High</SelectItem>
+                  <SelectItem value="Critical">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="modalTaskStart">Start Date</Label>
+              <Input
+                id="modalTaskStart"
+                type="date"
+                {...register("start_date")}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="modalTaskDue">Due Date</Label>
+              <Input
+                id="modalTaskDue"
+                type="date"
+                {...register("due_date")}
+              />
+            </div>
+
+            <div className="space-y-2 sm:col-span-2">
               <Label htmlFor="modalTaskPercent">Progress (%)</Label>
               <Input
                 id="modalTaskPercent"

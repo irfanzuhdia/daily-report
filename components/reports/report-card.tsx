@@ -226,7 +226,7 @@ export function DroppableColumn({
       </div>
 
       <SortableContext items={reportIds} strategy={verticalListSortingStrategy}>
-        <div className="flex-1 space-y-3 overflow-y-auto" data-column-id={column.id}>
+        <div className="flex-1 space-y-3.5 sm:space-y-4 overflow-y-auto p-0.5" data-column-id={column.id}>
           {reports.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 border border-dashed rounded-xl bg-card/50">
               <p className="text-xs text-muted-foreground">No reports</p>

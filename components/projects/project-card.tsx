@@ -113,6 +113,16 @@ export const SortableProjectCard = memo(function SortableProjectCard({
           {/* Metrics */}
           <div className={`flex items-center justify-between text-xs text-muted-foreground pt-1 border-t ${isCompact ? "border-t-muted/30" : ""}`}>
             <div className="flex flex-wrap gap-1">
+              {project.priority && (
+                <Badge variant="outline" className={`text-[9px] py-0 px-1.5 font-medium ${
+                  project.priority === 'Critical' ? 'bg-rose-500/10 text-rose-600 border-rose-500/20' :
+                  project.priority === 'High' ? 'bg-amber-500/10 text-amber-600 border-amber-500/20' :
+                  project.priority === 'Low' ? 'bg-slate-500/10 text-slate-600 border-slate-500/20' :
+                  'bg-blue-500/10 text-blue-600 border-blue-500/20'
+                }`}>
+                  {project.priority}
+                </Badge>
+              )}
               {project.category && (
                 <Badge variant="outline" className="text-[9px] py-0 px-1.5 bg-primary/5 text-primary border-primary/10">
                   {project.category}

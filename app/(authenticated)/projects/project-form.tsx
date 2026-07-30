@@ -33,6 +33,7 @@ export function ProjectForm({
   initialName = null,
   initialDescription = null,
   initialCategory = null,
+  initialPriority = null,
 }: {
   project?: Project
   statuses: Status[]
@@ -45,6 +46,7 @@ export function ProjectForm({
   initialName?: string | null
   initialDescription?: string | null
   initialCategory?: string | null
+  initialPriority?: string | null
 }) {
   const router = useRouter()
   const isEdit = !!project
@@ -66,6 +68,9 @@ export function ProjectForm({
   const [endDate, setEndDate] = useState(project?.project_end_date_plan ?? defaultEndDate ?? getLocalYMD(nextWeek))
   const [status, setStatus] = useState(project?.project_status ?? "NS")
   const [category, setCategory] = useState(project?.category ?? initialCategory ?? "")
+  const [priority, setPriority] = useState<'Low' | 'Medium' | 'High' | 'Critical'>(
+    (project?.priority as any) ?? (initialPriority as any) ?? "Medium"
+  )
   const [projectFile, setProjectFile] = useState<string | null>(project?.project_file ?? null)
   const [additionalLink, setAdditionalLink] = useState(project?.additional_link ?? "")
   const [fileName, setFileName] = useState<string | null>(
@@ -138,12 +143,14 @@ export function ProjectForm({
       const payload = {
         project_name: name,
         project_description: description || undefined,
-        project_start_date_plan: startDate,
-        project_end_date_plan: endDate,
+        project_start_date_plan: startDate || undefined,
+        project_end_date_plan: endDate || undefined,
+        due_date: endDate || undefined,
         project_status: status,
         project_file: projectFile || undefined,
         additional_link: additionalLink || undefined,
-        category: category.trim() || undefined,
+        category: category || undefined,
+        priority: priority,
         team_user_ids: teamUserIds,
         ticket_reference: ticketReference || undefined,
       }
@@ -275,20 +282,37 @@ export function ProjectForm({
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="status">Status</Label>
-              <Select value={status} onValueChange={setStatus}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select status" />
-                </SelectTrigger>
-                <SelectContent>
-                  {statuses.map((s) => (
-                    <SelectItem key={s.id} value={s.id}>
-                      {s.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="status">Status</Label>
+                <Select value={status} onValueChange={setStatus}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select status" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {statuses.map((s) => (
+                      <SelectItem key={s.id} value={s.id}>
+                        {s.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="priority">Priority Level</Label>
+                <Select value={priority} onValueChange={(val: any) => setPriority(val)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Low">Low</SelectItem>
+                    <SelectItem value="Medium">Medium</SelectItem>
+                    <SelectItem value="High">High</SelectItem>
+                    <SelectItem value="Critical">Critical</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">

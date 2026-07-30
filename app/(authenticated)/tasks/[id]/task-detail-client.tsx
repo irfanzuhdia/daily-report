@@ -357,9 +357,9 @@ export function TaskDetailClient({
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3.5 sm:gap-4">
           {reports.map((report) => (
-            <Link key={report.report_id} href={`/reports/${report.report_id}`}>
+            <Link key={report.report_id} href={`/reports/${report.report_id}`} className="block">
               <Card className="transition-shadow hover:shadow-md">
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="min-w-0 flex-1">

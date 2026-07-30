@@ -1,6 +1,6 @@
 import { redirect } from "next/navigation"
 import { getSession } from "@/lib/session"
-import { StatusRepository, UserRepository, ProjectRepository } from "@/lib/repositories"
+import { StatusRepository, UserRepository, ProjectRepository, TicketRepository } from "@/lib/repositories"
 import { toDateStr } from "@/lib/format"
 import { ProjectForm } from "../project-form"
 
@@ -25,16 +25,18 @@ export default async function NewProjectPage({
   const team = params.team || null
   const category = params.category || null
 
-  const [statuses, users, uniqueCategories] = await Promise.all([
+  const [statuses, users, uniqueCategories, ticket] = await Promise.all([
     StatusRepository.findAll(),
     UserRepository.findAll(),
     ProjectRepository.findUniqueCategories(),
+    ticketRef ? TicketRepository.findById(ticketRef) : null,
   ])
 
   const today = toDateStr(new Date())
   const plus30 = new Date()
   plus30.setDate(plus30.getDate() + 30)
-  const endDateDefault = toDateStr(plus30)
+  const defaultEndDateStr = ticket?.due_date || toDateStr(plus30)
+  const initialPriority = ticket?.priority || "Medium"
 
   // Merge session user ID and any ticket team user IDs to form the initial project team
   const ticketTeamIds = team ? team.split(',').filter(Boolean) : []
@@ -46,12 +48,13 @@ export default async function NewProjectPage({
       users={users}
       initialTeamUserIds={initialTeamUserIds}
       defaultStartDate={today}
-      defaultEndDate={endDateDefault}
+      defaultEndDate={defaultEndDateStr}
       uniqueCategories={uniqueCategories}
       initialTicketRef={ticketRef}
-      initialName={title}
-      initialDescription={desc}
-      initialCategory={category}
+      initialName={title || ticket?.title || null}
+      initialDescription={desc || ticket?.description || null}
+      initialCategory={category || ticket?.problem_type || null}
+      initialPriority={initialPriority}
     />
   )
 }

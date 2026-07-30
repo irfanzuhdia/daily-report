@@ -153,7 +153,7 @@ export function Sidebar({
       .channel('sidebar-notifications')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'notifications' },
+        { event: '*', schema: 'daily_report', table: 'notifications' },
         () => {
           fetchUnreadCount()
         }

@@ -30,6 +30,8 @@ export interface Project {
   additional_link: string | null;
   category: string | null;
   ticket_reference?: string | null;
+  priority?: 'Low' | 'Medium' | 'High' | 'Critical' | null;
+  due_date?: string | null;
   created_by: string | null;
   created_at: string | null;
   updated_by: string | null;
@@ -60,6 +62,9 @@ export interface Task {
   task_latest_percentage: string | null;
   task_file: string | null;
   additional_link: string | null;
+  priority?: 'Low' | 'Medium' | 'High' | 'Critical' | null;
+  start_date?: string | null;
+  due_date?: string | null;
   created_by: string | null;
   created_at: string | null;
   updated_by: string | null;

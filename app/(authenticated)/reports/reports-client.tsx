@@ -162,7 +162,7 @@ export function ReportsClient({
       .channel('realtime-reports')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'daily_reports' },
+        { event: '*', schema: 'daily_report', table: 'daily_reports' },
         () => {
           router.refresh()
         }
@@ -621,7 +621,7 @@ export function ReportsClient({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full max-w-full">
+        <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-2 px-1 -mx-1 scrollbar-none w-full max-w-full">
             <FilterMultiSelect
               placeholder="All projects"
               icon={<Filter className="h-3.5 w-3.5" />}
@@ -769,7 +769,7 @@ export function ReportsClient({
             </CardContent>
           </Card>
         ) : (
-          <div className="space-y-3">
+          <div className="flex flex-col gap-3.5 sm:gap-4">
             {localReports.map((report) => (
               <Card 
                 key={report.report_id} 

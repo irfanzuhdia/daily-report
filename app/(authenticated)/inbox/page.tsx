@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef, useCallback } from "react"
 import { useViewDensity } from "@/lib/view-density"
 import Link from "next/link"
 import { Bell, Check, CheckCheck, Inbox, Loader2, ArrowRight } from "lucide-react"
@@ -16,6 +16,7 @@ export default function InboxPage() {
   const [loadingMore, setLoadingMore] = useState(false)
   const [markingAll, setMarkingAll] = useState(false)
   const [hasMore, setHasMore] = useState(false)
+  const observerTargetRef = useRef<HTMLDivElement | null>(null)
   const LIMIT = 50
 
   useEffect(() => {
@@ -58,7 +59,7 @@ export default function InboxPage() {
       .channel('realtime-notifications')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'notifications' },
+        { event: 'INSERT', schema: 'daily_report', table: 'notifications' },
         () => {
           // Refetch if there's a new notification
           fetchNotifications()
@@ -77,8 +78,8 @@ export default function InboxPage() {
     }
   }, [])
 
-  const handleLoadMore = async () => {
-    if (loadingMore) return
+  const handleLoadMore = useCallback(async () => {
+    if (loadingMore || !hasMore) return
     setLoadingMore(true)
     try {
       const offset = notifications.length
@@ -94,7 +95,28 @@ export default function InboxPage() {
     } finally {
       setLoadingMore(false)
     }
-  }
+  }, [loadingMore, hasMore, notifications.length])
+
+  // Automatic Infinite Scroll on bottom reach
+  useEffect(() => {
+    if (!hasMore || loadingMore || loading) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0].isIntersecting) {
+          handleLoadMore()
+        }
+      },
+      { threshold: 0.1 }
+    )
+
+    const el = observerTargetRef.current
+    if (el) observer.observe(el)
+
+    return () => {
+      if (el) observer.unobserve(el)
+    }
+  }, [hasMore, loadingMore, loading, handleLoadMore])
 
   const markAsRead = async (id: string) => {
     try {
@@ -251,19 +273,22 @@ export default function InboxPage() {
                 </div>
               ))}
               {hasMore && (
-                <div className="flex justify-center p-4">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={handleLoadMore}
-                    disabled={loadingMore}
-                    className="w-full sm:w-auto rounded-xl"
-                  >
-                    {loadingMore ? (
-                      <Loader2 className="mr-1.5 h-4 w-4 animate-spin text-muted-foreground" />
-                    ) : null}
-                    Load older notifications
-                  </Button>
+                <div ref={observerTargetRef} className="flex justify-center p-4">
+                  {loadingMore ? (
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2 font-medium">
+                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                      Loading older notifications...
+                    </div>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleLoadMore}
+                      className="w-full sm:w-auto rounded-xl"
+                    >
+                      Load older notifications
+                    </Button>
+                  )}
                 </div>
               )}
             </div>

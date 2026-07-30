@@ -181,7 +181,7 @@ export function ProjectsClient({
       .channel('realtime-projects')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'projects' },
+        { event: '*', schema: 'daily_report', table: 'projects' },
         () => {
           router.refresh()
         }
@@ -489,17 +489,8 @@ export function ProjectsClient({
     }
   }, [users])
 
-  // Only show users who have actually created a project
-  const uniqueCreators = useMemo(() => {
-    const creatorIds = new Set(projects.map((p) => p.created_by).filter(Boolean))
-    return users.filter((u) => creatorIds.has(u.user_id))
-  }, [projects, users])
-
-  // Only show users who are actually a team member on some project
-  const uniqueMembers = useMemo(() => {
-    const memberIds = new Set(projectTeams.map((pt) => pt.user_id).filter(Boolean))
-    return users.filter((u) => memberIds.has(u.user_id))
-  }, [projectTeams, users])
+  const uniqueCreators = useMemo(() => users, [users])
+  const uniqueMembers = useMemo(() => users, [users])
 
   const activeProject = activeId ? activeProjects.find(p => p.project_id === activeId) : null
 
@@ -652,7 +643,7 @@ export function ProjectsClient({
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none w-full max-w-full">
+        <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-2 px-1 -mx-1 scrollbar-none w-full max-w-full">
         {layout === "list" && (
           <FilterMultiSelect
             placeholder="All statuses"
@@ -1045,7 +1036,12 @@ export function ProjectsClient({
                         <Select
                           value={project.project_status || "NS"}
                           onValueChange={(val) => handleStatusChange(project.project_id, val)}
-                          disabled={!projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId)}
+                          disabled={
+                            !(projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId) ||
+                              project.created_by === currentUserId ||
+                              isSuperUser ||
+                              userLevel >= 6)
+                          }
                         >
                           <SelectTrigger className="h-8 text-[11px] w-[120px] px-2 py-0">
                             <SelectValue placeholder="Restore status" />

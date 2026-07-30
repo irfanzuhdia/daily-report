@@ -1,4 +1,5 @@
 import * as React from "react"
+import { createPortal } from "react-dom"
 import { Search, ChevronDown, Check } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { SelectTrigger } from "@/components/ui/select"
@@ -6,7 +7,7 @@ import { cn } from "@/lib/utils"
 
 export function FilterContainer({ children, className }: { children: React.ReactNode, className?: string }) {
   return (
-    <div className={cn("bg-card border border-border rounded-[1.25rem] p-2 sm:p-3 shadow-sm mb-6 flex flex-col gap-2.5", className)}>
+    <div className={cn("bg-card border border-border rounded-[1.25rem] p-3 sm:p-3.5 shadow-sm mb-6 flex flex-col gap-3", className)}>
       {children}
     </div>
   )
@@ -64,17 +65,66 @@ export function FilterMultiSelect({
   className,
 }: FilterMultiSelectProps) {
   const [isOpen, setIsOpen] = React.useState(false);
-  const containerRef = React.useRef<HTMLDivElement>(null);
+  const [dropdownPosition, setDropdownPosition] = React.useState<{ top: number; left: number; width: number } | null>(null);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  const updatePosition = React.useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const minW = Math.max(rect.width, 200);
+      let left = rect.left;
+      if (left + minW > viewportWidth - 16) {
+        left = Math.max(16, viewportWidth - minW - 16);
+      }
+      setDropdownPosition({
+        top: rect.bottom + 6,
+        left,
+        width: minW,
+      });
+    }
+  }, []);
+
+  const toggleOpen = () => {
+    if (!isOpen) {
+      updatePosition();
+    }
+    setIsOpen((prev) => !prev);
+  };
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+
     const handleOutsideClick = (e: MouseEvent) => {
-      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const target = e.target as Node;
+      if (
+        buttonRef.current && !buttonRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
         setIsOpen(false);
       }
     };
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
     document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
+  }, [isOpen, updatePosition]);
 
   const toggleOption = (value: string) => {
     if (selectedValues.includes(value)) {
@@ -95,10 +145,11 @@ export function FilterMultiSelect({
   const hasSelections = selectedValues.length > 0;
   
   return (
-    <div className="relative shrink-0" ref={containerRef}>
+    <div className="relative shrink-0">
       <button
+        ref={buttonRef}
         type="button"
-        onClick={() => setIsOpen(!isOpen)}
+        onClick={toggleOpen}
         className={cn(
           "flex h-10 sm:h-9 w-full min-w-[140px] sm:min-w-[160px] items-center justify-between rounded-full bg-muted/50 border border-border px-3 py-2 text-xs sm:text-sm shadow-sm transition-colors hover:border-border/80 focus:outline-none focus:ring-2 focus:ring-ring/30",
           hasSelections ? "border-primary/50 bg-primary/10 text-primary font-medium" : "",
@@ -115,11 +166,21 @@ export function FilterMultiSelect({
             <span>{placeholder}</span>
           )}
         </span>
-        <ChevronDown className="h-4 w-4 opacity-50" />
+        <ChevronDown className="h-4 w-4 opacity-50 ml-1 shrink-0" />
       </button>
 
-      {isOpen && (
-        <div className="absolute top-full left-0 mt-2 z-50 w-full min-w-[200px] max-h-72 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-md animate-in fade-in-0 zoom-in-95 p-1">
+      {isOpen && mounted && dropdownPosition && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: "fixed",
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            minWidth: `${dropdownPosition.width}px`,
+            zIndex: 9999,
+          }}
+          className="max-h-72 overflow-y-auto rounded-xl border border-border bg-popover text-popover-foreground shadow-xl animate-in fade-in-0 zoom-in-95 p-1"
+        >
           {options.length === 0 ? (
             <div className="py-2 px-2 text-sm text-muted-foreground text-center">No options found.</div>
           ) : (
@@ -165,7 +226,8 @@ export function FilterMultiSelect({
               })}
             </>
           )}
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   )

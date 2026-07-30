@@ -61,8 +61,12 @@ export function ProjectDetailClient({
   const [adding, setAdding] = useState(false)
   const [removingId, setRemovingId] = useState<string | null>(null)
   const [updatingStatus, setUpdatingStatus] = useState(false)
-  const [currentStatus, setCurrentStatus] = useState(autoProjectStatus)
+  const [currentStatus, setCurrentStatus] = useState(project.project_status || autoProjectStatus)
   const currentUser = useMemo(() => allUsers.find((u) => u.user_id === currentUserId), [allUsers, currentUserId])
+  
+  useEffect(() => {
+    setCurrentStatus(project.project_status || autoProjectStatus)
+  }, [project.project_status, autoProjectStatus])
   
   // Realtime Websocket Supabase
   useEffect(() => {
@@ -71,7 +75,7 @@ export function ProjectDetailClient({
       .channel('realtime-project-logs')
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'project_logs' },
+        { event: 'INSERT', schema: 'daily_report', table: 'project_logs' },
         (payload: any) => {
           if (payload.new.project_id === project.project_id) {
              router.refresh()
@@ -459,9 +463,9 @@ export function ProjectDetailClient({
           </CardContent>
         </Card>
       ) : (
-        <div className="space-y-3">
+        <div className="flex flex-col gap-3.5 sm:gap-4">
           {tasks.map((task) => (
-            <Link key={task.id} href={`/tasks/${task.id}`}>
+            <Link key={task.id} href={`/tasks/${task.id}`} className="block">
               <Card className="transition-shadow hover:shadow-md">
                 <CardContent className="flex items-center justify-between p-4">
                   <div className="min-w-0 flex-1">

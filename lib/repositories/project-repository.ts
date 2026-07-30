@@ -381,10 +381,12 @@ export const ProjectRepository = {
       additional_link?: string;
       category?: string;
       ticket_reference?: string | null;
+      priority?: 'Low' | 'Medium' | 'High' | 'Critical' | null;
+      due_date?: string | null;
     },
     createdBy: string
   ): Promise<Project> {
-    // Validate 1-to-1 unique active ticket reference
+    let initialPriority = project.priority;
     if (project.ticket_reference) {
       const activeProjects = await sql`
         SELECT project_id 
@@ -394,6 +396,18 @@ export const ProjectRepository = {
       if (activeProjects.length > 0) {
         throw new Error('This ticket is already linked to an active project.');
       }
+
+      const ticketRows = await sql`
+        SELECT priority FROM tickets WHERE id = ${project.ticket_reference} AND deleted_at IS NULL LIMIT 1
+      `;
+      if (ticketRows.length > 0 && ticketRows[0].priority) {
+        if (!project.priority || project.priority === 'Medium') {
+          initialPriority = ticketRows[0].priority as 'Low' | 'Medium' | 'High' | 'Critical';
+        }
+      }
+    }
+    if (!initialPriority) {
+      initialPriority = 'Medium';
     }
 
     const lastRow = await sql`SELECT project_id FROM projects WHERE project_id ~ '^P-[0-9]+$' ORDER BY CAST(SUBSTRING(project_id FROM 3) AS INTEGER) DESC LIMIT 1`;
@@ -414,6 +428,8 @@ export const ProjectRepository = {
       additional_link: project.additional_link ?? null,
       category: project.category ?? null,
       ticket_reference: project.ticket_reference ?? null,
+      priority: initialPriority,
+      due_date: project.due_date || project.project_end_date_plan || null,
       created_by: createdBy,
       created_at: now,
       updated_by: null,
@@ -426,12 +442,13 @@ export const ProjectRepository = {
       await tx`
         INSERT INTO projects (
           project_id, project_name, project_description, project_start_date_plan, project_end_date_plan,
-          project_status, project_file, additional_link, category, ticket_reference, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
+          project_status, project_file, additional_link, category, ticket_reference, priority, due_date, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
         ) VALUES (
-          ${newProject.project_id}, ${newProject.project_name}, ${newProject.project_description},
-          ${newProject.project_start_date_plan}, ${newProject.project_end_date_plan}, ${newProject.project_status},
-          ${newProject.project_file}, ${newProject.additional_link}, ${newProject.category}, ${newProject.ticket_reference as string | null}, ${newProject.created_by}, ${newProject.created_at},
-          ${newProject.updated_by}, ${newProject.updated_at}, ${newProject.deleted_by}, ${newProject.deleted_at}
+          ${newProject.project_id}, ${newProject.project_name}, ${newProject.project_description ?? null},
+          ${newProject.project_start_date_plan ?? null}, ${newProject.project_end_date_plan ?? null}, ${newProject.project_status},
+          ${newProject.project_file ?? null}, ${newProject.additional_link ?? null}, ${newProject.category ?? null}, ${newProject.ticket_reference ?? null},
+          ${newProject.priority || 'Medium'}, ${newProject.due_date || newProject.project_end_date_plan || null}, ${newProject.created_by ?? createdBy ?? null}, ${newProject.created_at ?? now},
+          ${newProject.updated_by ?? null}, ${newProject.updated_at ?? null}, ${newProject.deleted_by ?? null}, ${newProject.deleted_at ?? null}
         )
       `;
 
@@ -466,6 +483,8 @@ export const ProjectRepository = {
         | 'additional_link'
         | 'category'
         | 'ticket_reference'
+        | 'priority'
+        | 'due_date'
       >
     >,
     updatedBy: string,
@@ -476,10 +495,11 @@ export const ProjectRepository = {
     if (!existing) return null;
 
     // ── Terminal status lock ──
-    // Projects in DONE or CANCEL cannot be edited by external callers.
+    // Projects in DONE or CANCEL can be reopened or have their status changed
     const isTerminal = existing.project_status === STATUS.DONE || existing.project_status === STATUS.CANCEL;
-    if (isTerminal && !forceStatusOverride) {
-      throw new Error('This project is locked because its status is final (Done/Cancelled). No further changes are allowed.');
+    const isChangingStatus = updates.project_status !== undefined && updates.project_status !== existing.project_status;
+    if (isTerminal && !forceStatusOverride && !isChangingStatus) {
+      throw new Error('This project is locked because its status is final (Done/Cancelled). To edit metadata, first change its status.');
     }
 
     // Validate 1-to-1 unique active ticket reference on update
@@ -515,17 +535,19 @@ export const ProjectRepository = {
 
     await sql`
       UPDATE projects SET
-        project_name = ${updated.project_name},
-        project_description = ${updated.project_description},
-        project_start_date_plan = ${updated.project_start_date_plan},
-        project_end_date_plan = ${updated.project_end_date_plan},
-        project_status = ${updated.project_status},
-        project_file = ${updated.project_file},
-        additional_link = ${updated.additional_link},
-        category = ${updated.category},
-        ticket_reference = ${(updated.ticket_reference !== undefined ? updated.ticket_reference : existing.ticket_reference) as string | null},
-        updated_by = ${updated.updated_by},
-        updated_at = ${updated.updated_at}
+        project_name = ${updated.project_name ?? existing.project_name},
+        project_description = ${updated.project_description ?? null},
+        project_start_date_plan = ${updated.project_start_date_plan ?? null},
+        project_end_date_plan = ${updated.project_end_date_plan ?? null},
+        project_status = ${updated.project_status ?? existing.project_status},
+        project_file = ${updated.project_file ?? null},
+        additional_link = ${updated.additional_link ?? null},
+        category = ${updated.category ?? null},
+        ticket_reference = ${(updated.ticket_reference !== undefined ? updated.ticket_reference : existing.ticket_reference) ?? null},
+        priority = ${updated.priority || 'Medium'},
+        due_date = ${updated.due_date || updated.project_end_date_plan || null},
+        updated_by = ${updatedBy || null},
+        updated_at = ${now}
       WHERE project_id = ${projectId}
     `;
 

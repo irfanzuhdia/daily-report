@@ -157,14 +157,14 @@ export function TicketingClient({
       .channel('realtime-ticketing')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'public', table: 'tickets' },
+        { event: '*', schema: 'daily_report', table: 'tickets' },
         () => {
           router.refresh()
         }
       )
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'ticket_comments' },
+        { event: 'INSERT', schema: 'daily_report', table: 'ticket_comments' },
         (payload: any) => {
           if (selectedTicketIdRef.current && payload.new?.ticket_id === selectedTicketIdRef.current) {
              fetch(`/api/tickets/${selectedTicketIdRef.current}`)
@@ -179,7 +179,7 @@ export function TicketingClient({
       )
       .on(
         'postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'ticket_logs' },
+        { event: 'INSERT', schema: 'daily_report', table: 'ticket_logs' },
         (payload: any) => {
           if (selectedTicketIdRef.current && payload.new?.ticket_id === selectedTicketIdRef.current) {
              fetch(`/api/tickets/${selectedTicketIdRef.current}`)
@@ -236,6 +236,7 @@ export function TicketingClient({
 
   // Form mode state
   const [isEditMode, setIsEditMode] = useState(false)
+  const [modalError, setModalError] = useState<string | null>(null)
 
   // File upload states & ref
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -535,6 +536,7 @@ export function TicketingClient({
 
   const handleOpenCreate = () => {
     setIsEditMode(false)
+    setModalError(null)
     setNewTicket({
       title: "",
       description: "",
@@ -554,9 +556,10 @@ export function TicketingClient({
   const handleOpenEdit = () => {
     if (!selectedTicket) return
     setIsEditMode(true)
+    setModalError(null)
     setNewTicket({
       title: selectedTicket.title,
-      description: selectedTicket.description,
+      description: selectedTicket.description || "",
       request_to_division: selectedTicket.request_to_division || "",
       problem_type: selectedTicket.problem_type,
       priority: selectedTicket.priority,
@@ -904,6 +907,7 @@ export function TicketingClient({
   // Create / Edit Ticket Submission
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setModalError(null)
     
     const teamIds = isEditMode 
       ? (editTeamUserIds.length > 0 ? editTeamUserIds : (selectedTicket?.team_user_ids || [])) 
@@ -912,8 +916,8 @@ export function TicketingClient({
     const hasUserTag = !!newTicket.tag_person || teamIds.length > 0;
     const divisionVal = newTicket.request_to_division === "none" || !newTicket.request_to_division ? null : newTicket.request_to_division;
     
-    if (!newTicket.title.trim() || !newTicket.description.trim() || (!divisionVal && !hasUserTag) || !newTicket.problem_type.trim()) {
-      triggerNotice("error", "Please fill in all required fields. You must select either a target division or a specific user tag.")
+    if (!newTicket.title.trim() || (!divisionVal && !hasUserTag) || !newTicket.problem_type.trim()) {
+      setModalError("Please fill in all required fields. Title, Problem Type, and Target Division or Tagged User are required.")
       return
     }
 
@@ -931,7 +935,7 @@ export function TicketingClient({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: newTicket.title.trim(),
-          description: newTicket.description.trim(),
+          description: newTicket.description ? newTicket.description.trim() : "",
           request_to_division: divisionVal,
           problem_type: newTicket.problem_type.trim(),
           priority: newTicket.priority,
@@ -981,12 +985,13 @@ export function TicketingClient({
         team_user_ids: [],
       })
       setFileName(null)
+      setModalError(null)
       setIsCreateOpen(false)
       startTransition(() => {
         router.refresh()
       })
     } catch (err: any) {
-      triggerNotice("error", err.message || "An error occurred.")
+      setModalError(err.message || "An error occurred.")
     }
   }
 
@@ -1528,6 +1533,11 @@ export function TicketingClient({
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreateSubmit} className="space-y-4 py-2">
+            {modalError && (
+              <div className="p-3 rounded-lg border border-destructive/20 bg-destructive/10 text-xs font-medium text-destructive text-left">
+                {modalError}
+              </div>
+            )}
             {isProcessedOrHandled && (
               <div className="p-3 rounded-lg border border-yellow-600/25 bg-yellow-600/5 text-xs text-yellow-500 text-left">
                 This ticket is already in progress or has been handled/commented on by others. Core details cannot be modified; you can only adjust the due date.
@@ -1595,7 +1605,7 @@ export function TicketingClient({
             {/* Description */}
             <div className="space-y-1">
               <Label htmlFor="description" className="text-xs font-semibold">
-                Description <span className="text-red-500">*</span>
+                Description (Optional)
               </Label>
               <Textarea
                 id="description"
@@ -1605,7 +1615,6 @@ export function TicketingClient({
                 rows={4}
                 className="bg-background"
                 disabled={isProcessedOrHandled}
-                required
               />
             </div>
 

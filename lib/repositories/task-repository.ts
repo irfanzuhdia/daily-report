@@ -300,6 +300,9 @@ export const TaskRepository = {
       task_latest_percentage?: string;
       task_file?: string;
       additional_link?: string;
+      priority?: 'Low' | 'Medium' | 'High' | 'Critical' | null;
+      start_date?: string | null;
+      due_date?: string | null;
     },
     createdBy: string
   ): Promise<Task> {
@@ -309,14 +312,26 @@ export const TaskRepository = {
     const nextId = 'T-' + String(lastNum + 1).padStart(5, '0');
     const now = new Date().toISOString();
 
+    let parentProject: any = null;
+    if (task.project_id) {
+      const projRows = await sql`SELECT priority, project_start_date_plan, project_end_date_plan, due_date FROM projects WHERE project_id = ${task.project_id} LIMIT 1`;
+      parentProject = projRows[0] || null;
+    }
+
+    const pct = parseFloat(task.task_latest_percentage ?? '0') || 0;
+    const computedStatus = pct >= 100 ? STATUS.DONE : (task.task_status ?? STATUS.NOT_STARTED);
+
     const newTask: Task = {
       id: nextId,
       project_id: task.project_id,
       task_description: task.task_description,
-      task_status: task.task_status ?? STATUS.NOT_STARTED,
+      task_status: computedStatus,
       task_latest_percentage: task.task_latest_percentage ?? '0',
       task_file: task.task_file ?? null,
       additional_link: task.additional_link ?? null,
+      priority: task.priority || parentProject?.priority || 'Medium',
+      start_date: task.start_date || parentProject?.project_start_date_plan || null,
+      due_date: task.due_date || parentProject?.project_end_date_plan || parentProject?.due_date || null,
       created_by: createdBy,
       created_at: now,
       updated_by: null,
@@ -329,11 +344,13 @@ export const TaskRepository = {
       await tx`
         INSERT INTO tasks (
           id, project_id, task_description, task_status, task_latest_percentage,
-          task_file, additional_link, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
+          task_file, additional_link, priority, start_date, due_date, created_by, created_at, updated_by, updated_at, deleted_by, deleted_at
         ) VALUES (
           ${newTask.id}, ${newTask.project_id}, ${newTask.task_description}, ${newTask.task_status},
-          ${newTask.task_latest_percentage}, ${newTask.task_file}, ${newTask.additional_link}, ${newTask.created_by}, ${newTask.created_at},
-          ${newTask.updated_by}, ${newTask.updated_at}, ${newTask.deleted_by}, ${newTask.deleted_at}
+          ${newTask.task_latest_percentage}, ${newTask.task_file ?? null}, ${newTask.additional_link ?? null},
+          ${newTask.priority || 'Medium'}, ${newTask.start_date ?? null}, ${newTask.due_date ?? null},
+          ${newTask.created_by ?? createdBy ?? null}, ${newTask.created_at ?? now},
+          ${newTask.updated_by ?? null}, ${newTask.updated_at ?? null}, ${newTask.deleted_by ?? null}, ${newTask.deleted_at ?? null}
         )
       `;
 
@@ -356,30 +373,40 @@ export const TaskRepository = {
 
   async update(
     taskId: string,
-    updates: Partial<Pick<Task, 'project_id' | 'task_description' | 'task_status' | 'task_latest_percentage' | 'task_file' | 'additional_link'>>,
+    updates: Partial<Pick<Task, 'project_id' | 'task_description' | 'task_status' | 'task_latest_percentage' | 'task_file' | 'additional_link' | 'priority' | 'start_date' | 'due_date'>>,
     updatedBy: string
   ): Promise<Task | null> {
     const existing = await TaskRepository.findById(taskId);
     if (!existing) return null;
 
     const now = new Date().toISOString();
+    const updatedPct = parseFloat((updates.task_latest_percentage !== undefined ? updates.task_latest_percentage : existing.task_latest_percentage) ?? '0') || 0;
+    let finalStatus = updates.task_status !== undefined ? updates.task_status : existing.task_status;
+    if (updatedPct >= 100 && finalStatus !== STATUS.CANCEL && finalStatus !== STATUS.HOLD) {
+      finalStatus = STATUS.DONE;
+    }
+
     const updated: Task = {
       ...existing,
       ...updates,
+      task_status: finalStatus,
       updated_by: updatedBy,
       updated_at: now,
     };
 
     await sql`
       UPDATE tasks SET
-        project_id = ${updated.project_id},
-        task_description = ${updated.task_description},
-        task_status = ${updated.task_status},
-        task_latest_percentage = ${updated.task_latest_percentage},
-        task_file = ${updated.task_file},
-        additional_link = ${updated.additional_link},
-        updated_by = ${updated.updated_by},
-        updated_at = ${updated.updated_at}
+        project_id = ${updated.project_id ?? existing.project_id},
+        task_description = ${updated.task_description ?? null},
+        task_status = ${updated.task_status ?? existing.task_status},
+        task_latest_percentage = ${updated.task_latest_percentage ?? '0'},
+        task_file = ${updated.task_file ?? null},
+        additional_link = ${updated.additional_link ?? null},
+        priority = ${updated.priority || 'Medium'},
+        start_date = ${updated.start_date ?? null},
+        due_date = ${updated.due_date ?? null},
+        updated_by = ${updatedBy || null},
+        updated_at = ${now}
       WHERE id = ${taskId}
     `;
 

@@ -9,6 +9,7 @@ import {
   UserRepository,
   ProjectLogRepository,
   calcProjectStatus,
+  STATUS,
 } from "@/lib/repositories"
 import { ProjectDetailClient } from "./project-detail-client"
 

@@ -49,13 +49,17 @@ export function calcProjectStatus(
   const projectTasks = tasks.filter((t) => t.project_id === projectId);
   if (projectTasks.length === 0) return STATUS.NOT_STARTED;
 
-  const taskStatuses = projectTasks.map((task) => task.task_status ?? STATUS.NOT_STARTED);
-
-  if (taskStatuses.some((s) => s === STATUS.ON_PROGRESS)) return STATUS.ON_PROGRESS;
+  const taskStatuses = projectTasks.map((task) => {
+    const pct = parseFloat(task.task_latest_percentage ?? '0') || 0;
+    if (pct >= 100) return STATUS.DONE;
+    return task.task_status ?? STATUS.NOT_STARTED;
+  });
 
   const allDoneOrCancel = taskStatuses.every((s) => s === STATUS.DONE || s === STATUS.CANCEL);
   const hasDone = taskStatuses.some((s) => s === STATUS.DONE);
   if (allDoneOrCancel && hasDone) return STATUS.DONE;
+
+  if (taskStatuses.some((s) => s === STATUS.ON_PROGRESS)) return STATUS.ON_PROGRESS;
 
   if (taskStatuses.every((s) => s === STATUS.CANCEL)) return STATUS.CANCEL;
 

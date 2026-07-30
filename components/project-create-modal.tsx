@@ -67,6 +67,7 @@ export function ProjectCreateModal({
       project_end_date_plan: getLocalYMD(nextWeek),
       project_status: "NS",
       category: "",
+      priority: "Medium",
       additional_link: "",
       team_user_ids: [currentUserId],
       project_file: "",
@@ -75,6 +76,7 @@ export function ProjectCreateModal({
 
   // Watch custom controlled fields
   const status = watch("project_status")
+  const priority = watch("priority") || "Medium"
   const teamUserIds = watch("team_user_ids") || []
   const projectFile = watch("project_file")
 
@@ -93,6 +95,7 @@ export function ProjectCreateModal({
         project_end_date_plan: getLocalYMD(nextWeek),
         project_status: "NS",
         category: "",
+        priority: "Medium",
         additional_link: "",
         team_user_ids: [currentUserId],
         project_file: "",
@@ -155,6 +158,7 @@ export function ProjectCreateModal({
         additional_link: data.additional_link || undefined,
         category: data.category || undefined,
         project_file: data.project_file || undefined,
+        due_date: data.project_end_date_plan || undefined,
       }
 
       const res = await fetch("/api/projects", {
@@ -254,6 +258,25 @@ export function ProjectCreateModal({
               </Select>
               {errors.project_status && <p className="text-[10px] text-destructive">{errors.project_status.message}</p>}
             </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="modalProjPriority">Priority Level</Label>
+              <Select 
+                value={priority} 
+                onValueChange={(val) => setValue("priority", val as any)}
+              >
+                <SelectTrigger id="modalProjPriority">
+                  <SelectValue placeholder="Select priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="Low">Low</SelectItem>
+                  <SelectItem value="Medium">Medium</SelectItem>
+                  <SelectItem value="High">High</SelectItem>
+                  <SelectItem value="Critical">Critical</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
             
             <div className="space-y-2">
               <Label htmlFor="modalProjCategory">Category</Label>
@@ -269,7 +292,6 @@ export function ProjectCreateModal({
                 ))}
               </datalist>
             </div>
-          </div>
 
           <div className="grid gap-4 grid-cols-2">
             <div className="space-y-2">

@@ -38,6 +38,8 @@ export const projectSchema = z.object({
   additional_link: z.string().nullable().optional().or(z.literal("")),
   category: z.string().nullable().optional().or(z.literal("")),
   ticket_reference: z.string().nullable().optional().or(z.literal("")),
+  priority: z.enum(['Low', 'Medium', 'High', 'Critical']).optional().nullable(),
+  due_date: z.string().nullable().optional().or(z.literal("")),
   team_user_ids: z.array(z.string()).optional(),
 }).merge(baseEntity);
 
@@ -51,6 +53,9 @@ export const taskSchema = z.object({
   task_latest_percentage: z.string().regex(/^\d{1,3}$/, { message: "Percentage must be a number between 0-100" }).nullable().optional().or(z.literal("")),
   task_file: z.string().nullable().optional().or(z.literal("")),
   additional_link: z.string().nullable().optional().or(z.literal("")),
+  priority: z.enum(['Low', 'Medium', 'High', 'Critical']).optional().nullable(),
+  start_date: z.string().nullable().optional().or(z.literal("")),
+  due_date: z.string().nullable().optional().or(z.literal("")),
   task_user_ids: z.array(z.string()).optional(),
 }).merge(baseEntity);
 
@@ -70,8 +75,8 @@ export type DailyReportInput = z.infer<typeof dailyReportSchema>;
 
 // Ticketing Validation Schema
 export const ticketSchema = z.object({
-  title: z.string().min(5, { message: "Title must be at least 5 characters long" }),
-  description: z.string().min(10, { message: "Description must be at least 10 characters long" }),
+  title: z.string().min(1, { message: "Title is required" }),
+  description: z.string().nullable().optional().or(z.literal("")),
   request_by: z.string().min(1),
   request_to_division: z.string().nullable().optional(),
   tag_person: z.string().nullable().optional(),
@@ -79,8 +84,8 @@ export const ticketSchema = z.object({
   problem_type: z.string().min(1, { message: "Problem type is required" }),
   division_category: z.string().nullable().optional(),
   due_date: z.string().nullable().optional(),
-  priority: z.enum(['Low', 'Medium', 'High', 'Critical']).default('Medium'),
-  status: z.enum(['Open', 'In Progress', 'Resolved', 'Closed', 'Pending']).default('Open'),
+  priority: z.enum(['Low', 'Medium', 'High', 'Critical']).optional().nullable().default('Medium'),
+  status: z.enum(['Open', 'In Progress', 'Resolved', 'Closed', 'Pending']).optional().nullable().default('Open'),
   attachment_link: z.string().nullable().optional().or(z.literal("")),
   attachment_file: z.string().nullable().optional(),
 }).merge(baseEntity);

@@ -905,12 +905,21 @@ export function TicketingClient({
   const handleCreateSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     
-    const hasUserTag = !!newTicket.tag_person;
+    const teamIds = isEditMode 
+      ? (editTeamUserIds.length > 0 ? editTeamUserIds : (selectedTicket?.team_user_ids || [])) 
+      : (newTicket.team_user_ids || []);
+
+    const hasUserTag = !!newTicket.tag_person || teamIds.length > 0;
     const divisionVal = newTicket.request_to_division === "none" || !newTicket.request_to_division ? null : newTicket.request_to_division;
     
     if (!newTicket.title.trim() || !newTicket.description.trim() || (!divisionVal && !hasUserTag) || !newTicket.problem_type.trim()) {
       triggerNotice("error", "Please fill in all required fields. You must select either a target division or a specific user tag.")
       return
+    }
+
+    let attachmentLink = newTicket.attachment_link ? newTicket.attachment_link.trim() : null;
+    if (attachmentLink && !attachmentLink.startsWith("http://") && !attachmentLink.startsWith("https://")) {
+      attachmentLink = `https://${attachmentLink}`;
     }
 
     try {
@@ -926,27 +935,36 @@ export function TicketingClient({
           request_to_division: divisionVal,
           problem_type: newTicket.problem_type.trim(),
           priority: newTicket.priority,
-          due_date: newTicket.due_date || null,
-          attachment_link: newTicket.attachment_link || null,
+          due_date: newTicket.due_date && newTicket.due_date.trim() !== "" ? newTicket.due_date : null,
+          attachment_link: attachmentLink,
           attachment_file: newTicket.attachment_file || null,
           tag_person: newTicket.tag_person || null,
-          team_user_ids: isEditMode ? (selectedTicket?.team_user_ids || []) : [],
+          team_user_ids: teamIds,
         }),
       })
 
       if (!res.ok) {
         const err = await res.json()
-        throw new Error(err.error || `Failed to ${isEditMode ? 'update' : 'create'} ticket`)
+        let errorMsg = err.error?.message || (typeof err.error === 'string' ? err.error : null) || err.message;
+        if (err.error?.details) {
+          const detailStr = Object.entries(err.error.details)
+            .map(([f, m]) => `${f}: ${(m as string[]).join(', ')}`)
+            .join('; ');
+          if (detailStr) errorMsg = `${errorMsg} (${detailStr})`;
+        }
+        throw new Error(errorMsg || `Failed to ${isEditMode ? 'update' : 'create'} ticket`)
       }
 
-      const data = await res.json()
+      const jsonRes = await res.json()
+      const ticketObj = jsonRes.data || jsonRes;
+
       if (isEditMode) {
-        setTickets((prev) => prev.map((t) => (t.id === data.id ? data : t)))
-        setSelectedTicket(data)
-        triggerNotice("success", `Ticket ${data.id} updated successfully!`)
+        setTickets((prev) => prev.map((t) => (t.id === ticketObj.id ? ticketObj : t)))
+        setSelectedTicket(ticketObj)
+        triggerNotice("success", `Ticket ${ticketObj.id} updated successfully!`)
       } else {
-        setTickets((prev) => [data, ...prev])
-        triggerNotice("success", `Ticket ${data.id} created successfully!`)
+        setTickets((prev) => [ticketObj, ...prev])
+        triggerNotice("success", `Ticket ${ticketObj.id} created successfully!`)
       }
       
       // Reset form

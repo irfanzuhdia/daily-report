@@ -81,7 +81,7 @@ export const ticketSchema = z.object({
   due_date: z.string().nullable().optional(),
   priority: z.enum(['Low', 'Medium', 'High', 'Critical']).default('Medium'),
   status: z.enum(['Open', 'In Progress', 'Resolved', 'Closed', 'Pending']).default('Open'),
-  attachment_link: z.string().url().nullable().optional().or(z.literal("")),
+  attachment_link: z.string().nullable().optional().or(z.literal("")),
   attachment_file: z.string().nullable().optional(),
 }).merge(baseEntity);
 

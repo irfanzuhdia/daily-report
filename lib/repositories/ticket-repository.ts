@@ -152,17 +152,22 @@ export const TicketRepository = {
     createdBy: string
   ): Promise<Ticket> {
     // Due date validation: cannot be in the past
-    if (ticket.due_date) {
+    if (ticket.due_date && ticket.due_date.trim() !== '') {
       const today = new Date().toLocaleDateString('en-CA'); // 'en-CA' outputs YYYY-MM-DD
       if (ticket.due_date < today) {
         throw new Error('Due date cannot be in the past.');
       }
     }
 
-    // Generate next TK ID
-    const lastRow = await sql`SELECT id FROM tickets ORDER BY id DESC LIMIT 1`;
+    // Generate next TK ID using numeric sorting
+    const lastRow = await sql`
+      SELECT id FROM tickets 
+      WHERE id LIKE 'TK-%' 
+      ORDER BY NULLIF(regexp_replace(id, '\D', '', 'g'), '')::int DESC 
+      LIMIT 1
+    `;
     const lastId = lastRow[0]?.id || 'TK-0000';
-    const lastNum = parseInt(lastId.replace('TK-', ''), 10) || 0;
+    const lastNum = parseInt(lastId.replace(/[^0-9]/g, ''), 10) || 0;
     const nextId = 'TK-' + String(lastNum + 1).padStart(4, '0');
     const now = new Date().toISOString();
 

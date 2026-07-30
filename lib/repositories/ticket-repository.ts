@@ -163,7 +163,7 @@ export const TicketRepository = {
     const lastRow = await sql`
       SELECT id FROM tickets 
       WHERE id LIKE 'TK-%' 
-      ORDER BY NULLIF(regexp_replace(id, '\D', '', 'g'), '')::int DESC 
+      ORDER BY NULLIF(regexp_replace(id, '[^0-9]', '', 'g'), '')::int DESC 
       LIMIT 1
     `;
     const lastId = lastRow[0]?.id || 'TK-0000';
@@ -173,13 +173,13 @@ export const TicketRepository = {
 
     const newTicket: Ticket = {
       id: nextId,
-      title: ticket.title,
-      description: ticket.description,
-      request_by: ticket.request_by,
-      request_to_division: ticket.request_to_division,
+      title: ticket.title || '',
+      description: ticket.description || '',
+      request_by: ticket.request_by || createdBy,
+      request_to_division: ticket.request_to_division || null,
       tag_person: ticket.tag_person || null,
-      problem_type: ticket.problem_type,
-      division_category: null,
+      problem_type: ticket.problem_type || '',
+      division_category: (ticket as any).division_category || null,
       due_date: ticket.due_date || null,
       priority: ticket.priority || 'Medium',
       status: 'Open',

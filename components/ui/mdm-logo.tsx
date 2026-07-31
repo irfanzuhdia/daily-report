@@ -6,7 +6,7 @@ export function MDMLogo({ className = "h-7 w-7" }: { className?: string }) {
     <img
       src="/icons/logo-mdm.png"
       alt="MDM Logo"
-      className={cn("rounded-xl object-contain overflow-hidden", className)}
+      className={cn("object-contain", className)}
     />
   );
 }

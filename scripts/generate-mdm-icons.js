@@ -2,6 +2,10 @@ import fs from 'fs';
 import path from 'path';
 import zlib from 'zlib';
 
+/**
+ * Creates an app icon PNG with dark theme background (#09090b)
+ * and a 75%-scale centered graphic with generous 15-20% margin/padding safe area around it.
+ */
 function createMDMPNG(width, height) {
   const signature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
   
@@ -20,59 +24,75 @@ function createMDMPNG(width, height) {
   
   const cx = width / 2;
   const cy = height / 2;
-  const squircleRadius = width * 0.44;
+
+  // Graphic scale factor: 75% size (0.75 * 0.4 = 0.30 radius relative to tile width)
+  // This leaves a clean 20% margin padding all around the icon graphic inside the app tile!
+  const iconSize = width * 0.65; // Total grid block width/height = 65% of tile
+  const gridStartX = cx - iconSize / 2;
+  const gridStartY = cy - iconSize / 2;
+  const cellSize = iconSize / 3;
+  const gap = cellSize * 0.18;
+  const actualCellSize = cellSize - gap;
+  const cellRadius = actualCellSize * 0.3;
+
+  // Colors for the 3x3 grid tiles matching MDM branding
+  // Row 0: Yellow, Yellow, Green
+  // Row 1: Blue, Yellow, Green
+  // Row 2: Blue, Blue, Green
+  const tileColors = [
+    [ {r: 245, g: 158, b: 11}, {r: 245, g: 158, b: 11}, {r: 34, g: 197, b: 94} ],
+    [ {r: 59, g: 130, b: 246}, {r: 245, g: 158, b: 11}, {r: 34, g: 197, b: 94} ],
+    [ {r: 59, g: 130, b: 246}, {r: 59, g: 130, b: 246}, {r: 132, g: 204, b: 22} ],
+  ];
 
   for (let y = 0; y < height; y++) {
     const offset = y * scanlineLength;
-    rawData[offset] = 0; // No filter
+    rawData[offset] = 0; // Filter type 0
     
     for (let x = 0; x < width; x++) {
       const pxOffset = offset + 1 + x * 3;
-      const nx = (x - cx) / squircleRadius;
-      const ny = (y - cy) / squircleRadius;
       
-      // Squircle shape |x|^4 + |y|^4 <= 1
-      const squircleDist = Math.pow(Math.abs(nx), 4) + Math.pow(Math.abs(ny), 4);
-      
-      if (squircleDist <= 1.0) {
-        // Base dark polished theme background
-        let r = 15;
-        let g = 23;
-        let b = 42;
+      // Default app tile background: #09090b (Dark theme matching Vercel & PWA manifest)
+      let r = 9;
+      let g = 9;
+      let b = 11;
 
-        // Draw stylized MDM geometric 'M' monogram in center
-        // Normalized coordinates in [-1, 1] relative to squircle radius
-        const mx = (x - cx) / (width * 0.32);
-        const my = (y - cy) / (height * 0.32);
+      // Check if point (x, y) falls inside any of the 3x3 rounded grid cells
+      for (let row = 0; row < 3; row++) {
+        for (let col = 0; col < 3; col++) {
+          const cellX = gridStartX + col * cellSize + gap / 2;
+          const cellY = gridStartY + row * cellSize + gap / 2;
 
-        // Left leg of M
-        const isLeftLeg = mx >= -0.75 && mx <= -0.45 && my >= -0.55 && my <= 0.55;
-        // Right leg of M
-        const isRightLeg = mx >= 0.45 && mx <= 0.75 && my >= -0.55 && my <= 0.55;
-        // Diagonal left-to-center
-        const isLeftDiag = my - (mx + 0.6) * 1.6 >= -0.2 && my - (mx + 0.6) * 1.6 <= 0.2 && mx >= -0.6 && mx <= 0.0 && my <= 0.4;
-        // Diagonal center-to-right
-        const isRightDiag = my - (-mx + 0.6) * 1.6 >= -0.2 && my - (-mx + 0.6) * 1.6 <= 0.2 && mx >= 0.0 && mx <= 0.6 && my <= 0.4;
-        // Middle accent bar (D / M connector)
-        const isCenterBadge = (mx >= -0.25 && mx <= 0.25 && my >= 0.1 && my <= 0.5);
-
-        if (isLeftLeg || isRightLeg || isLeftDiag || isRightDiag || isCenterBadge) {
-          // Vibrant indigo to cyan gradient for MDM logo
-          const gradientFactor = (mx + 1) / 2;
-          r = Math.floor(99 + gradientFactor * (59 - 99));    // 99 -> 59
-          g = Math.floor(102 + gradientFactor * (130 - 102)); // 102 -> 130
-          b = Math.floor(241 + gradientFactor * (246 - 241)); // 241 -> 246
+          if (
+            x >= cellX &&
+            x <= cellX + actualCellSize &&
+            y >= cellY &&
+            y <= cellY + actualCellSize
+          ) {
+            // Check rounded corner distance for smooth rounded square
+            const localX = x - cellX;
+            const localY = y - cellY;
+            
+            // Corner centers
+            const cornerX = localX < cellRadius ? cellRadius : (localX > actualCellSize - cellRadius ? actualCellSize - cellRadius : localX);
+            const cornerY = localY < cellRadius ? cellRadius : (localY > actualCellSize - cellRadius ? actualCellSize - cellRadius : localY);
+            
+            const dx = localX - cornerX;
+            const dy = localY - cornerY;
+            
+            if (dx * dx + dy * dy <= cellRadius * cellRadius) {
+              const color = tileColors[row][col];
+              r = color.r;
+              g = color.g;
+              b = color.b;
+            }
+          }
         }
-
-        rawData[pxOffset] = r;
-        rawData[pxOffset + 1] = g;
-        rawData[pxOffset + 2] = b;
-      } else {
-        // Transparent / outer background matching theme dark
-        rawData[pxOffset] = 9;
-        rawData[pxOffset + 1] = 9;
-        rawData[pxOffset + 2] = 11;
       }
+
+      rawData[pxOffset] = r;
+      rawData[pxOffset + 1] = g;
+      rawData[pxOffset + 2] = b;
     }
   }
 
@@ -111,9 +131,11 @@ function crc32(buf) {
 const iconsDir = path.join(process.cwd(), 'public', 'icons');
 if (!fs.existsSync(iconsDir)) fs.mkdirSync(iconsDir, { recursive: true });
 
+// Write all PWA PNG icons with 75% scale factor & 20% safe-area margin
 fs.writeFileSync(path.join(iconsDir, 'icon-192.png'), createMDMPNG(192, 192));
 fs.writeFileSync(path.join(iconsDir, 'icon-512.png'), createMDMPNG(512, 512));
 fs.writeFileSync(path.join(iconsDir, 'icon-512-maskable.png'), createMDMPNG(512, 512));
 fs.writeFileSync(path.join(iconsDir, 'apple-touch-icon.png'), createMDMPNG(180, 180));
+fs.writeFileSync(path.join(iconsDir, 'logo-mdm.png'), createMDMPNG(180, 180));
 
-console.log('Successfully generated MDM Logo PNG icons!');
+console.log('Successfully generated PWA icon PNGs with 75% scale and 20% padding!');

@@ -153,7 +153,7 @@ export function Sidebar({
       .channel('sidebar-notifications')
       .on(
         'postgres_changes',
-        { event: '*', schema: 'daily_report', table: 'notifications' },
+        { event: '*', schema: 'public', table: 'notifications' },
         () => {
           fetchUnreadCount()
         }
@@ -211,7 +211,7 @@ export function Sidebar({
       >
         <div className="flex h-16 items-center justify-between border-b px-6">
           <div className="flex items-center gap-2.5">
-            <MDMLogo className="h-5.5 w-5.5 shrink-0" />
+            <MDMLogo className="h-7 w-7 shrink-0" />
             <div className="flex flex-col">
               <span className="text-sm font-bold tracking-tight text-foreground leading-none">MDM</span>
               <span className="text-xs text-muted-foreground font-medium">Daily Report</span>

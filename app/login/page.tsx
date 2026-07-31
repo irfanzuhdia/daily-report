@@ -29,8 +29,8 @@ export default async function LoginPage({
       <div className="w-full max-w-md">
         <div className="rounded-2xl border bg-card p-8 shadow-lg">
           <div className="mb-8 text-center">
-            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center">
-              <MDMLogo className="h-10.5 w-10.5" />
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center">
+              <MDMLogo className="h-14 w-14" />
             </div>
             <h1 className="text-2xl font-bold tracking-tight">MDM Daily Report</h1>
             <p className="mt-2 text-sm text-muted-foreground">

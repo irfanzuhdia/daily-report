@@ -1,6 +1,6 @@
 import React from "react";
 
-export function MDMLogo({ className = "h-5.5 w-5.5" }: { className?: string }) {
+export function MDMLogo({ className = "h-7 w-7" }: { className?: string }) {
   return (
     <img
       src="/icons/logo-mdm.png"

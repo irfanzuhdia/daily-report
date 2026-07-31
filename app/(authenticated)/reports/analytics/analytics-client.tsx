@@ -993,13 +993,17 @@ export function ContributionCalendar({
                 </div>
 
                 {/* Tooltip */}
-                {hoveredDay && hoveredDay.date && (
-                  <div className="mt-2 text-center text-sm text-muted-foreground">
-                    <span className="font-medium">{formatDate(hoveredDay.date)}</span>
-                    {" — "}
-                    <span className="font-medium text-foreground">{hoveredDay.hours} hours</span>
-                  </div>
-                )}
+                <div className="mt-2 h-6 flex items-center justify-center text-center text-sm text-muted-foreground">
+                  {hoveredDay && hoveredDay.date ? (
+                    <div>
+                      <span className="font-medium">{formatDate(hoveredDay.date)}</span>
+                      {" — "}
+                      <span className="font-medium text-foreground">{hoveredDay.hours} hours</span>
+                    </div>
+                  ) : (
+                    <span className="text-xs text-muted-foreground/40">Hover over a date to view details</span>
+                  )}
+                </div>
               </div>
             </div>
           )}

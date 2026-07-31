@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { FilterContainer, FilterSearch, FilterMultiSelect } from "@/components/ui/filter-bar"
+import { ViewModeToggle } from "@/components/ui/view-mode-toggle"
 import {
   Dialog,
   DialogContent,
@@ -551,29 +552,33 @@ export function ReportsClient({
         </div>
 
         {/* Sub Header: View Toggle + Secondary Actions */}
-        <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2 sm:border-none sm:pt-0">
-          {/* Layout Toggle */}
-          <div className="flex rounded-xl border p-0.5 bg-muted/20">
-            <Button
-              type="button"
-              variant={layout === "kanban" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-8 px-2.5 rounded-lg text-xs font-medium"
-              onClick={() => setLayout("kanban")}
-            >
-              <Kanban className="h-3.5 w-3.5 mr-1" />
-              <span>Kanban</span>
-            </Button>
-            <Button
-              type="button"
-              variant={layout === "list" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-8 px-2.5 rounded-lg text-xs font-medium"
-              onClick={() => setLayout("list")}
-            >
-              <List className="h-3.5 w-3.5 mr-1" />
-              <span>List</span>
-            </Button>
+        <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2 sm:border-none sm:pt-0 flex-wrap">
+          <div className="flex items-center gap-2">
+            <ViewModeToggle />
+
+            {/* Layout Toggle */}
+            <div className="flex rounded-xl border p-0.5 bg-muted/20">
+              <Button
+                type="button"
+                variant={layout === "kanban" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 px-2.5 rounded-lg text-xs font-medium"
+                onClick={() => setLayout("kanban")}
+              >
+                <Kanban className="h-3.5 w-3.5 mr-1" />
+                <span>Kanban</span>
+              </Button>
+              <Button
+                type="button"
+                variant={layout === "list" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 px-2.5 rounded-lg text-xs font-medium"
+                onClick={() => setLayout("list")}
+              >
+                <List className="h-3.5 w-3.5 mr-1" />
+                <span>List</span>
+              </Button>
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5">

@@ -41,6 +41,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { FilterContainer, FilterSearch, FilterMultiSelect } from "@/components/ui/filter-bar"
+import { ViewModeToggle } from "@/components/ui/view-mode-toggle"
 import type { Task, Status, Project, TaskTeam, ProjectTeam } from "@/lib/types"
 import { useViewDensity } from "@/lib/view-density"
 import dynamic from "next/dynamic"
@@ -567,29 +568,33 @@ export function TasksClient({
         </div>
 
         {/* Sub Header: View Toggle + Secondary Actions */}
-        <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2 sm:border-none sm:pt-0">
-          {/* Layout Toggle */}
-          <div className="flex rounded-xl border p-0.5 bg-muted/20">
-            <Button
-              type="button"
-              variant={layout === "kanban" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-8 px-2.5 rounded-lg text-xs font-medium"
-              onClick={() => setLayout("kanban")}
-            >
-              <Kanban className="h-3.5 w-3.5 mr-1" />
-              <span>Kanban</span>
-            </Button>
-            <Button
-              type="button"
-              variant={layout === "list" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-8 px-2.5 rounded-lg text-xs font-medium"
-              onClick={() => setLayout("list")}
-            >
-              <List className="h-3.5 w-3.5 mr-1" />
-              <span>List</span>
-            </Button>
+        <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2 sm:border-none sm:pt-0 flex-wrap">
+          <div className="flex items-center gap-2">
+            <ViewModeToggle />
+
+            {/* Layout Toggle */}
+            <div className="flex rounded-xl border p-0.5 bg-muted/20">
+              <Button
+                type="button"
+                variant={layout === "kanban" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 px-2.5 rounded-lg text-xs font-medium"
+                onClick={() => setLayout("kanban")}
+              >
+                <Kanban className="h-3.5 w-3.5 mr-1" />
+                <span>Kanban</span>
+              </Button>
+              <Button
+                type="button"
+                variant={layout === "list" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 px-2.5 rounded-lg text-xs font-medium"
+                onClick={() => setLayout("list")}
+              >
+                <List className="h-3.5 w-3.5 mr-1" />
+                <span>List</span>
+              </Button>
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -807,41 +812,28 @@ export function TasksClient({
                   projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
                   isSuperUser
                 return (
-                  <div key={task.id} onClick={() => router.push(`/tasks/${task.id}`)} className="flex flex-col sm:flex-row sm:items-center justify-between p-3 gap-2.5 border rounded-xl bg-card hover:bg-muted/30 transition-colors cursor-pointer shadow-xs">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <Badge variant="outline" className="shrink-0 text-[10px] font-mono py-0 px-1 bg-muted">
-                        {task.id.substring(0, 6)}
-                      </Badge>
-                      <div className="min-w-0 flex-1">
-                        <span className="font-medium text-xs hover:text-primary leading-none block truncate">
+                  <div 
+                    key={task.id} 
+                    onClick={() => router.push(`/tasks/${task.id}`)} 
+                    className="flex flex-col p-3 gap-2 border rounded-xl bg-card hover:bg-muted/30 transition-colors cursor-pointer shadow-xs"
+                  >
+                    {/* Top Row: ID, Task Description & Action Icons (Pencil & Trash) */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Badge variant="outline" className="shrink-0 text-[10px] font-mono py-0 px-1 bg-muted">
+                          {task.id.substring(0, 6)}
+                        </Badge>
+                        <span className="font-medium text-xs sm:text-sm hover:text-primary leading-tight truncate">
                           {task.task_description}
                         </span>
-                        <p className="text-[10px] text-muted-foreground mt-0.5 max-w-xl truncate">
-                          📁 {projectMap[task.project_id] ?? task.project_id}
-                        </p>
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap items-center gap-2 shrink-0 text-xs" onClick={(e) => e.stopPropagation()}>
-                      <Badge
-                        variant={statusVariant[task.task_status ?? "NS"] ?? "default"}
-                        className="text-[9px] py-0 px-1.5 shrink-0"
-                      >
-                        {statusLabel[task.task_status ?? "NS"] ?? task.task_status ?? "NS"}
-                      </Badge>
-
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground min-w-[100px] justify-end">
-                        <span className="shrink-0">{task.task_latest_percentage ?? 0}% done</span>
-                        {(taskHoursMap[task.id] ?? 0) > 0 && (
-                          <span className="shrink-0 font-medium text-foreground">{taskHoursMap[task.id]}h</span>
-                        )}
                       </div>
 
-                      <div className="flex items-center gap-0.5">
+                      {/* Action Icons Pinned to Top-Right */}
+                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                         {isMember && (
                           <>
                             <Link href={`/tasks/${task.id}/edit`}>
-                              <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                              <Button variant="ghost" size="icon-sm" className="h-6 w-6 text-muted-foreground hover:text-foreground">
                                 <Pencil className="h-3 w-3" />
                               </Button>
                             </Link>
@@ -854,6 +846,36 @@ export function TasksClient({
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Sub Row: Parent Project */}
+                    <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
+                      📁 {projectMap[task.project_id] ?? task.project_id}
+                    </p>
+
+                    {/* Bottom Row: Status Badges, Priority & Progress Metrics */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/30 text-xs" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge
+                          variant={statusVariant[task.task_status ?? "NS"] ?? "default"}
+                          className="text-[9px] py-0 px-1.5 shrink-0"
+                        >
+                          {statusLabel[task.task_status ?? "NS"] ?? task.task_status ?? "NS"}
+                        </Badge>
+
+                        {task.priority && (
+                          <Badge variant="outline" className="text-[9px] py-0 px-1.5 font-medium shrink-0">
+                            {task.priority}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground shrink-0">
+                        <span className="shrink-0">{task.task_latest_percentage ?? 0}% done</span>
+                        {(taskHoursMap[task.id] ?? 0) > 0 && (
+                          <span className="shrink-0 font-medium text-foreground">{taskHoursMap[task.id]}h</span>
                         )}
                       </div>
                     </div>

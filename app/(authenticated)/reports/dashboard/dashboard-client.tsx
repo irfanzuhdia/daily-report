@@ -27,6 +27,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ViewModeToggle } from "@/components/ui/view-mode-toggle"
 import type { DashboardStats } from "@/lib/types"
 
 const statusVariant: Record<string, "default" | "success" | "warning" | "destructive" | "secondary"> = {
@@ -292,15 +293,16 @@ export function DashboardClient({
 
   return (
     <div className={density === "compact" ? "space-y-4" : "space-y-8"}>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/40 pb-4">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight">Dashboard</h1>
+          <p className="text-xs sm:text-sm text-muted-foreground">
             {viewMode === "my"
               ? "Your personal overview"
               : "Team overview — all projects, tasks, and reports"}
           </p>
         </div>
+        <ViewModeToggle />
       </div>
 
       {/* Filters (Team view only) */}

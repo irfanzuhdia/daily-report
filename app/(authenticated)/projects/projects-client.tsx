@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ViewModeToggle } from "@/components/ui/view-mode-toggle"
 import { FilterContainer, FilterSearch, FilterMultiSelect } from "@/components/ui/filter-bar"
 import {
   Dialog,
@@ -573,29 +574,33 @@ export function ProjectsClient({
         </div>
 
         {/* Sub Header: View Toggle + Secondary Actions */}
-        <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2 sm:border-none sm:pt-0">
-          {/* Layout Toggle */}
-          <div className="flex rounded-xl border p-0.5 bg-muted/20">
-            <Button
-              type="button"
-              variant={layout === "kanban" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-8 px-2.5 rounded-lg text-xs font-medium"
-              onClick={() => setLayout("kanban")}
-            >
-              <Kanban className="h-3.5 w-3.5 mr-1" />
-              <span>Kanban</span>
-            </Button>
-            <Button
-              type="button"
-              variant={layout === "list" ? "secondary" : "ghost"}
-              size="sm"
-              className="h-8 px-2.5 rounded-lg text-xs font-medium"
-              onClick={() => setLayout("list")}
-            >
-              <List className="h-3.5 w-3.5 mr-1" />
-              <span>List</span>
-            </Button>
+        <div className="flex items-center justify-between gap-2 border-t border-border/40 pt-2 sm:border-none sm:pt-0 flex-wrap">
+          <div className="flex items-center gap-2">
+            <ViewModeToggle />
+
+            {/* Layout Toggle */}
+            <div className="flex rounded-xl border p-0.5 bg-muted/20">
+              <Button
+                type="button"
+                variant={layout === "kanban" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 px-2.5 rounded-lg text-xs font-medium"
+                onClick={() => setLayout("kanban")}
+              >
+                <Kanban className="h-3.5 w-3.5 mr-1" />
+                <span>Kanban</span>
+              </Button>
+              <Button
+                type="button"
+                variant={layout === "list" ? "secondary" : "ghost"}
+                size="sm"
+                className="h-8 px-2.5 rounded-lg text-xs font-medium"
+                onClick={() => setLayout("list")}
+              >
+                <List className="h-3.5 w-3.5 mr-1" />
+                <span>List</span>
+              </Button>
+            </div>
           </div>
 
           <div className="flex items-center gap-1.5">
@@ -800,64 +805,27 @@ export function ProjectsClient({
                 const isMember = projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId) || project.created_by === currentUserId || isSuperUser
                 return (
                   <div 
-                  key={project.project_id} 
-                  onClick={() => router.push(`/projects/${project.project_id}`)}
-                  className="flex flex-col sm:flex-row sm:items-center justify-between p-2.5 gap-2.5 hover:bg-muted/30 transition-colors cursor-pointer"
-                >
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <Badge variant="outline" className="shrink-0 text-[10px] font-mono py-0 px-1 bg-muted">
-                        {project.project_id.substring(0, 6)}
-                      </Badge>
-                      <div className="min-w-0 flex-1">
-                        <span className="font-medium text-xs hover:text-primary leading-none block truncate">
+                    key={project.project_id} 
+                    onClick={() => router.push(`/projects/${project.project_id}`)}
+                    className="flex flex-col p-3 gap-2 hover:bg-muted/30 transition-colors cursor-pointer"
+                  >
+                    {/* Top Row: ID, Title & Action Icons (Pencil & Trash) */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
+                        <Badge variant="outline" className="shrink-0 text-[10px] font-mono py-0 px-1 bg-muted">
+                          {project.project_id.substring(0, 6)}
+                        </Badge>
+                        <span className="font-medium text-xs sm:text-sm hover:text-primary leading-tight truncate">
                           {project.project_name}
                         </span>
-                        {project.project_description && (
-                          <p className="text-[10px] text-muted-foreground truncate mt-0.5 max-w-xl">
-                            {project.project_description}
-                          </p>
-                        )}
-                        {project.ticket_reference && (
-                          <div className="mt-1 flex items-center gap-1">
-                            <Link href={`/ticketing?ticketId=${project.ticket_reference}`} onClick={(e) => e.stopPropagation()}>
-                              <Badge variant="outline" className="h-4 gap-0.5 text-[8px] py-0 px-1 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary cursor-pointer transition-all inline-flex items-center font-medium">
-                                <LifeBuoy className="h-2.5 w-2.5 shrink-0" />
-                                <span>Ref: {project.ticket_reference}</span>
-                              </Badge>
-                            </Link>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div className="flex flex-wrap items-center gap-2 shrink-0 text-xs" onClick={(e) => e.stopPropagation()}>
-                      <Badge
-                        variant={statusVariant[project.project_status ?? "NS"] ?? "default"}
-                        className="text-[9px] py-0 px-1.5 shrink-0"
-                      >
-                        {statusLabel[project.project_status ?? "NS"] ?? project.project_status ?? "NS"}
-                      </Badge>
-
-                      {project.category && (
-                        <Badge variant="outline" className="text-[9px] py-0 px-1 bg-primary/5 text-primary border-primary/10 shrink-0">
-                          {project.category}
-                        </Badge>
-                      )}
-
-                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground min-w-[100px] justify-end">
-                        {(projectProgressMap[project.project_id] ?? 0) > 0 && (
-                          <span className="shrink-0">{projectProgressMap[project.project_id]}% done</span>
-                        )}
-                        {(projectHoursMap[project.project_id] ?? 0) > 0 && (
-                          <span className="shrink-0 font-medium text-foreground">{projectHoursMap[project.project_id]}h</span>
-                        )}
                       </div>
 
-                      <div className="flex items-center gap-0.5">
+                      {/* Action Icons Pinned to Top-Right */}
+                      <div className="flex items-center gap-0.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                         {isMember && (
                           <>
                             <Link href={`/projects/${project.project_id}/edit`}>
-                              <Button variant="ghost" size="icon-sm" className="h-6 w-6">
+                              <Button variant="ghost" size="icon-sm" className="h-6 w-6 text-muted-foreground hover:text-foreground">
                                 <Pencil className="h-3 w-3" />
                               </Button>
                             </Link>
@@ -870,6 +838,57 @@ export function ProjectsClient({
                               <Trash2 className="h-3 w-3" />
                             </Button>
                           </>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Sub Row: Description & Ticket Ref */}
+                    {project.project_description && (
+                      <p className="text-[10px] sm:text-xs text-muted-foreground truncate max-w-xl">
+                        {project.project_description}
+                      </p>
+                    )}
+
+                    {project.ticket_reference && (
+                      <div className="flex items-center gap-1">
+                        <Link href={`/ticketing?ticketId=${project.ticket_reference}`} onClick={(e) => e.stopPropagation()}>
+                          <Badge variant="outline" className="h-4 gap-0.5 text-[8px] py-0 px-1 border-primary/20 bg-primary/5 hover:bg-primary/10 text-primary cursor-pointer transition-all inline-flex items-center font-medium">
+                            <LifeBuoy className="h-2.5 w-2.5 shrink-0" />
+                            <span>Ref: {project.ticket_reference}</span>
+                          </Badge>
+                        </Link>
+                      </div>
+                    )}
+
+                    {/* Bottom Row: Status Badges, Category & Progress Metrics */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-border/30 text-xs" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <Badge
+                          variant={statusVariant[project.project_status ?? "NS"] ?? "default"}
+                          className="text-[9px] py-0 px-1.5 shrink-0"
+                        >
+                          {statusLabel[project.project_status ?? "NS"] ?? project.project_status ?? "NS"}
+                        </Badge>
+
+                        {project.priority && (
+                          <Badge variant="outline" className="text-[9px] py-0 px-1.5 font-medium shrink-0">
+                            {project.priority}
+                          </Badge>
+                        )}
+
+                        {project.category && (
+                          <Badge variant="outline" className="text-[9px] py-0 px-1 bg-primary/5 text-primary border-primary/10 shrink-0">
+                            {project.category}
+                          </Badge>
+                        )}
+                      </div>
+
+                      <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground shrink-0">
+                        {(projectProgressMap[project.project_id] ?? 0) > 0 && (
+                          <span className="shrink-0">{projectProgressMap[project.project_id]}% done</span>
+                        )}
+                        {(projectHoursMap[project.project_id] ?? 0) > 0 && (
+                          <span className="shrink-0 font-medium text-foreground">{projectHoursMap[project.project_id]}h</span>
                         )}
                       </div>
                     </div>

@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { ViewModeToggle } from "@/components/ui/view-mode-toggle"
 import type { Project } from "@/lib/types"
 
 /* ─── types ─── */
@@ -633,17 +634,20 @@ export function ContributionCalendar({
   return (
     <div className={isCompact ? "space-y-4" : "space-y-6"}>
       {/* Header */}
-      <div className="flex items-center gap-4">
-        <Link href="/reports/dashboard">
-          <Button variant="ghost" size="sm" className={isCompact ? "h-8 px-2 text-xs" : ""}>
-            <ArrowLeft className={`mr-2 h-4 w-4 ${isCompact ? "h-3.5 w-3.5 mr-1" : ""}`} />
-            Back
-          </Button>
-        </Link>
-        <div>
-          <h1 className={`${isCompact ? "text-xl" : "text-2xl"} font-bold tracking-tight`}>Contribution Calendar</h1>
-          <p className={`${isCompact ? "text-xs" : "text-sm"} text-muted-foreground`}>Visualize daily work hours across your team</p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-border/40 pb-4">
+        <div className="flex items-center gap-3">
+          <Link href="/reports">
+            <Button variant="ghost" size="sm">
+              <ArrowLeft className="h-4 w-4 mr-1" />
+              Back
+            </Button>
+          </Link>
+          <div>
+            <h1 className={`${isCompact ? "text-xl" : "text-2xl"} font-bold tracking-tight`}>Contribution Calendar</h1>
+            <p className={`${isCompact ? "text-xs" : "text-sm"} text-muted-foreground`}>Visualize daily work hours across your team</p>
+          </div>
         </div>
+        <ViewModeToggle />
       </div>
 
       {/* Role-Based Filters */}

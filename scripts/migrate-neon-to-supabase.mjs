@@ -2,7 +2,11 @@ import postgres from 'postgres';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const neonUrl = 'postgresql://neondb_owner:npg_CBo82TNluzgn@ep-sweet-frog-aokp9eix-pooler.c-2.ap-southeast-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require';
+const neonUrl = process.env.NEON_DATABASE_URL;
+if (!neonUrl) {
+  console.error('Missing NEON_DATABASE_URL');
+  process.exit(1);
+}
 const supabaseUrl = process.env.DATABASE_URL;
 
 if (!supabaseUrl) {

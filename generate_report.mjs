@@ -3,7 +3,14 @@ import fs from 'fs';
 
 const { Client } = pg;
 
-const connectionString = "postgresql://postgres.gguqhxinkcdzauvitnuf:EzRQvtkiIyr92n50@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres";
+// Never hardcode this: an earlier revision of this file carried a live connection
+// string, password included, into a public repository.
+// Run with: node --env-file=.env generate_report.mjs
+const connectionString = process.env.DATABASE_URL;
+if (!connectionString) {
+  console.error('DATABASE_URL is not set. Run with: node --env-file=.env generate_report.mjs');
+  process.exit(1);
+}
 
 async function generateReport() {
   const client = new Client({ connectionString });

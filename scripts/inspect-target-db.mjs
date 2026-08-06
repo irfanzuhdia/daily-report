@@ -1,7 +1,7 @@
 import postgres from 'postgres'
 
 async function inspect() {
-  const targetDb = postgres('postgresql://postgres:ntEkcttr4vKoj7cv@db.gguqhxinkcdzauvitnuf.supabase.co:5432/postgres', { ssl: 'require' })
+  const targetDb = postgres(process.env.DATABASE_URL, { ssl: 'require' })
   
   try {
     const tables = await targetDb`

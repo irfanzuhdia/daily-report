@@ -1,12 +1,34 @@
 import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/session"
+import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
+import { TaskRepository, UserRepository, getUserLevel } from "@/lib/repositories"
+import { EXPORT_ROW_CAP } from "@/lib/export-scope"
 
 export async function GET() {
   try {
     const session = await getSession()
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // The export used to dump the whole table for anyone with a session, ignoring
+    // both the RBAC scope and the My/Team toggle. Reuse the repository so the file
+    // contains exactly the rows the viewer can already see on screen.
+    const viewMode = await getViewModeFromCookies()
+    const user = await UserRepository.findById(session.user_id)
+    const level = await getUserLevel(user?.user_occupation ?? null)
+    const effectiveViewMode = level === 1 ? "my" : viewMode
+
+    const { data: visible } = await TaskRepository.findPaginated(
+      session.user_id,
+      { viewMode: effectiveViewMode },
+      EXPORT_ROW_CAP,
+      0
+    )
+    const allowedIds = visible.map((t) => t.id)
+    if (allowedIds.length === 0) {
+      return NextResponse.json({ data: [] })
     }
 
     const tasks = await sql`
@@ -47,6 +69,7 @@ export async function GET() {
         LIMIT 1
       ) latest_dr ON true
       WHERE t.deleted_at IS NULL
+        AND t.id = ANY(${allowedIds})
       ORDER BY t.id DESC
     `
 

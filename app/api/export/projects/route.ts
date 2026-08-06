@@ -1,12 +1,34 @@
 import { NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/session"
+import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
+import { ProjectRepository, UserRepository, getUserLevel } from "@/lib/repositories"
+import { EXPORT_ROW_CAP } from "@/lib/export-scope"
 
 export async function GET() {
   try {
     const session = await getSession()
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // The export used to dump the whole table for anyone with a session, ignoring
+    // both the RBAC scope and the My/Team toggle. Reuse the repository so the file
+    // contains exactly the rows the viewer can already see on screen.
+    const viewMode = await getViewModeFromCookies()
+    const user = await UserRepository.findById(session.user_id)
+    const level = await getUserLevel(user?.user_occupation ?? null)
+    const effectiveViewMode = level === 1 ? "my" : viewMode
+
+    const { data: visible } = await ProjectRepository.findPaginated(
+      session.user_id,
+      { viewMode: effectiveViewMode },
+      EXPORT_ROW_CAP,
+      0
+    )
+    const allowedIds = visible.map((p) => p.project_id)
+    if (allowedIds.length === 0) {
+      return NextResponse.json({ data: [] })
     }
 
     // Query projects with team members, task counts, hours, and reporter contributions
@@ -58,6 +80,7 @@ export async function GET() {
       FROM projects p
       LEFT JOIN users u_creator ON p.created_by = u_creator.user_id
       WHERE p.deleted_at IS NULL
+        AND p.project_id = ANY(${allowedIds})
       ORDER BY CAST(SUBSTRING(p.project_id FROM 3) AS INTEGER) DESC
     `
 

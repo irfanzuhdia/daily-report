@@ -2,7 +2,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter, usePathname, useSearchParams } from "next/navigation"
-import { ArrowLeft, Calendar, BarChart3, Clock, TrendingUp, Award, PieChart } from "lucide-react"
+import { ArrowLeft, Calendar, BarChart3, Clock, TrendingUp, Award, PieChart, Printer } from "lucide-react"
 import { useViewDensity } from "@/lib/view-density"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -662,7 +662,28 @@ export function ContributionCalendar({
             <p className={`${isCompact ? "text-xs" : "text-sm"} text-muted-foreground`}>Visualize daily work hours across your team</p>
           </div>
         </div>
-        <ViewModeToggle />
+        <div className="flex items-center gap-2">
+          {/* Carries the active period and filters into the printable report. */}
+          <Link
+            href={`/reports/print?${new URLSearchParams({
+              start_date: startDate,
+              end_date: endDate,
+              ...(createdBy.length > 0 ? { created_by: createdBy.join(",") } : {}),
+              ...(selectedProject.length > 0 ? { project_id: selectedProject.join(",") } : {}),
+              ...(dept.length > 0 ? { dept_filter: dept.join(",") } : {}),
+              ...(site.length > 0 ? { site_filter: site.join(",") } : {}),
+              ...(division.length > 0 ? { div_filter: division.join(",") } : {}),
+              ...(team.length > 0 ? { team_filter: team.join(",") } : {}),
+            }).toString()}`}
+            target="_blank"
+          >
+            <Button variant="outline" size="sm">
+              <Printer className="h-4 w-4 mr-1" />
+              Print report
+            </Button>
+          </Link>
+          <ViewModeToggle />
+        </div>
       </div>
 
       {/* Role-Based Filters */}

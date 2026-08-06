@@ -68,8 +68,8 @@ export function ReportsClient({
   currentSite = "",
   currentDiv = "",
   currentTeam = "",
-  currentPage = 1,
-  totalPages = 1,
+  columnData = {},
+  columnPageSize = 20,
 }: {
   reports: EnrichedReport[]
   tasks: Task[]
@@ -86,8 +86,8 @@ export function ReportsClient({
   currentSite?: string
   currentDiv?: string
   currentTeam?: string
-  currentPage?: number
-  totalPages?: number
+  columnData?: Record<string, { items: EnrichedReport[]; total: number }>
+  columnPageSize?: number
 }) {
   const { density } = useViewDensity()
   const currentUser = useMemo(() => (users || []).find(u => u.user_id === currentUserId), [users, currentUserId])
@@ -138,6 +138,70 @@ export function ReportsClient({
       return r
     }))
   }
+
+  // ── per-column lazy loading ──
+  // Totals come from the server as one COUNT per task status, so a column always shows
+  // how many reports it really has, not how many landed in a shared page window.
+  const [columnTotals, setColumnTotals] = useState<Record<string, number>>(() =>
+    Object.fromEntries(Object.entries(columnData).map(([s, c]) => [s, c.total]))
+  )
+  const [loadingColumn, setLoadingColumn] = useState<string | null>(null)
+  const [prevColumnData, setPrevColumnData] = useState(columnData)
+  if (columnData !== prevColumnData) {
+    setPrevColumnData(columnData)
+    setColumnTotals(Object.fromEntries(Object.entries(columnData).map(([s, c]) => [s, c.total])))
+  }
+
+  const loadedInColumn = useCallback(
+    (status: string) => localReports.filter((r) => (r.task_status ?? "NS") === status).length,
+    [localReports]
+  )
+
+  const columnHasMore = useCallback(
+    (status: string) => loadedInColumn(status) < (columnTotals[status] ?? 0),
+    [loadedInColumn, columnTotals]
+  )
+
+  // A ref, not the state flag: the observer can fire several times before a state
+  // update lands, which would otherwise refetch the same offset in a loop.
+  const inFlightColumn = useRef<string | null>(null)
+
+  const loadMoreColumn = useCallback(
+    async (status: string) => {
+      if (inFlightColumn.current) return
+      inFlightColumn.current = status
+      setLoadingColumn(status)
+      try {
+        const sp = new URLSearchParams(window.location.search)
+        sp.set("entity", "reports")
+        sp.set("status", status)
+        sp.set("viewMode", viewMode)
+        sp.set("limit", String(columnPageSize))
+        sp.set("offset", String(loadedInColumn(status)))
+
+        const res = await fetch(`/api/board?${sp.toString()}`)
+        if (!res.ok) return
+        const json = await res.json()
+        const incoming: EnrichedReport[] = json?.items ?? []
+
+        if (typeof json?.total === "number") {
+          setColumnTotals((prev) => ({ ...prev, [status]: json.total }))
+        }
+        if (incoming.length > 0) {
+          setLocalReports((prev) => {
+            const seen = new Set(prev.map((r) => r.report_id))
+            return [...prev, ...incoming.filter((r) => !seen.has(r.report_id))]
+          })
+        }
+      } catch {
+        // A failed page just leaves the sentinel in place; scrolling retries it.
+      } finally {
+        inFlightColumn.current = null
+        setLoadingColumn(null)
+      }
+    },
+    [viewMode, columnPageSize, loadedInColumn]
+  )
 
   const dndId = useId()
   const sensors = useSensors(
@@ -731,7 +795,14 @@ export function ReportsClient({
               const colReports = getSortedColumnReports(col.id)
               return (
                 <div key={col.id} className="w-[85vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none">
-                <DroppableColumn column={col} reports={colReports}>
+                <DroppableColumn
+                  column={col}
+                  reports={colReports}
+                  total={columnTotals[col.id]}
+                  hasMore={columnHasMore(col.id)}
+                  loadingMore={loadingColumn === col.id}
+                  onLoadMore={() => loadMoreColumn(col.id)}
+                >
                   {colReports.map((report) => (
                     <SortableReportCard
                       key={report.report_id}
@@ -830,39 +901,6 @@ export function ReportsClient({
             ))}
           </div>
         )
-      )}
-
-      {/* Pagination Controls */}
-      {layout !== "kanban" && totalPages > 1 && (
-        <div className="flex items-center justify-center py-6 mt-4 gap-2 border-t">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const url = new URL(window.location.href)
-              url.searchParams.set("page", String(Math.max(1, currentPage - 1)))
-              router.push(url.pathname + url.search)
-            }}
-            disabled={currentPage <= 1}
-          >
-            Previous
-          </Button>
-          <div className="text-sm text-muted-foreground px-4">
-            Page <span className="font-medium text-foreground">{currentPage}</span> of {totalPages}
-          </div>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              const url = new URL(window.location.href)
-              url.searchParams.set("page", String(Math.min(totalPages, currentPage + 1)))
-              router.push(url.pathname + url.search)
-            }}
-            disabled={currentPage >= totalPages}
-          >
-            Next
-          </Button>
-        </div>
       )}
 
       {/* Complete & Cancel Reports Folder Dialog */}

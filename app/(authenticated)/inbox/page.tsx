@@ -107,7 +107,9 @@ export default function InboxPage() {
           handleLoadMore()
         }
       },
-      { threshold: 0.1 }
+      // Start fetching a little before the sentinel is actually on screen so the
+      // next batch is usually there by the time the user reaches it.
+      { rootMargin: "200px" }
     )
 
     const el = observerTargetRef.current
@@ -274,21 +276,10 @@ export default function InboxPage() {
               ))}
               {hasMore && (
                 <div ref={observerTargetRef} className="flex justify-center p-4">
-                  {loadingMore ? (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground py-2 font-medium">
-                      <Loader2 className="h-4 w-4 animate-spin text-primary" />
-                      Loading older notifications...
-                    </div>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={handleLoadMore}
-                      className="w-full sm:w-auto rounded-xl"
-                    >
-                      Load older notifications
-                    </Button>
-                  )}
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground py-2 font-medium">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    Loading older notifications...
+                  </div>
                 </div>
               )}
             </div>

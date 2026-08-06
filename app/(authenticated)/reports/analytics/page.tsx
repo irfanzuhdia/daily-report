@@ -66,42 +66,54 @@ export default async function AnalyticsPage({
     const isDivDisabled = userLevel < 3
     const isTeamDisabled = userLevel < 2
 
-    if (params.created_by) {
-      filteredReports = filteredReports.filter(r => r.user_id === params.created_by || r.created_by === params.created_by)
-    }
-    
-    // Dept Filter
-    const targetDept = isDeptDisabled ? (currentUser?.user_departement || "") : (params.dept_filter !== undefined ? params.dept_filter : (currentUser?.user_departement || ""))
-    if (targetDept && targetDept !== "all") {
-      filteredReports = filteredReports.filter(r => (userById.get(r.user_id || "")?.user_departement || "") === targetDept)
+    // Every filter arrives as a comma-separated list; "all" is a no-op sentinel.
+    const parseList = (raw?: string) =>
+      (raw ?? "").split(",").map(s => s.trim()).filter(s => s.length > 0 && s !== "all")
+
+    // A locked filter is pinned to the viewer's own unit. Otherwise an absent param means
+    // "not set yet", which also scopes to their unit; an empty param is a deliberate clear.
+    const resolveScope = (isLocked: boolean, own: string, raw?: string): string[] => {
+      if (isLocked) return own ? [own] : []
+      if (raw !== undefined) return parseList(raw)
+      return own ? [own] : []
     }
 
-    // Site Filter
-    const targetSite = isSiteDisabled ? (currentUser?.user_site || "") : (params.site_filter !== undefined ? params.site_filter : (currentUser?.user_site || ""))
-    if (targetSite && targetSite !== "all") {
-      filteredReports = filteredReports.filter(r => (userById.get(r.user_id || "")?.user_site || "") === targetSite)
+    const createdByIds = parseList(params.created_by)
+    if (createdByIds.length > 0) {
+      filteredReports = filteredReports.filter(
+        r => createdByIds.includes(r.user_id || "") || createdByIds.includes(r.created_by || "")
+      )
     }
 
-    // Div Filter
-    const targetDiv = isDivDisabled ? (currentUser?.user_division || "") : (params.div_filter !== undefined ? params.div_filter : (currentUser?.user_division || ""))
-    if (targetDiv && targetDiv !== "all") {
-      filteredReports = filteredReports.filter(r => (userById.get(r.user_id || "")?.user_division || "") === targetDiv)
+    const targetDepts = resolveScope(isDeptDisabled, currentUser?.user_departement || "", params.dept_filter)
+    if (targetDepts.length > 0) {
+      filteredReports = filteredReports.filter(r => targetDepts.includes(userById.get(r.user_id || "")?.user_departement || ""))
     }
 
-    // Team Filter
-    const targetTeam = isTeamDisabled ? (currentUser?.user_team || "") : (params.team_filter !== undefined ? params.team_filter : (currentUser?.user_team || ""))
-    if (targetTeam && targetTeam !== "all") {
-      filteredReports = filteredReports.filter(r => (userById.get(r.user_id || "")?.user_team || "") === targetTeam)
+    const targetSites = resolveScope(isSiteDisabled, currentUser?.user_site || "", params.site_filter)
+    if (targetSites.length > 0) {
+      filteredReports = filteredReports.filter(r => targetSites.includes(userById.get(r.user_id || "")?.user_site || ""))
+    }
+
+    const targetDivs = resolveScope(isDivDisabled, currentUser?.user_division || "", params.div_filter)
+    if (targetDivs.length > 0) {
+      filteredReports = filteredReports.filter(r => targetDivs.includes(userById.get(r.user_id || "")?.user_division || ""))
+    }
+
+    const targetTeams = resolveScope(isTeamDisabled, currentUser?.user_team || "", params.team_filter)
+    if (targetTeams.length > 0) {
+      filteredReports = filteredReports.filter(r => targetTeams.includes(userById.get(r.user_id || "")?.user_team || ""))
     }
   } else {
     // "my" view
     filteredReports = filteredReports.filter(r => r.user_id === userId)
   }
 
-  // Apply Project Filter
-  if (params.project_id) {
-    const projectTaskIds = tasks.filter(t => t.project_id === params.project_id).map(t => t.id)
-    filteredReports = filteredReports.filter(r => projectTaskIds.includes(r.task_id))
+  // Apply Project Filter (comma-separated list of project ids)
+  const projectIds = (params.project_id ?? "").split(",").map(s => s.trim()).filter(s => s.length > 0 && s !== "all")
+  if (projectIds.length > 0) {
+    const projectTaskIds = new Set(tasks.filter(t => projectIds.includes(t.project_id)).map(t => t.id))
+    filteredReports = filteredReports.filter(r => projectTaskIds.has(r.task_id))
   }
 
   // Apply Date Filter

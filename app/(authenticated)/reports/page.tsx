@@ -23,7 +23,6 @@ export default async function ReportsPage({
     site_filter?: string
     div_filter?: string
     team_filter?: string
-    page?: string
   }>
 }) {
   const session = await getSession()
@@ -33,9 +32,11 @@ export default async function ReportsPage({
   const userId = session.user_id
   const params = await searchParams
 
-  const page = parseInt(params.page || "1", 10)
-  const limit = 50
-  const offset = (page - 1) * limit
+  // Kanban columns group reports by their parent task's status.
+  const BOARD_STATUSES = ["NS", "OP", "H", "D"] as const
+  // Per column, not across the board: a single global window made a column show only
+  // the rows of that status that happened to fall inside it.
+  const COLUMN_PAGE_SIZE = 20
 
   const allUsers = await UserRepository.findAll()
   const currentUser = allUsers.find(u => u.user_id === userId)
@@ -55,13 +56,20 @@ export default async function ReportsPage({
     viewMode: effectiveViewMode,
   }
 
-  // Fetch paginated enriched reports directly from DB
-  const { reports, total } = await DailyReportRepository.findPaginatedEnriched(
-    userId,
-    limit,
-    offset,
-    filters
+  // One query per column so each one reflects its own real contents.
+  const columnResults = await Promise.all(
+    BOARD_STATUSES.map(async (status) => {
+      const { reports, total } = await DailyReportRepository.findPaginatedEnriched(
+        userId,
+        COLUMN_PAGE_SIZE,
+        0,
+        { ...filters, taskStatus: status }
+      )
+      return [status, { reports, total }] as const
+    })
   )
+
+  const reports = columnResults.flatMap(([, col]) => col.reports)
 
   // allUsers already fetched above
 
@@ -106,7 +114,11 @@ export default async function ReportsPage({
     created_by_name: r.created_by_name || r.user_id || "Unknown",
   }))
 
-  const totalPages = Math.ceil(total / limit)
+  // Only the per-status totals are consumed by the client; the rows themselves
+  // already travel in `reports`.
+  const columnData = Object.fromEntries(
+    columnResults.map(([status, col]) => [status, { items: col.reports, total: col.total }])
+  )
 
   return (
     <ReportsClient
@@ -125,8 +137,8 @@ export default async function ReportsPage({
       currentSite={params.site_filter}
       currentDiv={params.div_filter}
       currentTeam={params.team_filter}
-      currentPage={page}
-      totalPages={totalPages}
+      columnData={columnData}
+      columnPageSize={COLUMN_PAGE_SIZE}
     />
   )
 }

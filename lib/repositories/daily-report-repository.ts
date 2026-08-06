@@ -82,6 +82,8 @@ export const DailyReportRepository = {
       viewMode?: string;
       startDate?: string;
       endDate?: string;
+      /** Status of the parent task — the reports board groups by this. */
+      taskStatus?: string;
     }
   ) {
     const user = await UserRepository.findById(userId);
@@ -156,6 +158,11 @@ export const DailyReportRepository = {
     if (filters?.createdBy) {
       params.push(filters.createdBy);
       whereClauses.push(`dr.user_id = ANY(string_to_array($${params.length}, ','))`);
+    }
+    if (filters?.taskStatus) {
+      params.push(filters.taskStatus);
+      // Reports whose task has no status land in the "NS" column in the UI, so match that here.
+      whereClauses.push(`COALESCE(t.task_status, 'NS') = ANY(string_to_array($${params.length}, ','))`);
     }
     if (filters?.startDate) {
       params.push(filters.startDate);

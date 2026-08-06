@@ -16,6 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
+import { FilterMultiSelect } from "@/components/ui/filter-bar"
 import { ViewModeToggle } from "@/components/ui/view-mode-toggle"
 import type { Project } from "@/lib/types"
 
@@ -361,10 +362,13 @@ export function ContributionCalendar({
   currentProjectId = "",
   currentUserId = "",
   currentCreatedBy = "",
-  currentDept = "",
-  currentSite = "",
-  currentDiv = "",
-  currentTeam = "",
+  // Deliberately not defaulted to "": undefined means "no param, scope me to my own unit",
+  // while "" means the viewer explicitly cleared the filter. Collapsing them would make a
+  // cleared filter snap back to the default on every render.
+  currentDept,
+  currentSite,
+  currentDiv,
+  currentTeam,
 }: ContributionCalendarProps) {
   const { density } = useViewDensity()
   const isCompact = density === "compact"
@@ -385,16 +389,26 @@ export function ContributionCalendar({
   const defaultDiv = currentUser?.user_division || ""
   const defaultTeam = currentUser?.user_team || ""
 
-  const [selectedProject, setSelectedProject] = useState<string>(currentProjectId)
+  // Filters travel through the URL as comma-separated lists.
+  const parseList = (raw?: string) =>
+    (raw ?? "").split(",").map((s) => s.trim()).filter((s) => s.length > 0 && s !== "all")
+
+  // No param yet means "scope me to my own org unit", which is the server's default too.
+  const initScope = (raw: string | undefined, own: string) =>
+    raw !== undefined ? parseList(raw) : own ? [own] : []
+
+  const [selectedProject, setSelectedProject] = useState<string[]>(parseList(currentProjectId))
   const defaultDateRange = getPresetRange("1y")
   const defaultStartDate = defaultDateRange?.startDate || ""
   const defaultEndDate = defaultDateRange?.endDate || ""
 
-  const [createdBy, setCreatedBy] = useState<string>(currentCreatedBy)
-  const [dept, setDept] = useState<string>(currentDept || defaultDept)
-  const [site, setSite] = useState<string>(currentSite || defaultSite)
-  const [division, setDivision] = useState<string>(currentDiv || defaultDiv)
-  const [team, setTeam] = useState<string>(currentTeam || defaultTeam)
+  const [createdBy, setCreatedBy] = useState<string[]>(
+    currentCreatedBy ? currentCreatedBy.split(",").filter(Boolean) : []
+  )
+  const [dept, setDept] = useState<string[]>(initScope(currentDept, defaultDept))
+  const [site, setSite] = useState<string[]>(initScope(currentSite, defaultSite))
+  const [division, setDivision] = useState<string[]>(initScope(currentDiv, defaultDiv))
+  const [team, setTeam] = useState<string[]>(initScope(currentTeam, defaultTeam))
 
   const [preset, setPreset] = useState<PresetKey>(currentPreset as PresetKey || "1y")
 
@@ -420,24 +434,25 @@ export function ContributionCalendar({
       return
     }
     const params = new URLSearchParams(searchParams.toString())
-    if (selectedProject) params.set("project_id", selectedProject)
+    if (selectedProject.length > 0) params.set("project_id", selectedProject.join(","))
     else params.delete("project_id")
 
+    // Dropping the param lets the server re-apply the viewer's own unit, so that is only
+    // safe when the selection already *is* that unit. A deliberate clear must stay in the
+    // URL as an empty value, otherwise the default would silently come back.
+    const syncScope = (key: string, values: string[], own: string) => {
+      if (own && values.length === 1 && values[0] === own) params.delete(key)
+      else params.set(key, values.join(","))
+    }
+
     if (globalViewMode === "team") {
-      if (createdBy) params.set("created_by", createdBy)
+      if (createdBy.length > 0) params.set("created_by", createdBy.join(","))
       else params.delete("created_by")
 
-      if (dept && dept !== defaultDept) params.set("dept_filter", dept)
-      else params.delete("dept_filter")
-
-      if (site && site !== defaultSite) params.set("site_filter", site)
-      else params.delete("site_filter")
-
-      if (division && division !== defaultDiv) params.set("div_filter", division)
-      else params.delete("div_filter")
-
-      if (team && team !== defaultTeam) params.set("team_filter", team)
-      else params.delete("team_filter")
+      syncScope("dept_filter", dept, defaultDept)
+      syncScope("site_filter", site, defaultSite)
+      syncScope("div_filter", division, defaultDiv)
+      syncScope("team_filter", team, defaultTeam)
     }
 
     if (startDate) params.set("start_date", startDate)
@@ -481,11 +496,11 @@ export function ContributionCalendar({
   }, [inputStart, inputEnd])
 
   const handleClear = useCallback(() => {
-    setCreatedBy("")
-    setDept(defaultDept)
-    setSite(defaultSite)
-    setDivision(defaultDiv)
-    setTeam(defaultTeam)
+    setCreatedBy([])
+    setDept(defaultDept ? [defaultDept] : [])
+    setSite(defaultSite ? [defaultSite] : [])
+    setDivision(defaultDiv ? [defaultDiv] : [])
+    setTeam(defaultTeam ? [defaultTeam] : [])
     
     const defaultDates = getPresetRange("1y")
     setInputStart(defaultDates?.startDate || "")
@@ -622,13 +637,13 @@ export function ContributionCalendar({
   const availableDepts = isDeptDisabled ? users.filter(u => u.user_departement === defaultDept) : users;
   const uniqueDepts = Array.from(new Set(availableDepts.map((u) => u.user_departement).filter(Boolean))) as string[]
 
-  const availableSites = availableDepts.filter(u => (!dept || dept === "all" || u.user_departement === dept) && (!isSiteDisabled || u.user_site === defaultSite));
+  const availableSites = availableDepts.filter(u => (dept.length === 0 || dept.includes(u.user_departement || "")) && (!isSiteDisabled || u.user_site === defaultSite));
   const uniqueSites = Array.from(new Set(availableSites.map((u) => u.user_site).filter(Boolean))) as string[]
 
-  const availableDivs = availableSites.filter(u => (!site || site === "all" || u.user_site === site) && (!isDivDisabled || u.user_division === defaultDiv));
+  const availableDivs = availableSites.filter(u => (site.length === 0 || site.includes(u.user_site || "")) && (!isDivDisabled || u.user_division === defaultDiv));
   const uniqueDivs = Array.from(new Set(availableDivs.map((u) => u.user_division).filter(Boolean))) as string[]
 
-  const availableTeams = availableDivs.filter(u => (!division || division === "all" || u.user_division === division) && (!isTeamDisabled || u.user_team === defaultTeam));
+  const availableTeams = availableDivs.filter(u => (division.length === 0 || division.includes(u.user_division || "")) && (!isTeamDisabled || u.user_team === defaultTeam));
   const uniqueTeams = Array.from(new Set(availableTeams.map((u) => u.user_team).filter(Boolean))) as string[]
 
   return (
@@ -658,101 +673,86 @@ export function ContributionCalendar({
               {/* Project */}
               <div className="w-full sm:w-[180px]">
                 <Label className="text-xs text-muted-foreground mb-1 block">Project</Label>
-                <Select value={selectedProject} onValueChange={setSelectedProject}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="All Projects" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Projects</SelectItem>
-                    {projects.map((p) => (
-                      <SelectItem key={p.project_id} value={p.project_id}>
-                        {p.project_name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FilterMultiSelect
+                  placeholder="All Projects"
+                  searchPlaceholder="Search project..."
+                  options={projects.map((p) => ({ label: p.project_name || p.project_id, value: p.project_id }))}
+                  selectedValues={selectedProject}
+                  onSelectedValuesChange={setSelectedProject}
+                  className="w-full rounded-md"
+                />
               </div>
 
               {/* Created by */}
               <div className="w-full sm:w-[200px]">
                 <Label className="text-xs text-muted-foreground mb-1 block">Created by</Label>
-                <Select value={createdBy} onValueChange={setCreatedBy}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="All team members" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All team members</SelectItem>
-                    {users.map((u) => (
-                      <SelectItem key={u.user_id} value={u.user_id}>
-                        {u.user_name || u.user_email}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FilterMultiSelect
+                  placeholder="All team members"
+                  searchPlaceholder="Search team member..."
+                  options={users.map((u) => ({
+                    label: u.user_name || u.user_email,
+                    value: u.user_id,
+                  }))}
+                  selectedValues={createdBy}
+                  onSelectedValuesChange={setCreatedBy}
+                  className="w-full rounded-md"
+                />
               </div>
 
               {/* Department */}
               <div className="w-full sm:w-[180px]">
                 <Label className="text-xs text-muted-foreground mb-1 block">Department</Label>
-                <Select value={dept} onValueChange={setDept} disabled={isDeptDisabled}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="All Departments" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Departments</SelectItem>
-                    {uniqueDepts.map((d) => (
-                      <SelectItem key={d} value={d}>{d}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FilterMultiSelect
+                  placeholder="All Departments"
+                  searchPlaceholder="Search department..."
+                  options={uniqueDepts.map((d) => ({ label: d, value: d }))}
+                  selectedValues={dept}
+                  onSelectedValuesChange={setDept}
+                  disabled={isDeptDisabled}
+                  className="w-full rounded-md"
+                />
               </div>
 
               {/* Site */}
               <div className="w-full sm:w-[180px]">
                 <Label className="text-xs text-muted-foreground mb-1 block">Site</Label>
-                <Select value={site} onValueChange={setSite} disabled={isSiteDisabled}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="All Sites" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Sites</SelectItem>
-                    {uniqueSites.map((s) => (
-                      <SelectItem key={s} value={s}>{s}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FilterMultiSelect
+                  placeholder="All Sites"
+                  searchPlaceholder="Search site..."
+                  options={uniqueSites.map((s) => ({ label: s, value: s }))}
+                  selectedValues={site}
+                  onSelectedValuesChange={setSite}
+                  disabled={isSiteDisabled}
+                  className="w-full rounded-md"
+                />
               </div>
 
               {/* Division */}
               <div className="w-full sm:w-[180px]">
                 <Label className="text-xs text-muted-foreground mb-1 block">Division</Label>
-                <Select value={division} onValueChange={setDivision} disabled={isDivDisabled}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="All Divisions" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Divisions</SelectItem>
-                    {uniqueDivs.map((d) => (
-                      <SelectItem key={d} value={d}>{d}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FilterMultiSelect
+                  placeholder="All Divisions"
+                  searchPlaceholder="Search division..."
+                  options={uniqueDivs.map((d) => ({ label: d, value: d }))}
+                  selectedValues={division}
+                  onSelectedValuesChange={setDivision}
+                  disabled={isDivDisabled}
+                  className="w-full rounded-md"
+                />
               </div>
 
               {/* Team */}
               <div className="w-full sm:w-[180px]">
                 <Label className="text-xs text-muted-foreground mb-1 block">Team</Label>
-                <Select value={team} onValueChange={setTeam} disabled={isTeamDisabled}>
-                  <SelectTrigger className="w-full">
-                    <SelectValue placeholder="All Teams" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="all">All Teams</SelectItem>
-                    {uniqueTeams.map((t) => (
-                      <SelectItem key={t} value={t}>{t}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <FilterMultiSelect
+                  placeholder="All Teams"
+                  searchPlaceholder="Search team..."
+                  options={uniqueTeams.map((t) => ({ label: t, value: t }))}
+                  selectedValues={team}
+                  onSelectedValuesChange={setTeam}
+                  disabled={isTeamDisabled}
+                  className="w-full rounded-md"
+                />
               </div>
             </div>
           </CardContent>

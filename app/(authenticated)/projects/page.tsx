@@ -21,7 +21,6 @@ export default async function ProjectsPage({
     site_filter?: string
     div_filter?: string
     team_filter?: string
-    page?: string
   }>
 }) {
   const session = await getSession()
@@ -31,9 +30,11 @@ export default async function ProjectsPage({
   const userId = session.user_id
   const params = await searchParams
 
-  const page = parseInt(params.page || "1", 10)
-  const limit = 50
-  const offset = (page - 1) * limit
+  // Kanban statuses, kept in sync with the columns rendered by ProjectsClient.
+  const BOARD_STATUSES = ["NS", "OP", "H", "D"] as const
+  // Per column, not across the board: a single global window made a column show only
+  // the rows of that status that happened to fall inside it.
+  const COLUMN_PAGE_SIZE = 20
 
   // We still fetch these globally because they are small and fully cached in Upstash Redis
   const [statuses, allUsers, allProjectTeams] = await Promise.all([
@@ -46,15 +47,28 @@ export default async function ProjectsPage({
   const userLevel = currentUser?.level || 1
   const effectiveViewMode = userLevel === 1 ? "my" : viewMode
 
-  // Fetch paginated & filtered projects directly from SQL
-  const { data: projects, total } = await ProjectRepository.findPaginated(
-    userId,
-    { ...params, viewMode: effectiveViewMode },
-    limit,
-    offset
+  // One query per column so each one reflects its own real contents.
+  const requestedStatuses = params.status
+    ? params.status.split(",").map((s) => s.trim()).filter(Boolean)
+    : []
+  const statusesToLoad = requestedStatuses.length > 0
+    ? BOARD_STATUSES.filter((s) => requestedStatuses.includes(s))
+    : [...BOARD_STATUSES]
+
+  const columnResults = await Promise.all(
+    statusesToLoad.map(async (status) => {
+      const { data, total } = await ProjectRepository.findPaginated(
+        userId,
+        { ...params, status, viewMode: effectiveViewMode },
+        COLUMN_PAGE_SIZE,
+        0
+      )
+      return [status, { items: data, total }] as const
+    })
   )
 
-  const totalPages = Math.ceil(total / limit)
+  const columnData = Object.fromEntries(columnResults)
+  const projects = columnResults.flatMap(([, col]) => col.items)
 
   // Project hours and progress are now directly provided via PostgreSQL Computed Columns!
   const projectHoursMap: Record<string, number> = {}
@@ -82,8 +96,8 @@ export default async function ProjectsPage({
       currentSite={params.site_filter}
       currentDiv={params.div_filter}
       currentTeam={params.team_filter}
-      currentPage={page}
-      totalPages={totalPages}
+      columnData={columnData}
+      columnPageSize={COLUMN_PAGE_SIZE}
     />
   )
 }

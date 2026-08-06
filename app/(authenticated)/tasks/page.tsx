@@ -24,7 +24,6 @@ export default async function TasksPage({
     site_filter?: string
     div_filter?: string
     team_filter?: string
-    page?: string
   }>
 }) {
   const session = await getSession()
@@ -34,9 +33,11 @@ export default async function TasksPage({
   const userId = session.user_id
   const params = await searchParams
 
-  const page = parseInt(params.page || "1", 10)
-  const limit = 50
-  const offset = (page - 1) * limit
+  // Kanban statuses, kept in sync with the columns rendered by TasksClient.
+  const BOARD_STATUSES = ["NS", "OP", "H", "D"] as const
+  // Per column, not across the board: a single global window made a column show only
+  // the rows of that status that happened to fall inside it.
+  const COLUMN_PAGE_SIZE = 20
 
   // We still fetch these globally because they are small and fully cached in Upstash Redis
   // allProjects is used for project name lookups in the UI
@@ -52,15 +53,29 @@ export default async function TasksPage({
   const userLevel = currentUser?.level || 1
   const effectiveViewMode = userLevel === 1 ? "my" : viewMode
 
-  // Fetch paginated & filtered tasks directly from SQL
-  const { data: tasks, total } = await TaskRepository.findPaginated(
-    userId,
-    { ...params, viewMode: effectiveViewMode },
-    limit,
-    offset
+  // One query per column so each one reflects its own real contents.
+  // When the user narrows the status filter, only those columns are fetched.
+  const requestedStatuses = params.status
+    ? params.status.split(",").map((s) => s.trim()).filter(Boolean)
+    : []
+  const statusesToLoad = requestedStatuses.length > 0
+    ? BOARD_STATUSES.filter((s) => requestedStatuses.includes(s))
+    : [...BOARD_STATUSES]
+
+  const columnResults = await Promise.all(
+    statusesToLoad.map(async (status) => {
+      const { data, total } = await TaskRepository.findPaginated(
+        userId,
+        { ...params, status, viewMode: effectiveViewMode },
+        COLUMN_PAGE_SIZE,
+        0
+      )
+      return [status, { items: data, total }] as const
+    })
   )
 
-  const totalPages = Math.ceil(total / limit)
+  const columnData = Object.fromEntries(columnResults)
+  const tasks = columnResults.flatMap(([, col]) => col.items)
 
   // Enrich with project names and total hours
   const projectMap = new Map(allProjects.map((p) => [p.project_id, p.project_name]))
@@ -91,8 +106,8 @@ export default async function TasksPage({
       currentSite={params.site_filter}
       currentDiv={params.div_filter}
       currentTeam={params.team_filter}
-      currentPage={page}
-      totalPages={totalPages}
+      columnData={columnData}
+      columnPageSize={COLUMN_PAGE_SIZE}
     />
   )
 }

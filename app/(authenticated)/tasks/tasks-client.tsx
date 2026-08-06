@@ -80,8 +80,8 @@ export function TasksClient({
   currentSite = "",
   currentDiv = "",
   currentTeam = "",
-  currentPage = 1,
-  totalPages = 1,
+  columnData = {},
+  columnPageSize = 20,
 }: {
   tasks: Task[]
   statuses: Status[]
@@ -102,8 +102,8 @@ export function TasksClient({
   currentSite?: string
   currentDiv?: string
   currentTeam?: string
-  currentPage?: number
-  totalPages?: number
+  columnData?: Record<string, { items: Task[]; total: number }>
+  columnPageSize?: number
 }) {
   const { density } = useViewDensity()
   const currentUser = useMemo(() => (users || []).find(u => u.user_id === currentUserId), [users, currentUserId])
@@ -154,6 +154,70 @@ export function TasksClient({
       return t
     }))
   }
+
+  // ── per-column lazy loading ──
+  // Totals come from the server as one COUNT per status, so a column always shows how
+  // many tasks it really has, not how many landed in a shared page window.
+  const [columnTotals, setColumnTotals] = useState<Record<string, number>>(() =>
+    Object.fromEntries(Object.entries(columnData).map(([s, c]) => [s, c.total]))
+  )
+  const [loadingColumn, setLoadingColumn] = useState<string | null>(null)
+  const [prevColumnData, setPrevColumnData] = useState(columnData)
+  if (columnData !== prevColumnData) {
+    setPrevColumnData(columnData)
+    setColumnTotals(Object.fromEntries(Object.entries(columnData).map(([s, c]) => [s, c.total])))
+  }
+
+  const loadedInColumn = useCallback(
+    (status: string) => localTasks.filter((t) => t.task_status === status).length,
+    [localTasks]
+  )
+
+  const columnHasMore = useCallback(
+    (status: string) => loadedInColumn(status) < (columnTotals[status] ?? 0),
+    [loadedInColumn, columnTotals]
+  )
+
+  // A ref, not the state flag: the observer can fire several times before a state
+  // update lands, which would otherwise refetch the same offset in a loop.
+  const inFlightColumn = useRef<string | null>(null)
+
+  const loadMoreColumn = useCallback(
+    async (status: string) => {
+      if (inFlightColumn.current) return
+      inFlightColumn.current = status
+      setLoadingColumn(status)
+      try {
+        const sp = new URLSearchParams(window.location.search)
+        sp.set("entity", "tasks")
+        sp.set("status", status)
+        sp.set("viewMode", viewMode)
+        sp.set("limit", String(columnPageSize))
+        sp.set("offset", String(loadedInColumn(status)))
+
+        const res = await fetch(`/api/board?${sp.toString()}`)
+        if (!res.ok) return
+        const json = await res.json()
+        const incoming: Task[] = json?.items ?? []
+
+        if (typeof json?.total === "number") {
+          setColumnTotals((prev) => ({ ...prev, [status]: json.total }))
+        }
+        if (incoming.length > 0) {
+          setLocalTasks((prev) => {
+            const seen = new Set(prev.map((t) => t.id))
+            return [...prev, ...incoming.filter((t) => !seen.has(t.id))]
+          })
+        }
+      } catch {
+        // A failed page just leaves the sentinel in place; scrolling retries it.
+      } finally {
+        inFlightColumn.current = null
+        setLoadingColumn(null)
+      }
+    },
+    [viewMode, columnPageSize, loadedInColumn]
+  )
 
   const dndId = useId()
   const sensors = useSensors(
@@ -745,7 +809,14 @@ export function TasksClient({
               const colTasks = getSortedColumnTasks(col.id)
               return (
                 <div key={col.id} className="w-[85vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none">
-                <DroppableColumn column={col} tasks={colTasks}>
+                <DroppableColumn
+                  column={col}
+                  tasks={colTasks}
+                  total={columnTotals[col.id]}
+                  hasMore={columnHasMore(col.id)}
+                  loadingMore={loadingColumn === col.id}
+                  onLoadMore={() => loadMoreColumn(col.id)}
+                >
                   {colTasks.map((task) => {
                     const isMember = taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
                       projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||
@@ -937,40 +1008,6 @@ export function TasksClient({
             </div>
           )
         )
-      )}
-
-      {totalPages > 1 && (
-        <div className="flex items-center justify-between py-6 mt-6 border-t px-2">
-          <p className="text-sm text-muted-foreground">
-            Showing page {currentPage} of {totalPages} ({tasks.length} items)
-          </p>
-          <div className="flex gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              disabled={currentPage <= 1}
-              onClick={() => {
-                const params = new URLSearchParams(window.location.search)
-                params.set("page", (currentPage - 1).toString())
-                router.push(`?${params.toString()}`)
-              }}
-            >
-              Previous
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              disabled={currentPage >= totalPages}
-              onClick={() => {
-                const params = new URLSearchParams(window.location.search)
-                params.set("page", (currentPage + 1).toString())
-                router.push(`?${params.toString()}`)
-              }}
-            >
-              Next
-            </Button>
-          </div>
-        </div>
       )}
 
       {/* Complete & Cancel Folder Dialog */}

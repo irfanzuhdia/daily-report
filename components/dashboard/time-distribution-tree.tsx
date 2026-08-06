@@ -8,10 +8,11 @@ import {
   Briefcase,
   CheckSquare,
   FileText,
-  Clock
+  Clock,
+  Loader2
 } from "lucide-react"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
+import { useLazyReveal } from "@/hooks/use-lazy-reveal"
 
 export type TreeNode = {
   id: string
@@ -30,17 +31,16 @@ interface TreeItemProps {
 
 function TreeItem({ node, initiallyExpanded = false, grandTotalHours }: TreeItemProps) {
   const [isExpanded, setIsExpanded] = useState(initiallyExpanded)
-  const [displayCount, setDisplayCount] = useState(5)
 
   const hasChildren = node.children && node.children.length > 0
-  const visibleChildren = hasChildren ? node.children!.slice(0, displayCount) : []
-  const hasMore = hasChildren && displayCount < node.children!.length
+  const { visibleCount, hasMore, sentinelRef } = useLazyReveal({
+    total: node.children?.length ?? 0,
+    initial: 5,
+    step: 10,
+  })
+  const visibleChildren = hasChildren ? node.children!.slice(0, visibleCount) : []
 
   const toggleExpand = () => setIsExpanded(!isExpanded)
-  const loadMore = (e: React.MouseEvent) => {
-    e.stopPropagation()
-    setDisplayCount(prev => prev + 10)
-  }
 
   const getIcon = () => {
     switch (node.type) {
@@ -107,10 +107,9 @@ function TreeItem({ node, initiallyExpanded = false, grandTotalHours }: TreeItem
             <TreeItem key={child.id} node={child} grandTotalHours={grandTotalHours} />
           ))}
           {hasMore && (
-            <div className="pl-8 py-2">
-              <Button variant="ghost" size="sm" onClick={loadMore} className="h-7 text-xs text-muted-foreground hover:text-primary">
-                Load more... ({node.children!.length - displayCount} remaining)
-              </Button>
+            <div ref={sentinelRef} className="pl-8 py-2 flex items-center gap-2 text-[11px] text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Loading {node.children!.length - visibleCount} more...
             </div>
           )}
         </div>
@@ -124,10 +123,13 @@ interface TimeDistributionTreeProps {
 }
 
 export function TimeDistributionTree({ data }: TimeDistributionTreeProps) {
-  const [displayCount, setDisplayCount] = useState(5)
-  const visibleData = data.slice(0, displayCount)
-  const hasMore = displayCount < data.length
-  
+  const { visibleCount, hasMore, sentinelRef } = useLazyReveal({
+    total: data.length,
+    initial: 5,
+    step: 5,
+  })
+  const visibleData = data.slice(0, visibleCount)
+
   const grandTotalHours = data.reduce((sum, n) => sum + n.hours, 0)
 
   if (!data || data.length === 0) {
@@ -157,10 +159,9 @@ export function TimeDistributionTree({ data }: TimeDistributionTreeProps) {
             <TreeItem key={node.id} node={node} grandTotalHours={grandTotalHours} />
           ))}
           {hasMore && (
-            <div className="pl-4 py-2">
-              <Button variant="outline" size="sm" onClick={() => setDisplayCount(prev => prev + 5)}>
-                Load more categories
-              </Button>
+            <div ref={sentinelRef} className="pl-4 py-3 flex items-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Loading {data.length - visibleCount} more categories...
             </div>
           )}
         </div>

@@ -41,6 +41,10 @@ export async function GET() {
         p.project_description,
         p.project_start_date_plan,
         p.project_end_date_plan,
+        actual.actual_start_date,
+        actual.actual_end_date,
+        actual.active_days,
+        actual.total_reports,
         p.created_at,
         u_creator.user_name as creator_name,
         COALESCE(
@@ -79,6 +83,20 @@ export async function GET() {
         ) as reporter_breakdown
       FROM projects p
       LEFT JOIN users u_creator ON p.created_by = u_creator.user_id
+      -- When work actually started and last happened, as opposed to when it was planned.
+      -- Dates are stored as ISO strings, so MIN/MAX order correctly without a cast.
+      LEFT JOIN LATERAL (
+        SELECT
+          MIN(dr.date) as actual_start_date,
+          MAX(dr.date) as actual_end_date,
+          COUNT(DISTINCT dr.date)::int as active_days,
+          COUNT(*)::int as total_reports
+        FROM daily_reports dr
+        JOIN tasks t ON dr.task_id = t.id
+        WHERE t.project_id = p.project_id
+          AND dr.deleted_at IS NULL AND t.deleted_at IS NULL
+          AND dr.date IS NOT NULL AND dr.date <> ''
+      ) actual ON true
       WHERE p.deleted_at IS NULL
         AND p.project_id = ANY(${allowedIds})
       ORDER BY CAST(SUBSTRING(p.project_id FROM 3) AS INTEGER) DESC

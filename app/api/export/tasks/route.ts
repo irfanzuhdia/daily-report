@@ -39,6 +39,12 @@ export async function GET() {
         t.task_description,
         t.task_status,
         t.task_latest_percentage,
+        t.start_date as plan_start_date,
+        t.due_date as plan_end_date,
+        actual.actual_start_date,
+        actual.actual_end_date,
+        actual.active_days,
+        actual.total_reports,
         t.created_at,
         u_creator.user_name as creator_name,
         COALESCE(
@@ -68,6 +74,19 @@ export async function GET() {
         ORDER BY dr.date DESC, dr.created_at DESC
         LIMIT 1
       ) latest_dr ON true
+      -- When work actually started and last happened, as opposed to when it was planned.
+      -- Dates are stored as ISO strings, so MIN/MAX order correctly without a cast.
+      LEFT JOIN LATERAL (
+        SELECT
+          MIN(dr.date) as actual_start_date,
+          MAX(dr.date) as actual_end_date,
+          COUNT(DISTINCT dr.date)::int as active_days,
+          COUNT(*)::int as total_reports
+        FROM daily_reports dr
+        WHERE dr.task_id = t.id
+          AND dr.deleted_at IS NULL
+          AND dr.date IS NOT NULL AND dr.date <> ''
+      ) actual ON true
       WHERE t.deleted_at IS NULL
         AND t.id = ANY(${allowedIds})
       ORDER BY t.id DESC

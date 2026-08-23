@@ -35,9 +35,15 @@ export default async function TasksPage({
 
   // Kanban statuses, kept in sync with the columns rendered by TasksClient.
   const BOARD_STATUSES = ["NS", "OP", "H", "D"] as const
+  // Completed and Cancel have no column, but they still feed the list view and the
+  // archive dialog. Fetching only the board statuses made those rows vanish entirely.
+  const OFF_BOARD_STATUSES = ["C", "CC"] as const
+  const OFF_BOARD_PAGE_SIZE = 500
   // Per column, not across the board: a single global window made a column show only
   // the rows of that status that happened to fall inside it.
-  const COLUMN_PAGE_SIZE = 20
+  // Sized so the list view — which has no lazy loading of its own — is not silently
+  // truncated; the board still pages beyond this as the user scrolls a column.
+  const COLUMN_PAGE_SIZE = 100
 
   // We still fetch these globally because they are small and fully cached in Upstash Redis
   // allProjects is used for project name lookups in the UI
@@ -58,16 +64,18 @@ export default async function TasksPage({
   const requestedStatuses = params.status
     ? params.status.split(",").map((s) => s.trim()).filter(Boolean)
     : []
+  const allStatuses = [...BOARD_STATUSES, ...OFF_BOARD_STATUSES]
   const statusesToLoad = requestedStatuses.length > 0
-    ? BOARD_STATUSES.filter((s) => requestedStatuses.includes(s))
-    : [...BOARD_STATUSES]
+    ? allStatuses.filter((s) => requestedStatuses.includes(s))
+    : allStatuses
 
   const columnResults = await Promise.all(
     statusesToLoad.map(async (status) => {
+      const onBoard = (BOARD_STATUSES as readonly string[]).includes(status)
       const { data, total } = await TaskRepository.findPaginated(
         userId,
         { ...params, status, viewMode: effectiveViewMode },
-        COLUMN_PAGE_SIZE,
+        onBoard ? COLUMN_PAGE_SIZE : OFF_BOARD_PAGE_SIZE,
         0
       )
       return [status, { items: data, total }] as const

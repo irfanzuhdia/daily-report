@@ -34,9 +34,16 @@ export default async function ReportsPage({
 
   // Kanban columns group reports by their parent task's status.
   const BOARD_STATUSES = ["NS", "OP", "H", "D"] as const
+  // Completed and Cancel have no column, but they still feed the list view and the
+  // archive dialog. Fetching only the board statuses made those rows vanish entirely.
+  const OFF_BOARD_STATUSES = ["C", "CC"] as const
+  // No column pages these, so take them in one go.
+  const OFF_BOARD_PAGE_SIZE = 500
   // Per column, not across the board: a single global window made a column show only
   // the rows of that status that happened to fall inside it.
-  const COLUMN_PAGE_SIZE = 20
+  // Sized so the list view — which has no lazy loading of its own — is not silently
+  // truncated; the board still pages beyond this as the user scrolls a column.
+  const COLUMN_PAGE_SIZE = 100
 
   const allUsers = await UserRepository.findAll()
   const currentUser = allUsers.find(u => u.user_id === userId)
@@ -58,10 +65,11 @@ export default async function ReportsPage({
 
   // One query per column so each one reflects its own real contents.
   const columnResults = await Promise.all(
-    BOARD_STATUSES.map(async (status) => {
+    [...BOARD_STATUSES, ...OFF_BOARD_STATUSES].map(async (status) => {
+      const onBoard = (BOARD_STATUSES as readonly string[]).includes(status)
       const { reports, total } = await DailyReportRepository.findPaginatedEnriched(
         userId,
-        COLUMN_PAGE_SIZE,
+        onBoard ? COLUMN_PAGE_SIZE : OFF_BOARD_PAGE_SIZE,
         0,
         { ...filters, taskStatus: status }
       )

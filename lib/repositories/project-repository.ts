@@ -312,14 +312,13 @@ export const ProjectRepository = {
        paramIndex++;
     }
     if (filters.start_date) {
-       conditions.push(`p.created_at >= $${paramIndex}`);
+       conditions.push(`COALESCE(p.project_end_date_plan, p.project_start_date_plan, p.created_at::date::text) >= $${paramIndex}`);
        params.push(filters.start_date);
        paramIndex++;
     }
     if (filters.end_date) {
-       // Append T23:59:59.999Z to include the entire end date
-       conditions.push(`p.created_at <= $${paramIndex}`);
-       params.push(filters.end_date + 'T23:59:59.999Z');
+       conditions.push(`COALESCE(p.project_start_date_plan, p.created_at::date::text) <= $${paramIndex}`);
+       params.push(filters.end_date);
        paramIndex++;
     }
 

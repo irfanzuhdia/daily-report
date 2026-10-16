@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin, LifeBuoy, Download } from "lucide-react"
+import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin, LifeBuoy, Download, Calendar, Flag } from "lucide-react"
 import {
   DndContext,
   DragOverlay,
@@ -35,7 +35,7 @@ import {
   SelectValue,
 } from "@/components/ui/select"
 import { ViewModeToggle } from "@/components/ui/view-mode-toggle"
-import { FilterContainer, FilterSearch, FilterMultiSelect } from "@/components/ui/filter-bar"
+import { FilterContainer, FilterSearch, FilterMultiSelect, FilterDateRange } from "@/components/ui/filter-bar"
 import {
   Dialog,
   DialogContent,
@@ -87,6 +87,8 @@ export function ProjectsClient({
   currentSite = "",
   currentDiv = "",
   currentTeam = "",
+  currentStartDate,
+  currentEndDate,
   columnData = {},
   columnPageSize = 20,
 }: {
@@ -106,6 +108,8 @@ export function ProjectsClient({
   currentSite?: string
   currentDiv?: string
   currentTeam?: string
+  currentStartDate?: string
+  currentEndDate?: string
   columnData?: Record<string, { items: Project[]; total: number }>
   columnPageSize?: number
 }) {
@@ -134,6 +138,9 @@ export function ProjectsClient({
   const [site, setSite] = useState<string[]>(currentSite ? currentSite.split(',') : (defaultSite ? [defaultSite] : []))
   const [division, setDivision] = useState<string[]>(currentDiv ? currentDiv.split(',') : (defaultDiv ? [defaultDiv] : []))
   const [team, setTeam] = useState<string[]>(currentTeam ? currentTeam.split(',') : (defaultTeam ? [defaultTeam] : []))
+
+  const [startDate, setStartDate] = useState(currentStartDate ?? "")
+  const [endDate, setEndDate] = useState(currentEndDate ?? "")
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
   
@@ -197,6 +204,8 @@ export function ProjectsClient({
         sp.set("viewMode", viewMode)
         sp.set("limit", String(columnPageSize))
         sp.set("offset", String(loadedInColumn(status)))
+        if (startDate) sp.set("start_date", startDate)
+        if (endDate) sp.set("end_date", endDate)
 
         const res = await fetch(`/api/board?${sp.toString()}`)
         if (!res.ok) return
@@ -219,7 +228,7 @@ export function ProjectsClient({
         setLoadingColumn(null)
       }
     },
-    [viewMode, columnPageSize, loadedInColumn]
+    [viewMode, columnPageSize, loadedInColumn, startDate, endDate]
   )
 
   const dndId = useId()
@@ -274,9 +283,11 @@ export function ProjectsClient({
       if (division.length > 0) params.set("div_filter", division.join(","))
       if (team.length > 0) params.set("team_filter", team.join(","))
     }
+    if (startDate) params.set("start_date", startDate)
+    if (endDate) params.set("end_date", endDate)
     const query = params.toString()
     router.push(`/projects${query ? "?" + query : ""}`)
-  }, [debouncedSearch, statusFilter, createdByFilter, memberFilter, viewMode, router, dept, site, division, team])
+  }, [debouncedSearch, statusFilter, createdByFilter, memberFilter, startDate, endDate, viewMode, router, dept, site, division, team])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -721,6 +732,14 @@ export function ProjectsClient({
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-2 px-1 -mx-1 scrollbar-none w-full max-w-full">
+        <FilterDateRange
+          startDate={startDate}
+          endDate={endDate}
+          onDateChange={(s, e) => {
+            setStartDate(s)
+            setEndDate(e)
+          }}
+        />
         {layout === "list" && (
           <FilterMultiSelect
             placeholder="All statuses"
@@ -1000,10 +1019,16 @@ export function ProjectsClient({
                       </p>
                       <div className="mb-3 flex flex-wrap gap-2 text-xs text-muted-foreground">
                         {project.project_start_date_plan && (
-                          <span>Start: {project.project_start_date_plan}</span>
+                          <span className="inline-flex items-center gap-1">
+                            <Calendar className="h-3 w-3 shrink-0" />
+                            <span>Start: {project.project_start_date_plan}</span>
+                          </span>
                         )}
                         {project.project_end_date_plan && (
-                          <span>End: {project.project_end_date_plan}</span>
+                          <span className="inline-flex items-center gap-1">
+                            <Flag className="h-3 w-3 shrink-0" />
+                            <span>End: {project.project_end_date_plan}</span>
+                          </span>
                         )}
                       </div>
                       <div className="mb-3 flex flex-wrap gap-1.5 text-xs">

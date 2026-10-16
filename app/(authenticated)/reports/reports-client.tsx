@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, GripVertical, Pin, Loader2, Download } from "lucide-react"
+import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, GripVertical, Pin, Loader2, Download, Folder } from "lucide-react"
 import {
   DndContext,
   DragOverlay,
@@ -34,7 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { FilterContainer, FilterSearch, FilterMultiSelect } from "@/components/ui/filter-bar"
+import { FilterContainer, FilterSearch, FilterMultiSelect, FilterDateRange } from "@/components/ui/filter-bar"
 import { ViewModeToggle } from "@/components/ui/view-mode-toggle"
 import {
   Dialog,
@@ -68,6 +68,8 @@ export function ReportsClient({
   currentSite = "",
   currentDiv = "",
   currentTeam = "",
+  currentStartDate,
+  currentEndDate,
   columnData = {},
   columnPageSize = 20,
 }: {
@@ -86,6 +88,8 @@ export function ReportsClient({
   currentSite?: string
   currentDiv?: string
   currentTeam?: string
+  currentStartDate?: string
+  currentEndDate?: string
   columnData?: Record<string, { items: EnrichedReport[]; total: number }>
   columnPageSize?: number
 }) {
@@ -115,6 +119,9 @@ export function ReportsClient({
   const [site, setSite] = useState<string[]>(currentSite ? currentSite.split(',') : (defaultSite ? [defaultSite] : []))
   const [division, setDivision] = useState<string[]>(currentDiv ? currentDiv.split(',') : (defaultDiv ? [defaultDiv] : []))
   const [team, setTeam] = useState<string[]>(currentTeam ? currentTeam.split(',') : (defaultTeam ? [defaultTeam] : []))
+
+  const [startDate, setStartDate] = useState(currentStartDate ?? "")
+  const [endDate, setEndDate] = useState(currentEndDate ?? "")
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
   
@@ -178,6 +185,8 @@ export function ReportsClient({
         sp.set("viewMode", viewMode)
         sp.set("limit", String(columnPageSize))
         sp.set("offset", String(loadedInColumn(status)))
+        if (startDate) sp.set("start_date", startDate)
+        if (endDate) sp.set("end_date", endDate)
 
         const res = await fetch(`/api/board?${sp.toString()}`)
         if (!res.ok) return
@@ -200,7 +209,7 @@ export function ReportsClient({
         setLoadingColumn(null)
       }
     },
-    [viewMode, columnPageSize, loadedInColumn]
+    [viewMode, columnPageSize, loadedInColumn, startDate, endDate]
   )
 
   const dndId = useId()
@@ -259,6 +268,8 @@ export function ReportsClient({
     if (divStr && divStr !== defaultDiv) params.set("div_filter", divStr)
     const teamStr = team.join(",")
     if (teamStr && teamStr !== defaultTeam) params.set("team_filter", teamStr)
+    if (startDate) params.set("start_date", startDate)
+    if (endDate) params.set("end_date", endDate)
     
     const currentParams = new URLSearchParams(window.location.search)
     currentParams.delete("page") // Ignore page for comparison
@@ -267,7 +278,7 @@ export function ReportsClient({
     if (currentParams.toString() !== newParamsStr) {
       router.push(`/reports?${newParamsStr}`)
     }
-  }, [debouncedSearch, taskFilter, projectFilter, createdByFilter, memberFilter, router, dept, site, division, team, defaultDept, defaultSite, defaultDiv, defaultTeam])
+  }, [debouncedSearch, taskFilter, projectFilter, createdByFilter, memberFilter, startDate, endDate, router, dept, site, division, team, defaultDept, defaultSite, defaultDiv, defaultTeam])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -691,6 +702,15 @@ export function ReportsClient({
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-2 px-1 -mx-1 scrollbar-none w-full max-w-full">
+            <FilterDateRange
+              startDate={startDate}
+              endDate={endDate}
+              onDateChange={(s, e) => {
+                setStartDate(s)
+                setEndDate(e)
+              }}
+            />
+
             <FilterMultiSelect
               placeholder="All projects"
               icon={<Filter className="h-3.5 w-3.5" />}
@@ -872,8 +892,9 @@ export function ReportsClient({
                       {report.remarks || "No remarks"}
                     </h4>
                     {report.task_description && (
-                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate">
-                        📁 {report.project_name ?? "Unknown"} → {report.task_description}
+                      <p className="text-[10px] text-muted-foreground mt-0.5 truncate inline-flex items-center gap-1 max-w-full">
+                        <Folder className="h-3 w-3 shrink-0" />
+                        <span className="truncate">{report.project_name ?? "Unknown"} → {report.task_description}</span>
                       </p>
                     )}
                   </div>
@@ -953,8 +974,9 @@ export function ReportsClient({
                           )}
                         </div>
                         {report.task_description && (
-                          <p className="text-[10px] text-muted-foreground mt-1 truncate pt-0.5">
-                            📁 {report.project_name ?? "Unknown"} → {report.task_description}
+                          <p className="text-[10px] text-muted-foreground mt-1 truncate pt-0.5 inline-flex items-center gap-1 max-w-full">
+                            <Folder className="h-3 w-3 shrink-0" />
+                            <span className="truncate">{report.project_name ?? "Unknown"} → {report.task_description}</span>
                           </p>
                         )}
                       </div>

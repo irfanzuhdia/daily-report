@@ -3,7 +3,7 @@
 import { useState, useCallback, useMemo, useId, useEffect, useRef } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin, Download } from "lucide-react"
+import { Plus, Search, Filter, Eye, Pencil, Trash2, Kanban, List, Archive, Loader2, GripVertical, Pin, Download, Folder, Calendar, Flag } from "lucide-react"
 import {
   DndContext,
   DragOverlay,
@@ -40,7 +40,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { FilterContainer, FilterSearch, FilterMultiSelect } from "@/components/ui/filter-bar"
+import { FilterContainer, FilterSearch, FilterMultiSelect, FilterDateRange } from "@/components/ui/filter-bar"
 import { ViewModeToggle } from "@/components/ui/view-mode-toggle"
 import type { Task, Status, Project, TaskTeam, ProjectTeam } from "@/lib/types"
 import { useViewDensity } from "@/lib/view-density"
@@ -80,6 +80,8 @@ export function TasksClient({
   currentSite = "",
   currentDiv = "",
   currentTeam = "",
+  currentStartDate,
+  currentEndDate,
   columnData = {},
   columnPageSize = 20,
 }: {
@@ -102,6 +104,8 @@ export function TasksClient({
   currentSite?: string
   currentDiv?: string
   currentTeam?: string
+  currentStartDate?: string
+  currentEndDate?: string
   columnData?: Record<string, { items: Task[]; total: number }>
   columnPageSize?: number
 }) {
@@ -131,6 +135,9 @@ export function TasksClient({
   const [site, setSite] = useState<string[]>(currentSite ? currentSite.split(',') : (defaultSite ? [defaultSite] : []))
   const [division, setDivision] = useState<string[]>(currentDiv ? currentDiv.split(',') : (defaultDiv ? [defaultDiv] : []))
   const [team, setTeam] = useState<string[]>(currentTeam ? currentTeam.split(',') : (defaultTeam ? [defaultTeam] : []))
+
+  const [startDate, setStartDate] = useState(currentStartDate ?? "")
+  const [endDate, setEndDate] = useState(currentEndDate ?? "")
 
   const [deleteId, setDeleteId] = useState<string | null>(null)
   
@@ -194,6 +201,8 @@ export function TasksClient({
         sp.set("viewMode", viewMode)
         sp.set("limit", String(columnPageSize))
         sp.set("offset", String(loadedInColumn(status)))
+        if (startDate) sp.set("start_date", startDate)
+        if (endDate) sp.set("end_date", endDate)
 
         const res = await fetch(`/api/board?${sp.toString()}`)
         if (!res.ok) return
@@ -216,7 +225,7 @@ export function TasksClient({
         setLoadingColumn(null)
       }
     },
-    [viewMode, columnPageSize, loadedInColumn]
+    [viewMode, columnPageSize, loadedInColumn, startDate, endDate]
   )
 
   const dndId = useId()
@@ -272,9 +281,11 @@ export function TasksClient({
       if (division.length > 0) params.set("div_filter", division.join(","))
       if (team.length > 0) params.set("team_filter", team.join(","))
     }
+    if (startDate) params.set("start_date", startDate)
+    if (endDate) params.set("end_date", endDate)
     const query = params.toString()
     router.push(`/tasks${query ? "?" + query : ""}`)
-  }, [debouncedSearch, statusFilter, projectFilter, createdByFilter, memberFilter, viewMode, router, dept, site, division, team])
+  }, [debouncedSearch, statusFilter, projectFilter, createdByFilter, memberFilter, startDate, endDate, viewMode, router, dept, site, division, team])
 
   const handleDelete = async () => {
     if (!deleteId) return
@@ -719,6 +730,15 @@ export function TasksClient({
           onChange={(e) => setSearch(e.target.value)}
         />
         <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-2 px-1 -mx-1 scrollbar-none w-full max-w-full">
+            <FilterDateRange
+              startDate={startDate}
+              endDate={endDate}
+              onDateChange={(s, e) => {
+                setStartDate(s)
+                setEndDate(e)
+              }}
+            />
+
             <FilterMultiSelect
               placeholder="All projects"
               icon={<Filter className="h-3.5 w-3.5" />}
@@ -934,8 +954,9 @@ export function TasksClient({
                     </div>
 
                     {/* Sub Row: Parent Project */}
-                    <p className="text-[10px] sm:text-xs text-muted-foreground truncate">
-                      📁 {projectMap[task.project_id] ?? task.project_id}
+                    <p className="text-[10px] sm:text-xs text-muted-foreground truncate inline-flex items-center gap-1">
+                      <Folder className="h-3 w-3 shrink-0" />
+                      <span className="truncate">{projectMap[task.project_id] ?? task.project_id}</span>
                     </p>
 
                     {/* Bottom Row: Status Badges, Priority & Progress Metrics */}
@@ -956,6 +977,18 @@ export function TasksClient({
                       </div>
 
                       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground shrink-0">
+                        {task.start_date && (
+                          <span className="inline-flex items-center gap-0.5">
+                            <Calendar className="h-2.5 w-2.5 shrink-0" />
+                            <span>{task.start_date}</span>
+                          </span>
+                        )}
+                        {task.due_date && (
+                          <span className="inline-flex items-center gap-0.5">
+                            <Flag className="h-2.5 w-2.5 shrink-0" />
+                            <span>{task.due_date}</span>
+                          </span>
+                        )}
                         <span className="shrink-0">{task.task_latest_percentage ?? 0}% done</span>
                         {(taskHoursMap[task.id] ?? 0) > 0 && (
                           <span className="shrink-0 font-medium text-foreground">{taskHoursMap[task.id]}h</span>
@@ -986,6 +1019,12 @@ export function TasksClient({
                           {task.task_latest_percentage ?? 0}% complete
                           {(taskHoursMap[task.id] ?? 0) > 0 && (
                             <> • <span className="font-medium">{taskHoursMap[task.id]}h</span></>
+                          )}
+                          {task.start_date && (
+                            <> • <span className="inline-flex items-center gap-0.5"><Calendar className="h-3 w-3 shrink-0" /> {task.start_date}</span></>
+                          )}
+                          {task.due_date && (
+                            <> • <span className="inline-flex items-center gap-0.5"><Flag className="h-3 w-3 shrink-0" /> {task.due_date}</span></>
                           )}
                         </p>
                       </div>
@@ -1054,9 +1093,9 @@ export function TasksClient({
                         <Link href={`/tasks/${task.id}`} className="font-semibold text-sm hover:text-primary leading-snug">
                           {task.task_description}
                         </Link>
-                        <p className="text-xs text-muted-foreground mt-0.5">
-                          📁 {projectMap[task.project_id] ?? task.project_id} • {task.task_latest_percentage ?? 0}% complete
-                          {taskHoursMap[task.id] > 0 && ` • ${taskHoursMap[task.id]}h`}
+                        <p className="text-xs text-muted-foreground mt-0.5 inline-flex items-center gap-1">
+                          <Folder className="h-3 w-3 shrink-0" />
+                          <span className="truncate">{projectMap[task.project_id] ?? task.project_id} • {task.task_latest_percentage ?? 0}% complete{taskHoursMap[task.id] > 0 && ` • ${taskHoursMap[task.id]}h`}</span>
                         </p>
                       </div>
                       <div className="flex items-center gap-2 shrink-0">

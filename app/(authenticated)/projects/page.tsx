@@ -21,6 +21,8 @@ export default async function ProjectsPage({
     site_filter?: string
     div_filter?: string
     team_filter?: string
+    start_date?: string
+    end_date?: string
   }>
 }) {
   const session = await getSession()
@@ -104,6 +106,8 @@ export default async function ProjectsPage({
       currentSite={params.site_filter}
       currentDiv={params.div_filter}
       currentTeam={params.team_filter}
+      currentStartDate={params.start_date}
+      currentEndDate={params.end_date}
       columnData={columnData}
       columnPageSize={COLUMN_PAGE_SIZE}
     />

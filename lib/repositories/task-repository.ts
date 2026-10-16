@@ -241,13 +241,13 @@ export const TaskRepository = {
        paramIndex++;
     }
     if (filters.start_date) {
-       conditions.push(`t.created_at >= $${paramIndex}`);
+       conditions.push(`COALESCE(t.due_date, t.start_date, t.created_at::date::text) >= $${paramIndex}`);
        params.push(filters.start_date);
        paramIndex++;
     }
     if (filters.end_date) {
-       conditions.push(`t.created_at <= $${paramIndex}`);
-       params.push(filters.end_date + 'T23:59:59.999Z');
+       conditions.push(`COALESCE(t.start_date, t.created_at::date::text) <= $${paramIndex}`);
+       params.push(filters.end_date);
        paramIndex++;
     }
 

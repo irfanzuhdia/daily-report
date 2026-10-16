@@ -3,7 +3,7 @@
 import { useState, useMemo, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Plus, Pencil, FileText, Users, X, History, Loader2, FileDown, ExternalLink } from "lucide-react"
+import { ArrowLeft, Plus, Pencil, FileText, Users, X, History, Loader2, FileDown, ExternalLink, Folder } from "lucide-react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
@@ -208,9 +208,10 @@ export function TaskDetailClient({
               {project && (
                 <Link
                   href={`/projects/${project.project_id}`}
-                  className="text-sm text-muted-foreground hover:text-primary"
+                  className="text-sm text-muted-foreground hover:text-primary inline-flex items-center gap-1.5"
                 >
-                  📁 {project.project_name}
+                  <Folder className="h-4 w-4 shrink-0" />
+                  <span>{project.project_name}</span>
                 </Link>
               )}
             </div>

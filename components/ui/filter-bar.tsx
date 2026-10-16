@@ -1,6 +1,6 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
-import { Search, ChevronDown, Check } from "lucide-react"
+import { Search, ChevronDown, Check, Calendar, X } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { SelectTrigger } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
@@ -304,3 +304,331 @@ export function FilterMultiSelect({
     </div>
   )
 }
+
+export interface FilterDateRangeProps {
+  startDate: string;
+  endDate: string;
+  onDateChange: (start: string, end: string) => void;
+  className?: string;
+  placeholder?: string;
+  disabled?: boolean;
+}
+
+export function FilterDateRange({
+  startDate,
+  endDate,
+  onDateChange,
+  className,
+  placeholder = "Date range",
+  disabled = false,
+}: FilterDateRangeProps) {
+  const [isOpen, setIsOpen] = React.useState(false);
+  const [draftStart, setDraftStart] = React.useState(startDate);
+  const [draftEnd, setDraftEnd] = React.useState(endDate);
+  const [dateError, setDateError] = React.useState<string | null>(null);
+  const [dropdownPosition, setDropdownPosition] = React.useState<{ top: number; left: number; width: number } | null>(null);
+  const buttonRef = React.useRef<HTMLButtonElement>(null);
+  const dropdownRef = React.useRef<HTMLDivElement>(null);
+  const mounted = React.useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
+
+  const updatePosition = React.useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const minW = Math.max(rect.width, 280);
+      let left = rect.left;
+      if (left + minW > viewportWidth - 16) {
+        left = Math.max(16, viewportWidth - minW - 16);
+      }
+      setDropdownPosition({
+        top: rect.bottom + 6,
+        left,
+        width: minW,
+      });
+    }
+  }, []);
+
+  const close = React.useCallback(() => {
+    setIsOpen(false);
+    setDateError(null);
+  }, []);
+
+  const toggleOpen = () => {
+    if (disabled) return;
+    if (isOpen) {
+      close();
+      return;
+    }
+    setDraftStart(startDate);
+    setDraftEnd(endDate);
+    setDateError(null);
+    updatePosition();
+    setIsOpen(true);
+  };
+
+  React.useEffect(() => {
+    if (!isOpen) return;
+
+    const handleOutsideClick = (e: MouseEvent) => {
+      const target = e.target as Node;
+      if (
+        buttonRef.current && !buttonRef.current.contains(target) &&
+        dropdownRef.current && !dropdownRef.current.contains(target)
+      ) {
+        close();
+      }
+    };
+
+    const handleScrollOrResize = () => {
+      updatePosition();
+    };
+
+    document.addEventListener("mousedown", handleOutsideClick);
+    window.addEventListener("scroll", handleScrollOrResize, true);
+    window.addEventListener("resize", handleScrollOrResize);
+
+    return () => {
+      document.removeEventListener("mousedown", handleOutsideClick);
+      window.removeEventListener("scroll", handleScrollOrResize, true);
+      window.removeEventListener("resize", handleScrollOrResize);
+    };
+  }, [isOpen, updatePosition, close]);
+
+  const handleApply = () => {
+    if (draftStart && draftEnd && draftStart > draftEnd) {
+      setDateError("End date cannot be earlier than start date.");
+      return;
+    }
+    setDateError(null);
+    onDateChange(draftStart, draftEnd);
+    close();
+  };
+
+  const handleClear = (e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDraftStart("");
+    setDraftEnd("");
+    setDateError(null);
+    onDateChange("", "");
+    close();
+  };
+
+  const handlePreset = (type: "today" | "thisWeek" | "thisMonth" | "last30Days") => {
+    const now = new Date();
+    const toYMD = (d: Date) => {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, "0");
+      const day = String(d.getDate()).padStart(2, "0");
+      return `${y}-${m}-${day}`;
+    };
+
+    let start = "";
+    let end = toYMD(now);
+
+    if (type === "today") {
+      start = end;
+    } else if (type === "thisWeek") {
+      const dayOfWeek = now.getDay() || 7; // Monday = 1
+      const mon = new Date(now);
+      mon.setDate(now.getDate() - dayOfWeek + 1);
+      const sun = new Date(mon);
+      sun.setDate(mon.getDate() + 6);
+      start = toYMD(mon);
+      end = toYMD(sun);
+    } else if (type === "thisMonth") {
+      const first = new Date(now.getFullYear(), now.getMonth(), 1);
+      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+      start = toYMD(first);
+      end = toYMD(last);
+    } else if (type === "last30Days") {
+      const past = new Date(now);
+      past.setDate(now.getDate() - 29);
+      start = toYMD(past);
+    }
+
+    setDraftStart(start);
+    setDraftEnd(end);
+    setDateError(null);
+  };
+
+  const hasSelections = Boolean(startDate || endDate);
+
+  const triggerLabel = React.useMemo(() => {
+    if (startDate && endDate) {
+      return startDate === endDate ? startDate : `${startDate} → ${endDate}`;
+    }
+    if (startDate) return `From ${startDate}`;
+    if (endDate) return `Until ${endDate}`;
+    return placeholder;
+  }, [startDate, endDate, placeholder]);
+
+  return (
+    <div className="relative shrink-0">
+      <button
+        ref={buttonRef}
+        type="button"
+        onClick={toggleOpen}
+        disabled={disabled}
+        aria-expanded={isOpen}
+        className={cn(
+          "flex h-10 sm:h-9 w-full min-w-[140px] sm:min-w-[160px] items-center justify-between rounded-full bg-muted/50 border border-border px-3 py-2 text-xs sm:text-sm shadow-sm transition-colors hover:border-border/80 focus:outline-none focus:ring-2 focus:ring-ring/30 gap-1.5",
+          hasSelections ? "border-primary/50 bg-primary/10 text-primary font-medium" : "",
+          disabled ? "cursor-not-allowed opacity-50 hover:border-border" : "",
+          className
+        )}
+      >
+        <span className="flex items-center gap-2 truncate text-muted-foreground">
+          <Calendar className="h-3.5 w-3.5 shrink-0 text-foreground/70" />
+          {hasSelections ? (
+            <span className="truncate text-foreground font-medium">{triggerLabel}</span>
+          ) : (
+            <span className="truncate">{placeholder}</span>
+          )}
+        </span>
+        <div className="flex items-center gap-1 shrink-0 ml-1">
+          {hasSelections && (
+            <span
+              role="button"
+              tabIndex={0}
+              onClick={handleClear}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" || e.key === " ") {
+                  e.stopPropagation();
+                  handleClear();
+                }
+              }}
+              title="Clear date filter"
+              className="p-0.5 rounded-full hover:bg-muted text-muted-foreground hover:text-foreground cursor-pointer transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </span>
+          )}
+          <ChevronDown className="h-4 w-4 opacity-50 shrink-0" />
+        </div>
+      </button>
+
+      {isOpen && mounted && dropdownPosition && createPortal(
+        <div
+          ref={dropdownRef}
+          style={{
+            position: "fixed",
+            top: `${dropdownPosition.top}px`,
+            left: `${dropdownPosition.left}px`,
+            width: `${dropdownPosition.width}px`,
+            zIndex: 9999,
+          }}
+          className="flex flex-col rounded-xl border border-border bg-popover text-popover-foreground shadow-xl animate-in fade-in-0 zoom-in-95 p-3 gap-3"
+        >
+          <div className="flex items-center justify-between border-b border-border/50 pb-2">
+            <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
+              <Calendar className="h-3.5 w-3.5 text-primary" />
+              Filter Date Range
+            </span>
+            {(draftStart || draftEnd) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftStart("");
+                  setDraftEnd("");
+                  setDateError(null);
+                }}
+                className="text-[11px] font-medium text-muted-foreground hover:text-foreground hover:underline focus:outline-none"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+
+          <div className="space-y-2">
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+                Start Date
+              </label>
+              <input
+                type="date"
+                value={draftStart}
+                onChange={(e) => {
+                  setDraftStart(e.target.value);
+                  setDateError(null);
+                }}
+                className="h-8 w-full rounded-lg border border-border bg-muted/40 px-2.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-muted-foreground mb-1 block">
+                End Date
+              </label>
+              <input
+                type="date"
+                value={draftEnd}
+                onChange={(e) => {
+                  setDraftEnd(e.target.value);
+                  setDateError(null);
+                }}
+                className="h-8 w-full rounded-lg border border-border bg-muted/40 px-2.5 text-xs text-foreground focus:outline-none focus:ring-2 focus:ring-primary/30"
+              />
+            </div>
+          </div>
+
+          {dateError && (
+            <p className="text-[11px] text-destructive font-medium leading-tight">{dateError}</p>
+          )}
+
+          <div className="flex flex-wrap gap-1 pt-1 border-t border-border/40">
+            <button
+              type="button"
+              onClick={() => handlePreset("today")}
+              className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              Today
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePreset("thisWeek")}
+              className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              This Week
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePreset("thisMonth")}
+              className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              This Month
+            </button>
+            <button
+              type="button"
+              onClick={() => handlePreset("last30Days")}
+              className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            >
+              Last 30 Days
+            </button>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-1 border-t border-border/40">
+            <button
+              type="button"
+              onClick={close}
+              className="h-7 px-3 text-xs font-medium rounded-lg text-muted-foreground hover:bg-muted transition-colors cursor-pointer"
+            >
+              Cancel
+            </button>
+            <button
+              type="button"
+              onClick={handleApply}
+              className="h-7 px-3 text-xs font-medium rounded-lg bg-primary text-primary-foreground hover:bg-primary/90 transition-colors shadow-xs cursor-pointer"
+            >
+              Apply
+            </button>
+          </div>
+        </div>,
+        document.body
+      )}
+    </div>
+  );
+}
+

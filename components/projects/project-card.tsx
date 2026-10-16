@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { GripVertical, Pin, LifeBuoy, Loader2, Pencil, Trash2 } from "lucide-react"
+import { GripVertical, Pin, LifeBuoy, Loader2, Pencil, Trash2, Calendar, Flag } from "lucide-react"
 import React, { memo } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
@@ -105,8 +105,18 @@ export const SortableProjectCard = memo(function SortableProjectCard({
           {/* Dates */}
           {!isCompact && (project.project_start_date_plan || project.project_end_date_plan) && (
             <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
-              {project.project_start_date_plan && <span>📅 Start: {project.project_start_date_plan}</span>}
-              {project.project_end_date_plan && <span>🏁 End: {project.project_end_date_plan}</span>}
+              {project.project_start_date_plan && (
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="h-3 w-3 shrink-0" />
+                  <span>Start: {project.project_start_date_plan}</span>
+                </span>
+              )}
+              {project.project_end_date_plan && (
+                <span className="inline-flex items-center gap-1">
+                  <Flag className="h-3 w-3 shrink-0" />
+                  <span>End: {project.project_end_date_plan}</span>
+                </span>
+              )}
             </div>
           )}
 

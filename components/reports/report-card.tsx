@@ -7,7 +7,7 @@ import { useDroppable } from "@dnd-kit/core"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { GripVertical, Pin, Pencil, Trash2, Loader2 } from "lucide-react"
+import { GripVertical, Pin, Pencil, Trash2, Loader2, Folder } from "lucide-react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 
@@ -128,8 +128,9 @@ export const SortableReportCard = memo(function SortableReportCard({
               )}
             </div>
             {report.task_description && (
-              <p className="text-[10px] text-muted-foreground truncate pt-0.5">
-                📁 {report.project_name ?? "Unknown"} → {report.task_description}
+              <p className="text-[10px] text-muted-foreground truncate pt-0.5 inline-flex items-center gap-1 max-w-full">
+                <Folder className="h-3 w-3 shrink-0" />
+                <span className="truncate">{report.project_name ?? "Unknown"} → {report.task_description}</span>
               </p>
             )}
           </div>
@@ -186,8 +187,9 @@ export function ReportDragOverlay({ report }: { report: EnrichedReport }) {
             )}
           </div>
           {report.task_description && (
-            <p className="text-[10px] text-muted-foreground truncate pt-0.5">
-              📁 {report.project_name ?? "Unknown"} → {report.task_description}
+            <p className="text-[10px] text-muted-foreground truncate pt-0.5 inline-flex items-center gap-1 max-w-full">
+              <Folder className="h-3 w-3 shrink-0" />
+              <span className="truncate">{report.project_name ?? "Unknown"} → {report.task_description}</span>
             </p>
           )}
         </div>

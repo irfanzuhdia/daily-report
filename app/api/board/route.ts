@@ -47,6 +47,7 @@ export async function GET(request: NextRequest) {
     const passthrough = [
       'project_id', 'search', 'created_by', 'member_id',
       'dept_filter', 'site_filter', 'div_filter', 'team_filter',
+      'start_date', 'end_date',
     ] as const
 
     const filters: Record<string, string> = { status, viewMode }
@@ -74,6 +75,8 @@ export async function GET(request: NextRequest) {
           site: sp.get('site_filter') || undefined,
           div: sp.get('div_filter') || undefined,
           team: sp.get('team_filter') || undefined,
+          startDate: sp.get('start_date') || undefined,
+          endDate: sp.get('end_date') || undefined,
         }
       )
       return createSuccessResponse({ items: reports, total, status, offset, limit })

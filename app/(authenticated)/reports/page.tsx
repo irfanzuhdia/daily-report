@@ -23,6 +23,8 @@ export default async function ReportsPage({
     site_filter?: string
     div_filter?: string
     team_filter?: string
+    start_date?: string
+    end_date?: string
   }>
 }) {
   const session = await getSession()
@@ -60,6 +62,8 @@ export default async function ReportsPage({
     site: params.site_filter,
     div: params.div_filter,
     team: params.team_filter,
+    startDate: params.start_date,
+    endDate: params.end_date,
     viewMode: effectiveViewMode,
   }
 
@@ -145,6 +149,8 @@ export default async function ReportsPage({
       currentSite={params.site_filter}
       currentDiv={params.div_filter}
       currentTeam={params.team_filter}
+      currentStartDate={params.start_date}
+      currentEndDate={params.end_date}
       columnData={columnData}
       columnPageSize={COLUMN_PAGE_SIZE}
     />

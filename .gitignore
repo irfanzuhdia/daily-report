@@ -38,3 +38,7 @@ next-env.d.ts
 # push subscriptions
 .push-subscriptions.json
 
+# local tool & generated files
+.claude/
+*.xlsx
+

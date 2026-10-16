@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useSortable } from "@dnd-kit/sortable"
 import { CSS } from "@dnd-kit/utilities"
-import { GripVertical, Pin, Pencil, Trash2, Loader2 } from "lucide-react"
+import { GripVertical, Pin, Pencil, Trash2, Loader2, Folder, Calendar, Flag } from "lucide-react"
 
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -93,8 +93,9 @@ export const SortableTaskCard = memo(function SortableTaskCard({
                 {task.task_description}
               </span>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <p className="text-[10px] text-muted-foreground truncate">
-                  📁 {projectMap[task.project_id] ?? task.project_id}
+                <p className="text-[10px] text-muted-foreground truncate inline-flex items-center gap-1">
+                  <Folder className="h-3 w-3 shrink-0" />
+                  <span className="truncate">{projectMap[task.project_id] ?? task.project_id}</span>
                 </p>
                 {task.priority && (
                   <Badge variant="outline" className={`text-[9px] py-0 px-1.5 font-medium ${getPriorityBadgeClass(task.priority)}`}>
@@ -118,8 +119,18 @@ export const SortableTaskCard = memo(function SortableTaskCard({
 
           {!isCompact && (task.start_date || task.due_date) && (
             <div className="flex flex-wrap gap-2 text-[10px] text-muted-foreground">
-              {task.start_date && <span>📅 Start: {task.start_date}</span>}
-              {task.due_date && <span>🏁 Due: {task.due_date}</span>}
+              {task.start_date && (
+                <span className="inline-flex items-center gap-1">
+                  <Calendar className="h-3 w-3 shrink-0" />
+                  <span>Start: {task.start_date}</span>
+                </span>
+              )}
+              {task.due_date && (
+                <span className="inline-flex items-center gap-1">
+                  <Flag className="h-3 w-3 shrink-0" />
+                  <span>Due: {task.due_date}</span>
+                </span>
+              )}
             </div>
           )}
 

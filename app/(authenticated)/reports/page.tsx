@@ -67,38 +67,36 @@ export default async function ReportsPage({
     viewMode: effectiveViewMode,
   }
 
-  // One query per column so each one reflects its own real contents.
-  const columnResults = await Promise.all(
-    [...BOARD_STATUSES, ...OFF_BOARD_STATUSES].map(async (status) => {
-      const onBoard = (BOARD_STATUSES as readonly string[]).includes(status)
-      const { reports, total } = await DailyReportRepository.findPaginatedEnriched(
-        userId,
-        onBoard ? COLUMN_PAGE_SIZE : OFF_BOARD_PAGE_SIZE,
-        0,
-        { ...filters, taskStatus: status }
-      )
-      return [status, { reports, total }] as const
-    })
-  )
+  // Run column queries, active tasks, projects, and task teams in parallel to eliminate waterfall
+  const [columnResults, rawActiveTasks, allProjects, taskTeams] = await Promise.all([
+    Promise.all(
+      [...BOARD_STATUSES, ...OFF_BOARD_STATUSES].map(async (status) => {
+        const onBoard = (BOARD_STATUSES as readonly string[]).includes(status)
+        const { reports, total } = await DailyReportRepository.findPaginatedEnriched(
+          userId,
+          onBoard ? COLUMN_PAGE_SIZE : OFF_BOARD_PAGE_SIZE,
+          0,
+          { ...filters, taskStatus: status }
+        )
+        return [status, { reports, total }] as const
+      })
+    ),
+    TaskRepository.findAll(userId),
+    ProjectRepository.findAll(userId),
+    effectiveViewMode === "my" ? TaskTeamRepository.findByUserId(userId) : Promise.resolve([]),
+  ])
 
   const reports = columnResults.flatMap(([, col]) => col.reports)
 
-  // allUsers already fetched above
-
-  // For the create form dropdown, fetch a simplified list of active tasks for this user
-  let activeTasks = await TaskRepository.findAll(userId) 
+  let activeTasks = rawActiveTasks
   if (effectiveViewMode === "my") {
-    const taskTeams = await TaskTeamRepository.findByUserId(userId)
     const myTaskIds = new Set(taskTeams.map((tt) => tt.task_id))
     activeTasks = activeTasks.filter((t) => t.created_by === userId || myTaskIds.has(t.id))
   }
 
-  // Fetch projects for the new project filter
-  let allProjects = await ProjectRepository.findAll(userId)
-
   // Filter tasks based on selected project to make task dropdown smarter
   if (params.project_id) {
-    activeTasks = activeTasks.filter(t => t.project_id === params.project_id)
+    activeTasks = activeTasks.filter((t) => t.project_id === params.project_id)
   }
 
   // Convert DB models to match ReportsClient expectations

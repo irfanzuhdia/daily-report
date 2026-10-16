@@ -41,6 +41,12 @@ export function UsersTable({
   setShowDeleteDialog
 }: UsersTableProps) {
 
+  const roleLevelMap = useMemo(() => {
+    const map = new Map<string, number>()
+    roleLevels.forEach((r) => map.set(r.role_name.toLowerCase(), r.level))
+    return map
+  }, [roleLevels])
+
   const columns = useMemo<ColumnDef<any>[]>(() => [
     {
       header: "User Profile",
@@ -70,10 +76,11 @@ export function UsersTable({
       accessorKey: "user_occupation",
       sortable: true,
       cell: (u) => {
-        const isUserAdmin = ["super user", "co - super user"].includes((u.user_occupation || "").toLowerCase())
+        const occLower = (u.user_occupation || "").toLowerCase()
+        const isUserAdmin = occLower === "super user" || occLower === "co - super user"
         const userLevel = isUserAdmin 
           ? 7 
-          : (roleLevels.find((r) => r.role_name.toLowerCase() === (u.user_occupation || "").toLowerCase())?.level || 1)
+          : (roleLevelMap.get(occLower) || 1)
         return (
           <div className="flex flex-col gap-1 items-start">
             <span className={`inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold ${
@@ -190,7 +197,7 @@ export function UsersTable({
         )
       }
     }
-  ], [callerIsSU, currentUserId, handleEditUserClick, handleImpersonateClick, handleResetPasswordClick, isSuperUserCaller, roleLevels, setDeleteUserId, setRestoreUserId, setShowDeleteDialog, setShowRestoreDialog])
+  ], [callerIsSU, currentUserId, handleEditUserClick, handleImpersonateClick, handleResetPasswordClick, isSuperUserCaller, roleLevels, roleLevelMap, setDeleteUserId, setRestoreUserId, setShowDeleteDialog, setShowRestoreDialog])
 
   return (
     <DataTable

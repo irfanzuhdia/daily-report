@@ -45,7 +45,16 @@ import {
 import type { Task } from "@/lib/types"
 import { revalidatePathsAndTags } from "@/app/actions"
 import { useViewDensity } from "@/lib/view-density"
-import { SortableReportCard, ReportDragOverlay, DroppableColumn, type EnrichedReport } from "@/components/reports/report-card"
+import dynamic from "next/dynamic"
+import type { EnrichedReport } from "@/components/reports/report-card"
+
+const SortableReportCard = dynamic(() => import("@/components/reports/report-card").then(m => m.SortableReportCard), {
+  loading: () => <div className="h-24 bg-muted/20 animate-pulse rounded-xl" />
+})
+const ReportDragOverlay = dynamic(() => import("@/components/reports/report-card").then(m => m.ReportDragOverlay))
+const DroppableColumn = dynamic(() => import("@/components/reports/report-card").then(m => m.DroppableColumn), {
+  loading: () => <div className="flex-1 min-h-[500px] bg-muted/10 animate-pulse rounded-2xl" />
+})
 
 
 
@@ -397,30 +406,47 @@ export function ReportsClient({
     return status === "CC" || status === "C"
   })
 
+  const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds])
+
   const getSortedColumnReports = useCallback((colId: string) => {
     const colReports = activeReports.filter((r) => {
       const status = dragOverTaskStatuses[r.task_id] ?? optimisticTaskStatuses[r.task_id] ?? r.task_status ?? "NS"
       return status === colId
     })
 
-    const pinned = colReports.filter((r) => pinnedIds.includes(r.report_id))
-    const unpinned = colReports.filter((r) => !pinnedIds.includes(r.report_id))
-
-    const sortOrder = columnOrders[colId] || []
-    const sortFn = (a: EnrichedReport, b: EnrichedReport) => {
-      const idxA = sortOrder.indexOf(a.report_id)
-      const idxB = sortOrder.indexOf(b.report_id)
-      if (idxA === -1 && idxB === -1) return 0
-      if (idxA === -1) return 1
-      if (idxB === -1) return -1
-      return idxA - idxB
+    const pinned: EnrichedReport[] = []
+    const unpinned: EnrichedReport[] = []
+    for (let i = 0; i < colReports.length; i++) {
+      const r = colReports[i]
+      if (pinnedSet.has(r.report_id)) {
+        pinned.push(r)
+      } else {
+        unpinned.push(r)
+      }
     }
 
-    pinned.sort(sortFn)
-    unpinned.sort(sortFn)
+    const sortOrder = columnOrders[colId]
+    if (sortOrder && sortOrder.length > 0) {
+      const orderMap = new Map<string, number>()
+      for (let i = 0; i < sortOrder.length; i++) {
+        orderMap.set(sortOrder[i], i)
+      }
+
+      const sortFn = (a: EnrichedReport, b: EnrichedReport) => {
+        const idxA = orderMap.get(a.report_id) ?? -1
+        const idxB = orderMap.get(b.report_id) ?? -1
+        if (idxA === -1 && idxB === -1) return 0
+        if (idxA === -1) return 1
+        if (idxB === -1) return -1
+        return idxA - idxB
+      }
+
+      pinned.sort(sortFn)
+      unpinned.sort(sortFn)
+    }
 
     return [...pinned, ...unpinned]
-  }, [activeReports, pinnedIds, columnOrders, optimisticTaskStatuses, dragOverTaskStatuses])
+  }, [activeReports, pinnedSet, columnOrders, optimisticTaskStatuses, dragOverTaskStatuses])
 
   /* ── Drag handlers ── */
 
@@ -562,7 +588,21 @@ export function ReportsClient({
   const handleExportCSV = async () => {
     try {
       setExporting(true)
-      const res = await fetch("/api/export/reports")
+      const params = new URLSearchParams()
+      if (startDate) params.set("start_date", startDate)
+      if (endDate) params.set("end_date", endDate)
+      if (debouncedSearch) params.set("search", debouncedSearch)
+      if (projectFilter.length > 0) params.set("project_id", projectFilter.join(","))
+      if (taskFilter.length > 0) params.set("task_id", taskFilter.join(","))
+      if (createdByFilter.length > 0) params.set("created_by", createdByFilter.join(","))
+      if (memberFilter.length > 0) params.set("member_id", memberFilter.join(","))
+      if (dept && dept.length > 0) params.set("dept_filter", dept.join(","))
+      if (site && site.length > 0) params.set("site_filter", site.join(","))
+      if (division && division.length > 0) params.set("div_filter", division.join(","))
+      if (team && team.length > 0) params.set("team_filter", team.join(","))
+
+      const url = params.toString() ? `/api/export/reports?${params.toString()}` : "/api/export/reports"
+      const res = await fetch(url)
       const result = await res.json()
       if (!res.ok || !result.data) throw new Error(result.error || "Export failed")
 
@@ -700,6 +740,12 @@ export function ReportsClient({
           placeholder="Search reports..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              setDebouncedSearch(search)
+            }
+          }}
         />
         <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-2 px-1 -mx-1 scrollbar-none w-full max-w-full">
             <FilterDateRange
@@ -828,7 +874,7 @@ export function ReportsClient({
                       key={report.report_id}
                       report={report}
                       onDelete={setDeleteId}
-                      isPinned={pinnedIds.includes(report.report_id)}
+                      isPinned={pinnedSet.has(report.report_id)}
                       onTogglePin={togglePin}
                       updatingTaskId={updatingTaskId}
                       currentUserId={currentUserId}

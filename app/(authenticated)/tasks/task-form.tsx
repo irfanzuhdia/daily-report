@@ -16,8 +16,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select"
-import { ProjectBrowseModal } from "@/components/project-browse-modal"
-import { ProjectCreateModal } from "@/components/project-create-modal"
+import dynamic from "next/dynamic"
+
+const ProjectBrowseModal = dynamic(() => import("@/components/project-browse-modal").then(m => m.ProjectBrowseModal), { ssr: false })
+const ProjectCreateModal = dynamic(() => import("@/components/project-create-modal").then(m => m.ProjectCreateModal), { ssr: false })
 import type { Task, Project, Status } from "@/lib/types"
 import { revalidatePathsAndTags } from "@/app/actions"
 import { SearchableUserSelect } from "@/components/ui/searchable-user-select"

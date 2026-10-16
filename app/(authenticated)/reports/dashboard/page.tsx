@@ -9,6 +9,7 @@ import {
   UserRepository,
   ProjectTeamRepository,
   TaskTeamRepository,
+  getContributionData,
 } from "@/lib/repositories"
 import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
 import { DashboardClient } from "./dashboard-client"
@@ -76,16 +77,15 @@ export default async function DashboardPage({
     created_by: effectiveViewMode === "team" ? params.created_by : undefined,
   }
 
-  const limit = 100000;
-
-  let [
-    { data: projects },
-    { data: tasks },
-    { reports },
+  const [
+    projectStats,
+    taskStats,
+    { reports: recentReportsRaw, total: totalReports },
+    contributionData,
   ] = await Promise.all([
-    ProjectRepository.findPaginated(userId, filters, limit, 0),
-    TaskRepository.findPaginated(userId, filters, limit, 0),
-    DailyReportRepository.findPaginatedEnriched(userId, limit, 0, {
+    ProjectRepository.getDashboardStats(userId, filters),
+    TaskRepository.getDashboardStats(userId, filters),
+    DailyReportRepository.findPaginatedEnriched(userId, 5, 0, {
       dept: filters.dept_filter,
       site: filters.site_filter,
       div: filters.div_filter,
@@ -93,67 +93,42 @@ export default async function DashboardPage({
       startDate: targetStartDate,
       endDate: targetEndDate,
       viewMode: effectiveViewMode,
-      createdBy: filters.created_by
+      createdBy: filters.created_by,
+    }),
+    getContributionData({
+      userId: effectiveViewMode === "my" ? userId : (filters.created_by || undefined),
+      startDate: targetStartDate,
+      endDate: targetEndDate,
     }),
   ])
 
   // Build status lookup
   const statusMap = new Map(statuses.map((s) => [s.id, s.name]))
 
-  // Stats
-  const activeProjects = projects.filter((p) => p.project_status === "OP").length
-  const completedTasks = tasks.filter((t) => t.task_status === "D" || t.task_status === "C").length
-
   // Projects by status
-  const statusCounts = new Map<string, number>()
-  for (const p of projects) {
-    const s = p.project_status ?? "NS"
-    statusCounts.set(s, (statusCounts.get(s) ?? 0) + 1)
-  }
-  const projectsByStatus = Array.from(statusCounts.entries()).map(
-    ([status, count]) => ({
-      status: statusMap.get(status) ?? status,
-      count,
-    })
-  )
+  const projectsByStatus = projectStats.statusCounts.map((item: { status: string; count: number }) => ({
+    status: statusMap.get(item.status) ?? item.status,
+    count: item.count,
+  }))
 
   const userMap = new Map(allUsers.map((u) => [u.user_id, u.user_name || u.user_email || u.user_id]))
 
-  // Recent reports with enriched data
-  const recentReports = reports
-    .sort((a, b) => (b.created_at ?? "").localeCompare(a.created_at ?? ""))
-    .slice(0, 5)
-    .map((r) => {
-      // For Dashboard stats, we already have enriched project_name and task_description
-      return {
-        ...r,
-        task_description: r.task_description ?? undefined,
-        project_name: r.project_name ?? undefined,
-        user_name: userMap.get(r.user_id ?? "") ?? undefined,
-      }
-    })
+  // Recent reports with enriched data (only top 5)
+  const recentReports = recentReportsRaw.map((r: any) => ({
+    ...r,
+    task_description: r.task_description ?? undefined,
+    project_name: r.project_name ?? undefined,
+    user_name: userMap.get(r.user_id ?? "") ?? undefined,
+  }))
 
-  const totalHours = reports.reduce((sum, r) => {
-    const h = parseFloat(r.total_hours ?? '0');
-    return sum + (isNaN(h) ? 0 : h);
-  }, 0);
-
-  // Contribution data for heatmap
-  const contributionData: Record<string, number> = {}
-  for (const r of reports) {
-    const h = parseFloat(r.total_hours ?? '0')
-    if (isNaN(h) || h <= 0) continue
-    if (r.date) {
-      contributionData[r.date] = (contributionData[r.date] || 0) + h
-    }
-  }
+  const totalHours = (Object.values(contributionData) as number[]).reduce((sum: number, h: number) => sum + h, 0)
 
   const stats = {
-    totalProjects: projects.length,
-    activeProjects,
-    totalTasks: tasks.length,
-    completedTasks,
-    totalReports: reports.length,
+    totalProjects: projectStats.totalProjects,
+    activeProjects: projectStats.activeProjects,
+    totalTasks: taskStats.totalTasks,
+    completedTasks: taskStats.completedTasks,
+    totalReports,
     totalHours,
     recentReports,
     projectsByStatus,

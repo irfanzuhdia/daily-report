@@ -14,89 +14,16 @@ export default async function TrashPage() {
   const session = await getSession()
   if (!session) redirect("/login")
 
-  let allProjects
-  let allTasks
-  let allReports
-
-  const [initProjects, initTasks, initReports, userMap] = await Promise.all([
+  const [allProjects, allTasks, allReports, userMap] = await Promise.all([
     findAllProjectsIncludingDeleted(session.user_id),
     findAllTasksIncludingDeleted(session.user_id),
     findAllReportsIncludingDeleted(session.user_id),
     getUserMap(),
   ])
 
-  allProjects = initProjects
-  allTasks = initTasks
-  allReports = initReports
-
-  // Purge items older than 30 days automatically
+  // Filter out items older than 30 days
   const thirtyDaysAgo = new Date()
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-  let projectsChanged = false
-  let tasksChanged = false
-  let reportsChanged = false
-
-  const projectsToDelete = allProjects.filter(
-    (p) => p.deleted_at && new Date(p.deleted_at) < thirtyDaysAgo
-  )
-  if (projectsToDelete.length > 0) {
-    const ids = projectsToDelete.map((p) => p.project_id)
-    
-    // Clean up child tables to avoid foreign key constraint violations
-    await sql`DELETE FROM files WHERE project_id = ANY(${ids}::text[])`
-    await sql`DELETE FROM project_logs WHERE project_id = ANY(${ids}::text[])`
-    await sql`DELETE FROM project_teams WHERE project_id = ANY(${ids}::text[])`
-    
-    const childTasks = (await sql`SELECT id FROM tasks WHERE project_id = ANY(${ids}::text[])`) as { id: string }[]
-    if (childTasks.length > 0) {
-      const childTaskIds = childTasks.map((t) => t.id)
-      await sql`DELETE FROM files WHERE task_id = ANY(${childTaskIds}::text[])`
-      await sql`DELETE FROM task_logs WHERE task_id = ANY(${childTaskIds}::text[])`
-      await sql`DELETE FROM task_teams WHERE task_id = ANY(${childTaskIds}::text[])`
-      await sql`DELETE FROM daily_reports WHERE task_id = ANY(${childTaskIds}::text[])`
-      await sql`DELETE FROM tasks WHERE id = ANY(${childTaskIds}::text[])`
-    }
-
-    await sql`DELETE FROM projects WHERE project_id = ANY(${ids}::text[])`
-    projectsChanged = true
-  }
-
-  const tasksToDelete = allTasks.filter(
-    (t) => t.deleted_at && new Date(t.deleted_at) < thirtyDaysAgo
-  )
-  if (tasksToDelete.length > 0) {
-    const ids = tasksToDelete.map((t) => t.id)
-    await sql`DELETE FROM files WHERE task_id = ANY(${ids}::text[])`
-    await sql`DELETE FROM task_logs WHERE task_id = ANY(${ids}::text[])`
-    await sql`DELETE FROM task_teams WHERE task_id = ANY(${ids}::text[])`
-    await sql`DELETE FROM daily_reports WHERE task_id = ANY(${ids}::text[])`
-    await sql`DELETE FROM tasks WHERE id = ANY(${ids}::text[])`
-    tasksChanged = true
-  }
-
-  const reportsToDelete = allReports.filter(
-    (r) => r.deleted_at && new Date(r.deleted_at) < thirtyDaysAgo
-  )
-  if (reportsToDelete.length > 0) {
-    const ids = reportsToDelete.map((r) => r.report_id)
-    await sql`DELETE FROM files WHERE report_id = ANY(${ids}::text[])`
-    await sql`DELETE FROM daily_reports WHERE report_id = ANY(${ids}::text[])`
-    reportsChanged = true
-  }
-
-  if (projectsChanged || tasksChanged || reportsChanged) {
-    if (projectsChanged) revalidateTag("projects")
-    if (tasksChanged) revalidateTag("tasks")
-    if (reportsChanged) revalidateTag("reports")
-
-    // Re-fetch clean data
-    ;[allProjects, allTasks, allReports] = await Promise.all([
-      findAllProjectsIncludingDeleted(session.user_id),
-      findAllTasksIncludingDeleted(session.user_id),
-      findAllReportsIncludingDeleted(session.user_id),
-    ])
-  }
 
   const items: {
     type: "project" | "task" | "report"

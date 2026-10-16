@@ -62,6 +62,22 @@ const getCachedAllReportsIncludingDeleted = unstable_cache(
   { tags: ['reports'], revalidate: 60 }
 );
 
+/**
+ * Worker attendance hours safeguard:
+ * Capped at 16h max. If exceeded due to user entry error, default to 8h.
+ */
+export function sanitizeWorkHours(hours: string | null | undefined): string | null {
+  if (hours === null || hours === undefined) return null;
+  const str = String(hours).trim();
+  if (!str) return null;
+  const num = parseFloat(str);
+  if (isNaN(num) || num <= 0) return '0';
+  if (num > 16) {
+    return '8';
+  }
+  return String(num);
+}
+
 // ============ DAILY REPORT REPOSITORY ============
 
 export const DailyReportRepository = {
@@ -316,6 +332,32 @@ export const DailyReportRepository = {
     },
     createdBy: string
   ): Promise<DailyReport> {
+    const targetUserId = report.user_id || createdBy;
+    const sanitizedHours = sanitizeWorkHours(report.total_hours);
+
+    // Deduplication safeguard: If an active report already exists for the same task, user, and date, update it
+    const existingDuplicates = await sql`
+      SELECT report_id FROM daily_reports 
+      WHERE task_id = ${report.task_id} 
+        AND user_id = ${targetUserId} 
+        AND date = ${report.date} 
+        AND deleted_at IS NULL 
+      LIMIT 1
+    `;
+    if (existingDuplicates.length > 0) {
+      const existingId = existingDuplicates[0].report_id;
+      const updated = await DailyReportRepository.update(
+        existingId,
+        {
+          progress_percentage: report.progress_percentage,
+          total_hours: sanitizedHours ?? undefined,
+          remarks: report.remarks ?? undefined,
+        },
+        createdBy
+      );
+      if (updated) return updated;
+    }
+
     const lastRow = await sql`SELECT report_id FROM daily_reports WHERE report_id ~ '^R-[0-9]+$' ORDER BY CAST(SUBSTRING(report_id FROM 3) AS INTEGER) DESC LIMIT 1`;
     const lastId = lastRow[0]?.report_id || 'R-0000';
     const lastNum = parseInt(lastId.replace('R-', ''), 10) || 0;
@@ -327,9 +369,9 @@ export const DailyReportRepository = {
       task_id: report.task_id,
       date: report.date,
       progress_percentage: report.progress_percentage,
-      total_hours: report.total_hours ?? null,
+      total_hours: sanitizedHours,
       remarks: report.remarks ?? null,
-      user_id: report.user_id || createdBy,
+      user_id: targetUserId,
       created_by: createdBy,
       created_at: now,
       deleted_by: null,
@@ -376,9 +418,14 @@ export const DailyReportRepository = {
     const existing = await DailyReportRepository.findById(reportId);
     if (!existing) return null;
 
+    const sanitizedHours = updates.total_hours !== undefined
+      ? sanitizeWorkHours(updates.total_hours)
+      : existing.total_hours;
+
     const updated = {
       ...existing,
       ...updates,
+      total_hours: sanitizedHours,
     };
 
     await sql`

@@ -7,7 +7,11 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import type { DailyReport, Task, Project } from "@/lib/types"
 import { formatDate, formatDateTime } from "@/lib/format"
-import { FileSection } from "@/components/file-section"
+import dynamic from "next/dynamic"
+
+const FileSection = dynamic(() => import("@/components/file-section").then(m => m.FileSection), {
+  loading: () => <div className="h-32 rounded-xl bg-muted/10 animate-pulse border" />
+})
 
 export function ReportDetailClient({
   report,

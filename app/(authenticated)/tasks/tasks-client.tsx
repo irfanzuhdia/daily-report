@@ -404,30 +404,47 @@ export function TasksClient({
     return status === "CC" || status === "C"
   })
 
+  const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds])
+
   const getSortedColumnTasks = useCallback((colId: string) => {
     const colTasks = activeTasks.filter((t) => {
       const status = dragOverStatuses[t.id] ?? optimisticStatuses[t.id] ?? t.task_status ?? "NS"
       return status === colId
     })
 
-    const pinned = colTasks.filter((t) => pinnedIds.includes(t.id))
-    const unpinned = colTasks.filter((t) => !pinnedIds.includes(t.id))
-
-    const sortOrder = columnOrders[colId] || []
-    const sortFn = (a: Task, b: Task) => {
-      const idxA = sortOrder.indexOf(a.id)
-      const idxB = sortOrder.indexOf(b.id)
-      if (idxA === -1 && idxB === -1) return 0
-      if (idxA === -1) return 1
-      if (idxB === -1) return -1
-      return idxA - idxB
+    const pinned: Task[] = []
+    const unpinned: Task[] = []
+    for (let i = 0; i < colTasks.length; i++) {
+      const t = colTasks[i]
+      if (pinnedSet.has(t.id)) {
+        pinned.push(t)
+      } else {
+        unpinned.push(t)
+      }
     }
 
-    pinned.sort(sortFn)
-    unpinned.sort(sortFn)
+    const sortOrder = columnOrders[colId]
+    if (sortOrder && sortOrder.length > 0) {
+      const orderMap = new Map<string, number>()
+      for (let i = 0; i < sortOrder.length; i++) {
+        orderMap.set(sortOrder[i], i)
+      }
+
+      const sortFn = (a: Task, b: Task) => {
+        const idxA = orderMap.get(a.id) ?? -1
+        const idxB = orderMap.get(b.id) ?? -1
+        if (idxA === -1 && idxB === -1) return 0
+        if (idxA === -1) return 1
+        if (idxB === -1) return -1
+        return idxA - idxB
+      }
+
+      pinned.sort(sortFn)
+      unpinned.sort(sortFn)
+    }
 
     return [...pinned, ...unpinned]
-  }, [activeTasks, pinnedIds, columnOrders, optimisticStatuses, dragOverStatuses])
+  }, [activeTasks, pinnedSet, columnOrders, optimisticStatuses, dragOverStatuses])
 
   /* ── Drag handlers ── */
 
@@ -566,6 +583,27 @@ export function TasksClient({
   const uniqueCreators = useMemo(() => users, [users])
   const uniqueMembers = useMemo(() => users, [users])
 
+  // O(1) task, project team, and project creator lookup structures
+  const myTaskIdsSet = useMemo(() => {
+    const set = new Set<string>()
+    for (const tt of taskTeams) {
+      if (tt.user_id === currentUserId) set.add(tt.task_id)
+    }
+    return set
+  }, [taskTeams, currentUserId])
+
+  const myProjectIdsSet = useMemo(() => {
+    const set = new Set<string>()
+    for (const pt of projectTeams) {
+      if (pt.user_id === currentUserId) set.add(pt.project_id)
+    }
+    return set
+  }, [projectTeams, currentUserId])
+
+  const projectCreatorMap = useMemo(() => {
+    return new Map(projects.map((p) => [p.project_id, p.created_by]))
+  }, [projects])
+
   const activeTask = activeId ? activeTasks.find(t => t.id === activeId) : null
 
   const [exporting, setExporting] = useState(false)
@@ -573,7 +611,21 @@ export function TasksClient({
   const handleExportCSV = async () => {
     try {
       setExporting(true)
-      const res = await fetch("/api/export/tasks")
+      const params = new URLSearchParams()
+      if (startDate) params.set("start_date", startDate)
+      if (endDate) params.set("end_date", endDate)
+      if (debouncedSearch) params.set("search", debouncedSearch)
+      if (statusFilter.length > 0) params.set("status", statusFilter.join(","))
+      if (projectFilter.length > 0) params.set("project_id", projectFilter.join(","))
+      if (createdByFilter.length > 0) params.set("created_by", createdByFilter.join(","))
+      if (memberFilter.length > 0) params.set("member_id", memberFilter.join(","))
+      if (dept && dept.length > 0) params.set("dept_filter", dept.join(","))
+      if (site && site.length > 0) params.set("site_filter", site.join(","))
+      if (division && division.length > 0) params.set("div_filter", division.join(","))
+      if (team && team.length > 0) params.set("team_filter", team.join(","))
+
+      const url = params.toString() ? `/api/export/tasks?${params.toString()}` : "/api/export/tasks"
+      const res = await fetch(url)
       const result = await res.json()
       if (!res.ok || !result.data) throw new Error(result.error || "Export failed")
 
@@ -728,6 +780,12 @@ export function TasksClient({
           placeholder="Search tasks..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              setDebouncedSearch(search)
+            }
+          }}
         />
         <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-2 px-1 -mx-1 scrollbar-none w-full max-w-full">
             <FilterDateRange
@@ -850,10 +908,10 @@ export function TasksClient({
                   onLoadMore={() => loadMoreColumn(col.id)}
                 >
                   {colTasks.map((task) => {
-                    const isMember = taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
-                      projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||
+                    const isMember = myTaskIdsSet.has(task.id) ||
+                      myProjectIdsSet.has(task.project_id) ||
                       task.created_by === currentUserId ||
-                      projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
+                      projectCreatorMap.get(task.project_id) === currentUserId ||
                       isSuperUser
                     return (
                       <SortableTaskCard
@@ -865,7 +923,7 @@ export function TasksClient({
                         updatingId={updatingId}
                         onStatusChange={handleStatusChange}
                         onDelete={setDeleteId}
-                        isPinned={pinnedIds.includes(task.id)}
+                        isPinned={pinnedSet.has(task.id)}
                         onTogglePin={togglePin}
                         isTaskTeamMember={isMember}
                         density={density}
@@ -909,10 +967,10 @@ export function TasksClient({
           density === "compact" ? (
             <div className="flex flex-col gap-2.5 sm:gap-3">
               {localTasks.map((task) => {
-                const isMember = taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
-                  projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||
+                const isMember = myTaskIdsSet.has(task.id) ||
+                  myProjectIdsSet.has(task.project_id) ||
                   task.created_by === currentUserId ||
-                  projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
+                  projectCreatorMap.get(task.project_id) === currentUserId ||
                   isSuperUser
                 return (
                   <div 
@@ -1002,10 +1060,10 @@ export function TasksClient({
           ) : (
             <div className="flex flex-col gap-3.5 sm:gap-4">
               {localTasks.map((task) => {
-                const isMember = taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
-                  projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||
+                const isMember = myTaskIdsSet.has(task.id) ||
+                  myProjectIdsSet.has(task.project_id) ||
                   task.created_by === currentUserId ||
-                  projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
+                  projectCreatorMap.get(task.project_id) === currentUserId ||
                   isSuperUser
                 return (
                   <Card key={task.id} onClick={() => router.push(`/tasks/${task.id}`)} className="transition-shadow hover:shadow-md cursor-pointer hover:bg-muted/50">
@@ -1106,10 +1164,10 @@ export function TasksClient({
                           value={task.task_status || "NS"}
                           onValueChange={(val) => handleStatusChange(task.id, val)}
                           disabled={
-                            !(taskTeams.some(tt => tt.task_id === task.id && tt.user_id === currentUserId) ||
-                              projectTeams.some(pt => pt.project_id === task.project_id && pt.user_id === currentUserId) ||
+                            !(myTaskIdsSet.has(task.id) ||
+                              myProjectIdsSet.has(task.project_id) ||
                               task.created_by === currentUserId ||
-                              projects.find(p => p.project_id === task.project_id)?.created_by === currentUserId ||
+                              projectCreatorMap.get(task.project_id) === currentUserId ||
                               isSuperUser)
                           }
                         >

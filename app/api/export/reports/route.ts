@@ -1,16 +1,30 @@
-import { NextResponse } from "next/server"
+import { NextRequest, NextResponse } from "next/server"
 import { sql } from "@/lib/db"
 import { getSession } from "@/lib/session"
 import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
 import { DailyReportRepository, UserRepository, getUserLevel } from "@/lib/repositories"
 import { EXPORT_ROW_CAP } from "@/lib/export-scope"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
     const session = await getSession()
     if (!session) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    const { searchParams } = request.nextUrl
+    const search = searchParams.get("search") || undefined
+    const taskId = searchParams.get("task_id") || undefined
+    const projectId = searchParams.get("project_id") || undefined
+    const memberId = searchParams.get("member_id") || undefined
+    const createdBy = searchParams.get("created_by") || undefined
+    const dept = searchParams.get("dept_filter") || undefined
+    const site = searchParams.get("site_filter") || undefined
+    const div = searchParams.get("div_filter") || undefined
+    const team = searchParams.get("team_filter") || undefined
+    const startDate = searchParams.get("start_date") || undefined
+    const endDate = searchParams.get("end_date") || undefined
+    const taskStatus = searchParams.get("status") || undefined
 
     // The export used to dump the whole table for anyone with a session, ignoring
     // both the RBAC scope and the My/Team toggle. Reuse the repository so the file
@@ -24,7 +38,21 @@ export async function GET() {
       session.user_id,
       EXPORT_ROW_CAP,
       0,
-      { viewMode: effectiveViewMode }
+      {
+        search,
+        taskId,
+        projectId,
+        memberId,
+        createdBy,
+        dept,
+        site,
+        div,
+        team,
+        startDate,
+        endDate,
+        taskStatus,
+        viewMode: effectiveViewMode,
+      }
     )
     const allowedIds = visible.map((r: { report_id: string }) => r.report_id)
     if (allowedIds.length === 0) {

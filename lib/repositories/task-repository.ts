@@ -284,6 +284,112 @@ export const TaskRepository = {
     return { data: rows as unknown as Task[], total };
   },
 
+  async getDashboardStats(userId: string, filters: any): Promise<{
+    totalTasks: number;
+    completedTasks: number;
+  }> {
+    const user = await UserRepository.findById(userId);
+    if (!user) return { totalTasks: 0, completedTasks: 0 };
+    const level = await getUserLevel(user.user_occupation);
+
+    const conditions = ["t.deleted_at IS NULL"];
+    const params: any[] = [];
+    let paramIndex = 1;
+
+    // RBAC
+    if (level < 6) {
+      let rbacCondition = `(t.created_by = $${paramIndex} OR tt.user_id = $${paramIndex})`;
+      params.push(userId);
+      paramIndex++;
+
+      const viewerOcc = (user.user_occupation || '').toLowerCase().trim();
+      let scopeCondition = '';
+      if (viewerOcc === 'kepala departement' || viewerOcc === 'kepala department') {
+        params.push(user.user_departement || '');
+        scopeCondition = `(LOWER(u.user_departement) = LOWER($${paramIndex}) OR LOWER(mu.user_departement) = LOWER($${paramIndex}))`;
+        paramIndex++;
+      } else if (viewerOcc === 'site manager' || viewerOcc === 'site admin' || level === 5) {
+        params.push(user.user_site || '');
+        scopeCondition = `(LOWER(u.user_site) = LOWER($${paramIndex}) OR LOWER(mu.user_site) = LOWER($${paramIndex}))`;
+        paramIndex++;
+      } else if (viewerOcc === 'divisi manager' || viewerOcc === 'divisi admin' || viewerOcc === 'div manager' || viewerOcc === 'div admin' || level === 4 || level === 3) {
+        params.push(user.user_division || '');
+        scopeCondition = `(LOWER(u.user_division) = LOWER($${paramIndex}) OR LOWER(mu.user_division) = LOWER($${paramIndex}))`;
+        paramIndex++;
+      } else if (viewerOcc === 'team leader' || level === 2) {
+        params.push(user.user_team || '');
+        scopeCondition = `(LOWER(u.user_team) = LOWER($${paramIndex}) OR LOWER(mu.user_team) = LOWER($${paramIndex}))`;
+        paramIndex++;
+      }
+
+      if (scopeCondition) {
+        rbacCondition = `(${rbacCondition} OR ${scopeCondition})`;
+      }
+      conditions.push(rbacCondition);
+    }
+
+    if (filters.viewMode === 'my') {
+       conditions.push(`(t.created_by = $${paramIndex} OR tt.user_id = $${paramIndex})`);
+       params.push(userId);
+       paramIndex++;
+    }
+
+    if (filters.dept_filter) {
+       conditions.push(`LOWER(u.user_departement) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
+       params.push(filters.dept_filter);
+       paramIndex++;
+    }
+    if (filters.site_filter) {
+       conditions.push(`LOWER(u.user_site) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
+       params.push(filters.site_filter);
+       paramIndex++;
+    }
+    if (filters.div_filter) {
+       conditions.push(`LOWER(u.user_division) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
+       params.push(filters.div_filter);
+       paramIndex++;
+    }
+    if (filters.team_filter) {
+       conditions.push(`LOWER(u.user_team) = ANY(string_to_array(LOWER($${paramIndex}), ','))`);
+       params.push(filters.team_filter);
+       paramIndex++;
+    }
+    if (filters.created_by) {
+       conditions.push(`t.created_by = ANY(string_to_array($${paramIndex}, ','))`);
+       params.push(filters.created_by);
+       paramIndex++;
+    }
+    if (filters.start_date) {
+       conditions.push(`COALESCE(t.due_date, t.start_date, t.created_at::date::text) >= $${paramIndex}`);
+       params.push(filters.start_date);
+       paramIndex++;
+    }
+    if (filters.end_date) {
+       conditions.push(`COALESCE(t.start_date, t.created_at::date::text) <= $${paramIndex}`);
+       params.push(filters.end_date);
+       paramIndex++;
+    }
+
+    const whereClause = conditions.length > 0 ? 'WHERE ' + conditions.join(' AND ') : '';
+
+    const query = `
+      SELECT 
+        COUNT(DISTINCT t.id)::int as total,
+        COUNT(DISTINCT CASE WHEN t.task_status IN ('D', 'C') THEN t.id END)::int as completed
+      FROM tasks t
+      LEFT JOIN users u ON t.created_by = u.user_id
+      LEFT JOIN task_teams tt ON t.id = tt.task_id AND tt.deleted_at IS NULL
+      LEFT JOIN users mu ON tt.user_id = mu.user_id
+      ${whereClause}
+    `;
+
+    const res = (await sql.unsafe(query, params)) as unknown as { total: number; completed: number }[];
+    return {
+      totalTasks: res[0]?.total || 0,
+      completedTasks: res[0]?.completed || 0,
+    };
+  },
+
   async findByProjectId(projectId: string): Promise<Task[]> {
     return getCachedTasksByProjectId(projectId);
   },

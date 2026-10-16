@@ -45,9 +45,17 @@ import {
 import type { Project, Status, ProjectTeam } from "@/lib/types"
 import { useViewDensity } from "@/lib/view-density"
 import { revalidatePathsAndTags } from "@/app/actions"
-
 import { statusVariant, statusLabel } from "@/lib/status-helpers"
-import { SortableProjectCard, ProjectDragOverlay, DroppableColumn } from "@/components/projects/project-card"
+
+import dynamic from "next/dynamic"
+
+const SortableProjectCard = dynamic(() => import("@/components/projects/project-card").then(m => m.SortableProjectCard), {
+  loading: () => <div className="h-24 bg-muted/20 animate-pulse rounded-xl" />
+})
+const ProjectDragOverlay = dynamic(() => import("@/components/projects/project-card").then(m => m.ProjectDragOverlay))
+const DroppableColumn = dynamic(() => import("@/components/projects/project-card").then(m => m.DroppableColumn), {
+  loading: () => <div className="flex-1 min-h-[500px] bg-muted/10 animate-pulse rounded-2xl" />
+})
 
 
 /* ─────────────────────── Folder Icon (Fallback) ─────────────────────── */
@@ -406,30 +414,47 @@ export function ProjectsClient({
     return status === "CC" || status === "C"
   })
 
+  const pinnedSet = useMemo(() => new Set(pinnedIds), [pinnedIds])
+
   const getSortedColumnProjects = useCallback((colId: string) => {
     const colProjects = activeProjects.filter((p) => {
       const status = dragOverStatuses[p.project_id] ?? optimisticStatuses[p.project_id] ?? p.project_status ?? "NS"
       return status === colId
     })
 
-    const pinned = colProjects.filter((p) => pinnedIds.includes(p.project_id))
-    const unpinned = colProjects.filter((p) => !pinnedIds.includes(p.project_id))
-
-    const sortOrder = columnOrders[colId] || []
-    const sortFn = (a: Project, b: Project) => {
-      const idxA = sortOrder.indexOf(a.project_id)
-      const idxB = sortOrder.indexOf(b.project_id)
-      if (idxA === -1 && idxB === -1) return 0
-      if (idxA === -1) return 1
-      if (idxB === -1) return -1
-      return idxA - idxB
+    const pinned: Project[] = []
+    const unpinned: Project[] = []
+    for (let i = 0; i < colProjects.length; i++) {
+      const p = colProjects[i]
+      if (pinnedSet.has(p.project_id)) {
+        pinned.push(p)
+      } else {
+        unpinned.push(p)
+      }
     }
 
-    pinned.sort(sortFn)
-    unpinned.sort(sortFn)
+    const sortOrder = columnOrders[colId]
+    if (sortOrder && sortOrder.length > 0) {
+      const orderMap = new Map<string, number>()
+      for (let i = 0; i < sortOrder.length; i++) {
+        orderMap.set(sortOrder[i], i)
+      }
+
+      const sortFn = (a: Project, b: Project) => {
+        const idxA = orderMap.get(a.project_id) ?? -1
+        const idxB = orderMap.get(b.project_id) ?? -1
+        if (idxA === -1 && idxB === -1) return 0
+        if (idxA === -1) return 1
+        if (idxB === -1) return -1
+        return idxA - idxB
+      }
+
+      pinned.sort(sortFn)
+      unpinned.sort(sortFn)
+    }
 
     return [...pinned, ...unpinned]
-  }, [activeProjects, pinnedIds, columnOrders, optimisticStatuses, dragOverStatuses])
+  }, [activeProjects, pinnedSet, columnOrders, optimisticStatuses, dragOverStatuses])
 
   /* ── Drag handlers ── */
 
@@ -568,6 +593,17 @@ export function ProjectsClient({
   const uniqueCreators = useMemo(() => users, [users])
   const uniqueMembers = useMemo(() => users, [users])
 
+  // O(1) project membership lookup Set
+  const myProjectIdsSet = useMemo(() => {
+    const set = new Set<string>()
+    for (const pt of projectTeams) {
+      if (pt.user_id === currentUserId) {
+        set.add(pt.project_id)
+      }
+    }
+    return set
+  }, [projectTeams, currentUserId])
+
   const activeProject = activeId ? activeProjects.find(p => p.project_id === activeId) : null
 
   const [exporting, setExporting] = useState(false)
@@ -575,7 +611,20 @@ export function ProjectsClient({
   const handleExportCSV = async () => {
     try {
       setExporting(true)
-      const res = await fetch("/api/export/projects")
+      const params = new URLSearchParams()
+      if (startDate) params.set("start_date", startDate)
+      if (endDate) params.set("end_date", endDate)
+      if (debouncedSearch) params.set("search", debouncedSearch)
+      if (statusFilter.length > 0) params.set("status", statusFilter.join(","))
+      if (createdByFilter.length > 0) params.set("created_by", createdByFilter.join(","))
+      if (memberFilter.length > 0) params.set("member_id", memberFilter.join(","))
+      if (dept && dept.length > 0) params.set("dept_filter", dept.join(","))
+      if (site && site.length > 0) params.set("site_filter", site.join(","))
+      if (division && division.length > 0) params.set("div_filter", division.join(","))
+      if (team && team.length > 0) params.set("team_filter", team.join(","))
+
+      const url = params.toString() ? `/api/export/projects?${params.toString()}` : "/api/export/projects"
+      const res = await fetch(url)
       const result = await res.json()
       if (!res.ok || !result.data) throw new Error(result.error || "Export failed")
 
@@ -730,6 +779,12 @@ export function ProjectsClient({
           placeholder="Search projects..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault()
+              setDebouncedSearch(search)
+            }
+          }}
         />
         <div className="flex items-center gap-2 overflow-x-auto pt-1 pb-2 px-1 -mx-1 scrollbar-none w-full max-w-full">
         <FilterDateRange
@@ -843,7 +898,7 @@ export function ProjectsClient({
                   onLoadMore={() => loadMoreColumn(col.id)}
                 >
                   {colProjects.map((project) => {
-                    const isMember = projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId) || project.created_by === currentUserId || isSuperUser
+                    const isMember = myProjectIdsSet.has(project.project_id) || project.created_by === currentUserId || isSuperUser
                     return (
                       <SortableProjectCard
                         key={project.project_id}
@@ -854,7 +909,7 @@ export function ProjectsClient({
                         updatingId={updatingId}
                         onStatusChange={handleStatusChange}
                         onDelete={setDeleteId}
-                        isPinned={pinnedIds.includes(project.project_id)}
+                        isPinned={pinnedSet.has(project.project_id)}
                         onTogglePin={togglePin}
                         isProjectTeamMember={isMember}
                         density={density}
@@ -900,7 +955,7 @@ export function ProjectsClient({
           density === "compact" ? (
             <div className="flex flex-col border rounded-xl divide-y divide-border/55 bg-card overflow-hidden">
               {localProjects.map((project) => {
-                const isMember = projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId) || project.created_by === currentUserId || isSuperUser
+                const isMember = myProjectIdsSet.has(project.project_id) || project.created_by === currentUserId || isSuperUser
                 return (
                   <div 
                     key={project.project_id} 
@@ -997,7 +1052,7 @@ export function ProjectsClient({
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {localProjects.map((project) => {
-                const isMember = projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId) || project.created_by === currentUserId || isSuperUser
+                const isMember = myProjectIdsSet.has(project.project_id) || project.created_by === currentUserId || isSuperUser
                 return (
                   <Card 
                   key={project.project_id} 
@@ -1126,7 +1181,7 @@ export function ProjectsClient({
                           value={project.project_status || "NS"}
                           onValueChange={(val) => handleStatusChange(project.project_id, val)}
                           disabled={
-                            !(projectTeams.some(pt => pt.project_id === project.project_id && pt.user_id === currentUserId) ||
+                            !(myProjectIdsSet.has(project.project_id) ||
                               project.created_by === currentUserId ||
                               isSuperUser ||
                               userLevel >= 6)

@@ -17,8 +17,14 @@ import {
 import type { Project, Task, Status, EnrichedProjectLog } from "@/lib/types"
 import { formatDate, formatDateTime } from "@/lib/format"
 import { revalidatePathsAndTags } from "@/app/actions"
-import { FileSection } from "@/components/file-section"
-import { CommentsSection } from "@/components/comments-section"
+import dynamic from "next/dynamic"
+
+const FileSection = dynamic(() => import("@/components/file-section").then(m => m.FileSection), {
+  loading: () => <div className="h-32 rounded-xl bg-muted/10 animate-pulse border" />
+})
+const CommentsSection = dynamic(() => import("@/components/comments-section").then(m => m.CommentsSection), {
+  loading: () => <div className="h-40 rounded-xl bg-muted/10 animate-pulse border" />
+})
 import { SearchableUserSelect, getSelectableUsers, type UserSelectItem } from "@/components/ui/searchable-user-select"
 import { statusVariant } from "@/lib/status-helpers"
 

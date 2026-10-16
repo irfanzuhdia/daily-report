@@ -24,6 +24,19 @@ interface DataTableProps<T> {
 
 type SortDirection = "asc" | "desc" | null
 
+function parseSortValue(val: unknown): number | null {
+  if (typeof val === "number") return isNaN(val) ? null : val
+  if (typeof val === "string") {
+    const trimmed = val.trim()
+    const cleaned = trimmed.replace(/^[^\d.-]+/, "").replace(/[^\d.-]+$/, "")
+    if (cleaned !== "") {
+      const parsed = parseFloat(cleaned)
+      if (!isNaN(parsed)) return parsed
+    }
+  }
+  return null
+}
+
 export function DataTable<T>({
   columns,
   data,
@@ -52,30 +65,40 @@ export function DataTable<T>({
     })
   }
 
+  // O(N) key extraction + O(N log N) sorting
   const sortedData = useMemo(() => {
     if (!sortConfig.key || sortConfig.direction === null) return data
 
-    return [...data].sort((a, b) => {
-      const aVal = a[sortConfig.key!]
-      const bVal = b[sortConfig.key!]
+    const key = sortConfig.key
+    const isAsc = sortConfig.direction === "asc"
 
-      if (aVal === bVal) return 0
-      
-      const isAsc = sortConfig.direction === "asc"
-      
-      // Handle nulls/undefined
-      if (aVal == null) return isAsc ? 1 : -1
-      if (bVal == null) return isAsc ? -1 : 1
+    const mapped = data.map((item, index) => {
+      const raw = item[key]
+      const num = parseSortValue(raw)
+      return { index, raw, num, item }
+    })
 
-      if (typeof aVal === "string" && typeof bVal === "string") {
-        return isAsc ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal)
+    mapped.sort((a, b) => {
+      if (a.raw === b.raw) return 0
+      if (a.raw == null) return isAsc ? 1 : -1
+      if (b.raw == null) return isAsc ? -1 : 1
+
+      // Numeric comparison (handles duration e.g. "16h", "0.4d", "100%")
+      if (a.num !== null && b.num !== null) {
+        return isAsc ? a.num - b.num : b.num - a.num
       }
 
-      if (aVal < bVal) return isAsc ? -1 : 1
-      if (aVal > bVal) return isAsc ? 1 : -1
+      if (typeof a.raw === "string" && typeof b.raw === "string") {
+        return isAsc ? a.raw.localeCompare(b.raw) : b.raw.localeCompare(a.raw)
+      }
+
+      if (a.raw < b.raw) return isAsc ? -1 : 1
+      if (a.raw > b.raw) return isAsc ? 1 : -1
 
       return 0
     })
+
+    return mapped.map((m) => m.item)
   }, [data, sortConfig])
 
   const parentRef = useRef<HTMLDivElement>(null)

@@ -274,13 +274,13 @@ export function DroppableColumn({
 
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting) onLoadMore()
+        if (entries[0]?.isIntersecting && !loadingMore) onLoadMore()
       },
-      { root, rootMargin: "150px" }
+      { root, rootMargin: "600px" }
     )
     observer.observe(el)
     return () => observer.disconnect()
-  }, [hasMore, onLoadMore, projects.length])
+  }, [hasMore, onLoadMore, loadingMore, projects.length])
 
   return (
     <div ref={setNodeRef} className="flex flex-col rounded-2xl border bg-muted/30 p-4 min-h-[500px]">

@@ -40,10 +40,10 @@ export default async function TasksPage({
   // Completed and Cancel have no column, but they still feed the list view and the
   // archive dialog. Initial batch sized for fast paint; pages further via lazy load.
   const OFF_BOARD_STATUSES = ["C", "CC"] as const
-  const OFF_BOARD_PAGE_SIZE = 30
-  // Per column initial window: sized for fast first paint while the board lazy-pages
+  const OFF_BOARD_PAGE_SIZE = 35
+  // Per column initial window: sized for immediate viewport coverage while the board lazy-pages
   // on scroll via IntersectionObserver.
-  const COLUMN_PAGE_SIZE = 25
+  const COLUMN_PAGE_SIZE = 35
 
   // We still fetch these globally because they are small and fully cached in Upstash Redis
   // allProjects is used for project name lookups in the UI

@@ -285,7 +285,7 @@ export const ProjectRepository = {
        params.push(filters.team_filter);
        paramIndex++;
     }
-    if (filters.status) {
+    if (filters.status && filters.status !== 'ALL' && filters.status !== 'all') {
        conditions.push(`p.project_status = ANY(string_to_array($${paramIndex}, ','))`);
        params.push(filters.status);
        paramIndex++;
@@ -347,8 +347,11 @@ export const ProjectRepository = {
 
     const dataParams = [...params, limit, offset];
     
-    const countRes = await sql.unsafe(countQuery, params);
-    const total = countRes[0]?.count || 0;
+    let total = 0;
+    if (offset === 0) {
+      const countRes = await sql.unsafe(countQuery, params);
+      total = countRes[0]?.count || 0;
+    }
 
     const rows = await sql.unsafe(dataQuery, dataParams);
     

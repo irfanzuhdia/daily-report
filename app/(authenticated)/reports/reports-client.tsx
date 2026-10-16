@@ -221,6 +221,79 @@ export function ReportsClient({
     [viewMode, columnPageSize, loadedInColumn, startDate, endDate]
   )
 
+  const totalAllReports = useMemo(
+    () => Object.values(columnTotals).reduce((a, b) => a + b, 0),
+    [columnTotals]
+  )
+
+  const [visibleListCount, setVisibleListCount] = useState<number>(35)
+  const listSentinelRef = useRef<HTMLDivElement>(null)
+  const inFlightList = useRef(false)
+  const [hasMoreList, setHasMoreList] = useState(true)
+  const [loadingMoreList, setLoadingMoreList] = useState(false)
+
+  const loadMoreList = useCallback(async () => {
+    if (inFlightList.current) return
+    inFlightList.current = true
+    setLoadingMoreList(true)
+    try {
+      const sp = new URLSearchParams(window.location.search)
+      sp.set("entity", "reports")
+      sp.set("status", "ALL")
+      sp.set("viewMode", viewMode)
+      sp.set("limit", "35")
+      sp.set("offset", String(localReports.length))
+      if (startDate) sp.set("start_date", startDate)
+      if (endDate) sp.set("end_date", endDate)
+
+      const res = await fetch(`/api/board?${sp.toString()}`)
+      if (!res.ok) return
+      const json = await res.json()
+      const incoming: EnrichedReport[] = json?.items ?? []
+      if (incoming.length === 0) {
+        setHasMoreList(false)
+      } else {
+        setLocalReports((prev) => {
+          const seen = new Set(prev.map((r) => r.report_id))
+          const added = incoming.filter((r) => !seen.has(r.report_id))
+          if (added.length === 0) setHasMoreList(false)
+          return [...prev, ...added]
+        })
+        setVisibleListCount((prev) => prev + incoming.length)
+      }
+    } catch {
+      // Keep sentinel to allow retry on scroll
+    } finally {
+      inFlightList.current = false
+      setLoadingMoreList(false)
+    }
+  }, [localReports.length, viewMode, startDate, endDate])
+
+  useEffect(() => {
+    if (layout === "kanban") return
+    const el = listSentinelRef.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return
+        if (visibleListCount < localReports.length) {
+          setVisibleListCount((prev) => Math.min(prev + 30, localReports.length))
+        } else if (hasMoreList && (totalAllReports === 0 || localReports.length < totalAllReports)) {
+          loadMoreList()
+        }
+      },
+      { rootMargin: "600px" }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [layout, visibleListCount, localReports.length, hasMoreList, totalAllReports, loadMoreList])
+
+  useEffect(() => {
+    setVisibleListCount(35)
+    setHasMoreList(true)
+  }, [reports])
+
   const dndId = useId()
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -343,7 +416,6 @@ export function ReportsClient({
 
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
   const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>({})
-  const [visibleListCount, setVisibleListCount] = useState<number>(30)
 
   useEffect(() => {
     const pinned = localStorage.getItem("reports-pinned")
@@ -967,16 +1039,13 @@ export function ReportsClient({
                 </CardContent>
               </Card>
             ))}
-            {visibleListCount < localReports.length && (
-              <div className="flex justify-center pt-2 pb-4">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setVisibleListCount((prev) => prev + 30)}
-                  className="text-xs"
-                >
-                  Show More ({localReports.length - visibleListCount} remaining)
-                </Button>
+            {(visibleListCount < localReports.length || (hasMoreList && (totalAllReports === 0 || localReports.length < totalAllReports))) && (
+              <div
+                ref={listSentinelRef}
+                className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground"
+              >
+                <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+                <span>Loading more reports...</span>
               </div>
             )}
           </div>

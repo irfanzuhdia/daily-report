@@ -215,7 +215,7 @@ export const TaskRepository = {
        params.push(filters.project_id);
        paramIndex++;
     }
-    if (filters.status) {
+    if (filters.status && filters.status !== 'ALL' && filters.status !== 'all') {
        conditions.push(`t.task_status = ANY(string_to_array($${paramIndex}, ','))`);
        params.push(filters.status);
        paramIndex++;
@@ -276,8 +276,11 @@ export const TaskRepository = {
 
     const dataParams = [...params, limit, offset];
     
-    const countRes = await sql.unsafe(countQuery, params);
-    const total = countRes[0]?.count || 0;
+    let total = 0;
+    if (offset === 0) {
+      const countRes = await sql.unsafe(countQuery, params);
+      total = countRes[0]?.count || 0;
+    }
 
     const rows = await sql.unsafe(dataQuery, dataParams);
     

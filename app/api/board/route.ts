@@ -31,11 +31,9 @@ export async function GET(request: NextRequest) {
     }
 
     const status = sp.get('status')
-    if (!status) {
-      return createErrorResponse('BAD_REQUEST', 'status is required', 400)
-    }
+    const hasStatusFilter = Boolean(status && status.toUpperCase() !== 'ALL')
 
-    const limit = Math.min(Math.max(parseInt(sp.get('limit') || '20', 10) || 20, 1), 100)
+    const limit = Math.min(Math.max(parseInt(sp.get('limit') || '30', 10) || 30, 1), 100)
     const offset = Math.max(parseInt(sp.get('offset') || '0', 10) || 0, 0)
 
     // Level 1 users are always scoped to their own items, matching the page components.
@@ -50,7 +48,10 @@ export async function GET(request: NextRequest) {
       'start_date', 'end_date',
     ] as const
 
-    const filters: Record<string, string> = { status, viewMode }
+    const filters: Record<string, string> = { viewMode }
+    if (hasStatusFilter && status) {
+      filters.status = status
+    }
     for (const key of passthrough) {
       const v = sp.get(key)
       if (v) filters[key] = v
@@ -65,7 +66,7 @@ export async function GET(request: NextRequest) {
         offset,
         {
           viewMode,
-          taskStatus: status,
+          taskStatus: hasStatusFilter && status ? status : undefined,
           search: sp.get('search') || undefined,
           taskId: sp.get('task_id') || undefined,
           projectId: sp.get('project_id') || undefined,
@@ -79,7 +80,7 @@ export async function GET(request: NextRequest) {
           endDate: sp.get('end_date') || undefined,
         }
       )
-      return createSuccessResponse({ items: reports, total, status, offset, limit })
+      return createSuccessResponse({ items: reports, total, status: status || 'ALL', offset, limit })
     }
 
     const repo = entity === 'tasks' ? TaskRepository : ProjectRepository
@@ -87,7 +88,7 @@ export async function GET(request: NextRequest) {
 
     // `items` rather than `data`: createSuccessResponse does not wrap the body, so a
     // field named `data` here would read as `json.data.data` on the client.
-    return createSuccessResponse({ items: data, total, status, offset, limit })
+    return createSuccessResponse({ items: data, total, status: status || 'ALL', offset, limit })
   } catch (error) {
     return handleApiError(error)
   }

@@ -239,6 +239,79 @@ export function ProjectsClient({
     [viewMode, columnPageSize, loadedInColumn, startDate, endDate]
   )
 
+  const totalAllProjects = useMemo(
+    () => Object.values(columnTotals).reduce((a, b) => a + b, 0),
+    [columnTotals]
+  )
+
+  const [visibleListCount, setVisibleListCount] = useState<number>(35)
+  const listSentinelRef = useRef<HTMLDivElement>(null)
+  const inFlightList = useRef(false)
+  const [hasMoreList, setHasMoreList] = useState(true)
+  const [loadingMoreList, setLoadingMoreList] = useState(false)
+
+  const loadMoreList = useCallback(async () => {
+    if (inFlightList.current) return
+    inFlightList.current = true
+    setLoadingMoreList(true)
+    try {
+      const sp = new URLSearchParams(window.location.search)
+      sp.set("entity", "projects")
+      sp.set("status", "ALL")
+      sp.set("viewMode", viewMode)
+      sp.set("limit", "35")
+      sp.set("offset", String(localProjects.length))
+      if (startDate) sp.set("start_date", startDate)
+      if (endDate) sp.set("end_date", endDate)
+
+      const res = await fetch(`/api/board?${sp.toString()}`)
+      if (!res.ok) return
+      const json = await res.json()
+      const incoming: Project[] = json?.items ?? []
+      if (incoming.length === 0) {
+        setHasMoreList(false)
+      } else {
+        setLocalProjects((prev) => {
+          const seen = new Set(prev.map((p) => p.project_id))
+          const added = incoming.filter((p) => !seen.has(p.project_id))
+          if (added.length === 0) setHasMoreList(false)
+          return [...prev, ...added]
+        })
+        setVisibleListCount((prev) => prev + incoming.length)
+      }
+    } catch {
+      // Keep sentinel to allow retry on scroll
+    } finally {
+      inFlightList.current = false
+      setLoadingMoreList(false)
+    }
+  }, [localProjects.length, viewMode, startDate, endDate])
+
+  useEffect(() => {
+    if (layout === "kanban") return
+    const el = listSentinelRef.current
+    if (!el) return
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (!entries[0]?.isIntersecting) return
+        if (visibleListCount < localProjects.length) {
+          setVisibleListCount((prev) => Math.min(prev + 30, localProjects.length))
+        } else if (hasMoreList && (totalAllProjects === 0 || localProjects.length < totalAllProjects)) {
+          loadMoreList()
+        }
+      },
+      { rootMargin: "600px" }
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [layout, visibleListCount, localProjects.length, hasMoreList, totalAllProjects, loadMoreList])
+
+  useEffect(() => {
+    setVisibleListCount(35)
+    setHasMoreList(true)
+  }, [projects])
+
   const dndId = useId()
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -351,7 +424,6 @@ export function ProjectsClient({
 
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
   const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>({})
-  const [visibleListCount, setVisibleListCount] = useState<number>(30)
 
   useEffect(() => {
     const pinned = localStorage.getItem("projects-pinned")
@@ -1138,16 +1210,13 @@ export function ProjectsClient({
         )
       )}
 
-      {layout !== "kanban" && visibleListCount < localProjects.length && (
-        <div className="flex justify-center pt-2 pb-4">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setVisibleListCount((prev) => prev + 30)}
-            className="text-xs"
-          >
-            Show More ({localProjects.length - visibleListCount} remaining)
-          </Button>
+      {layout !== "kanban" && (visibleListCount < localProjects.length || (hasMoreList && (totalAllProjects === 0 || localProjects.length < totalAllProjects))) && (
+        <div
+          ref={listSentinelRef}
+          className="flex items-center justify-center gap-2 py-6 text-xs text-muted-foreground"
+        >
+          <span className="h-4 w-4 animate-spin rounded-full border-2 border-primary/30 border-t-primary" />
+          <span>Loading more projects...</span>
         </div>
       )}
 

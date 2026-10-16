@@ -175,7 +175,7 @@ export const DailyReportRepository = {
       params.push(filters.createdBy);
       whereClauses.push(`dr.user_id = ANY(string_to_array($${params.length}, ','))`);
     }
-    if (filters?.taskStatus) {
+    if (filters?.taskStatus && filters.taskStatus !== 'ALL' && filters.taskStatus !== 'all') {
       params.push(filters.taskStatus);
       // Reports whose task has no status land in the "NS" column in the UI, so match that here.
       whereClauses.push(`COALESCE(t.task_status, 'NS') = ANY(string_to_array($${params.length}, ','))`);
@@ -203,18 +203,21 @@ export const DailyReportRepository = {
 
     const whereSql = whereClauses.join(' AND ');
 
-    // 1. Get total count
-    const countQuery = `
-      SELECT COUNT(DISTINCT dr.report_id) as total
-      FROM daily_reports dr
-      LEFT JOIN users u ON dr.user_id = u.user_id
-      LEFT JOIN users cu ON dr.created_by = cu.user_id
-      LEFT JOIN tasks t ON dr.task_id = t.id
-      LEFT JOIN projects p ON t.project_id = p.project_id
-      WHERE ${whereSql}
-    `;
-    const countRes = await sql.unsafe(countQuery, params);
-    const total = parseInt(countRes[0].total, 10);
+    // 1. Get total count (only needed on initial fetch when offset === 0)
+    let total = 0;
+    if (offset === 0) {
+      const countQuery = `
+        SELECT COUNT(dr.report_id) as total
+        FROM daily_reports dr
+        LEFT JOIN users u ON dr.user_id = u.user_id
+        LEFT JOIN users cu ON dr.created_by = cu.user_id
+        LEFT JOIN tasks t ON dr.task_id = t.id
+        LEFT JOIN projects p ON t.project_id = p.project_id
+        WHERE ${whereSql}
+      `;
+      const countRes = await sql.unsafe(countQuery, params);
+      total = parseInt(countRes[0]?.total || '0', 10);
+    }
 
     // 2. Get paginated & enriched data
     params.push(limit, offset);

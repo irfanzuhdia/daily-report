@@ -27,7 +27,7 @@ export default async function ProjectDetailPage({
     ProjectRepository.findById(id),
     TaskRepository.findByProjectId(id),
     StatusRepository.findAll(),
-    DailyReportRepository.findAll(),
+    DailyReportRepository.findByProjectId(id),
     UserRepository.findAll(),
     ProjectLogRepository.findByProjectId(id),
   ])

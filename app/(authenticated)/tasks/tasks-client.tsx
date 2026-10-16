@@ -341,6 +341,7 @@ export function TasksClient({
 
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
   const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>({})
+  const [visibleListCount, setVisibleListCount] = useState<number>(30)
 
   useEffect(() => {
     const pinned = localStorage.getItem("tasks-pinned")
@@ -966,7 +967,7 @@ export function TasksClient({
         ) : (
           density === "compact" ? (
             <div className="flex flex-col gap-2.5 sm:gap-3">
-              {localTasks.map((task) => {
+              {localTasks.slice(0, visibleListCount).map((task) => {
                 const isMember = myTaskIdsSet.has(task.id) ||
                   myProjectIdsSet.has(task.project_id) ||
                   task.created_by === currentUserId ||
@@ -1059,7 +1060,7 @@ export function TasksClient({
             </div>
           ) : (
             <div className="flex flex-col gap-3.5 sm:gap-4">
-              {localTasks.map((task) => {
+              {localTasks.slice(0, visibleListCount).map((task) => {
                 const isMember = myTaskIdsSet.has(task.id) ||
                   myProjectIdsSet.has(task.project_id) ||
                   task.created_by === currentUserId ||
@@ -1117,6 +1118,19 @@ export function TasksClient({
             </div>
           )
         )
+      )}
+
+      {layout !== "kanban" && visibleListCount < localTasks.length && (
+        <div className="flex justify-center pt-2 pb-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setVisibleListCount((prev) => prev + 30)}
+            className="text-xs"
+          >
+            Show More ({localTasks.length - visibleListCount} remaining)
+          </Button>
+        </div>
       )}
 
       {/* Complete & Cancel Folder Dialog */}
@@ -1186,6 +1200,26 @@ export function TasksClient({
                     </CardContent>
                   </Card>
                 ))}
+
+                {((columnTotals["C"] ?? 0) > loadedInColumn("C") || (columnTotals["CC"] ?? 0) > loadedInColumn("CC")) && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs w-full"
+                      disabled={loadingColumn === "C" || loadingColumn === "CC"}
+                      onClick={async () => {
+                        if ((columnTotals["C"] ?? 0) > loadedInColumn("C")) await loadMoreColumn("C")
+                        if ((columnTotals["CC"] ?? 0) > loadedInColumn("CC")) await loadMoreColumn("CC")
+                      }}
+                    >
+                      {loadingColumn === "C" || loadingColumn === "CC" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                      ) : null}
+                      Load More Completed &amp; Cancelled Tasks
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>

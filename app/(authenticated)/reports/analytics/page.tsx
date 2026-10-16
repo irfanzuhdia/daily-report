@@ -37,11 +37,32 @@ export default async function AnalyticsPage({
   const userId = session.user_id
   const params = await searchParams
 
+  // Compute Date Filter bounds first so SQL only fetches needed rows
+  const now = new Date()
+  const toYMD = (d: Date) => {
+    const year = d.getFullYear()
+    const month = String(d.getMonth() + 1).padStart(2, "0")
+    const day = String(d.getDate()).padStart(2, "0")
+    return `${year}-${month}-${day}`
+  }
+
+  const defaultEndDate = toYMD(now)
+  const oneYearAgo = new Date(now)
+  oneYearAgo.setDate(oneYearAgo.getDate() - 364)
+  const defaultStartDate = toYMD(oneYearAgo)
+
+  const targetStartDate = params.start_date || defaultStartDate
+  const targetEndDate = params.end_date || defaultEndDate
+
   const [allProjects, users, tasks, reports] = await Promise.all([
     ProjectRepository.findAll(),
     UserRepository.findAll(),
     TaskRepository.findAll(),
-    DailyReportRepository.findAll()
+    DailyReportRepository.findByDateRange(
+      targetStartDate,
+      targetEndDate,
+      viewMode === "my" ? userId : undefined
+    )
   ])
 
   // Filter projects by user when in "my" view
@@ -114,30 +135,6 @@ export default async function AnalyticsPage({
   if (projectIds.length > 0) {
     const projectTaskIds = new Set(tasks.filter(t => projectIds.includes(t.project_id)).map(t => t.id))
     filteredReports = filteredReports.filter(r => projectTaskIds.has(r.task_id))
-  }
-
-  // Apply Date Filter
-  const now = new Date()
-  const toYMD = (d: Date) => {
-    const year = d.getFullYear()
-    const month = String(d.getMonth() + 1).padStart(2, "0")
-    const day = String(d.getDate()).padStart(2, "0")
-    return `${year}-${month}-${day}`
-  }
-
-  const defaultEndDate = toYMD(now)
-  const oneYearAgo = new Date(now)
-  oneYearAgo.setDate(oneYearAgo.getDate() - 364)
-  const defaultStartDate = toYMD(oneYearAgo)
-
-  const targetStartDate = params.start_date || defaultStartDate
-  const targetEndDate = params.end_date || defaultEndDate
-
-  if (targetStartDate) {
-    filteredReports = filteredReports.filter(r => r.date && r.date >= targetStartDate)
-  }
-  if (targetEndDate) {
-    filteredReports = filteredReports.filter(r => r.date && r.date <= targetEndDate)
   }
 
   // Aggregate Data in JS for Heatmap and Pie Charts

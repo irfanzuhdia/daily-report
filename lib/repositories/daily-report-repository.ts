@@ -321,6 +321,56 @@ export const DailyReportRepository = {
     return getCachedReportsByDate(date);
   },
 
+  async findByProjectId(projectId: string): Promise<DailyReport[]> {
+    const rows = await sql`
+      SELECT dr.* 
+      FROM daily_reports dr
+      JOIN tasks t ON t.id = dr.task_id
+      WHERE t.project_id = ${projectId} AND dr.deleted_at IS NULL
+      ORDER BY dr.date DESC
+    `;
+    return rows as unknown as DailyReport[];
+  },
+
+  async findByDateRange(startDate?: string, endDate?: string, userId?: string): Promise<DailyReport[]> {
+    if (startDate && endDate && userId) {
+      const rows = await sql`
+        SELECT * FROM daily_reports 
+        WHERE deleted_at IS NULL 
+          AND date >= ${startDate} 
+          AND date <= ${endDate} 
+          AND user_id = ${userId}
+        ORDER BY date ASC
+      `;
+      return rows as unknown as DailyReport[];
+    }
+    if (startDate && endDate) {
+      const rows = await sql`
+        SELECT * FROM daily_reports 
+        WHERE deleted_at IS NULL 
+          AND date >= ${startDate} 
+          AND date <= ${endDate}
+        ORDER BY date ASC
+      `;
+      return rows as unknown as DailyReport[];
+    }
+    if (userId) {
+      const rows = await sql`
+        SELECT * FROM daily_reports 
+        WHERE deleted_at IS NULL 
+          AND user_id = ${userId}
+        ORDER BY date ASC
+      `;
+      return rows as unknown as DailyReport[];
+    }
+    const rows = await sql`
+      SELECT * FROM daily_reports 
+      WHERE deleted_at IS NULL 
+      ORDER BY date ASC
+    `;
+    return rows as unknown as DailyReport[];
+  },
+
   async create(
     report: {
       task_id: string;

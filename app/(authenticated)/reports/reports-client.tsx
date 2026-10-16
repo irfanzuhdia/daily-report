@@ -343,6 +343,7 @@ export function ReportsClient({
 
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
   const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>({})
+  const [visibleListCount, setVisibleListCount] = useState<number>(30)
 
   useEffect(() => {
     const pinned = localStorage.getItem("reports-pinned")
@@ -912,7 +913,7 @@ export function ReportsClient({
           </Card>
         ) : (
           <div className="flex flex-col gap-3.5 sm:gap-4">
-            {localReports.map((report) => (
+            {localReports.slice(0, visibleListCount).map((report) => (
               <Card 
                 key={report.report_id} 
                 onClick={() => router.push(`/reports/${report.report_id}`)}
@@ -966,6 +967,18 @@ export function ReportsClient({
                 </CardContent>
               </Card>
             ))}
+            {visibleListCount < localReports.length && (
+              <div className="flex justify-center pt-2 pb-4">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setVisibleListCount((prev) => prev + 30)}
+                  className="text-xs"
+                >
+                  Show More ({localReports.length - visibleListCount} remaining)
+                </Button>
+              </div>
+            )}
           </div>
         )
       )}
@@ -1029,6 +1042,26 @@ export function ReportsClient({
                     </CardContent>
                   </Card>
                 ))}
+
+                {((columnTotals["C"] ?? 0) > loadedInColumn("C") || (columnTotals["CC"] ?? 0) > loadedInColumn("CC")) && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs w-full"
+                      disabled={loadingColumn === "C" || loadingColumn === "CC"}
+                      onClick={async () => {
+                        if ((columnTotals["C"] ?? 0) > loadedInColumn("C")) await loadMoreColumn("C")
+                        if ((columnTotals["CC"] ?? 0) > loadedInColumn("CC")) await loadMoreColumn("CC")
+                      }}
+                    >
+                      {loadingColumn === "C" || loadingColumn === "CC" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                      ) : null}
+                      Load More Completed &amp; Cancelled Reports
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>

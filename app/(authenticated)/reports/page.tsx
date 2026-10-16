@@ -37,15 +37,12 @@ export default async function ReportsPage({
   // Kanban columns group reports by their parent task's status.
   const BOARD_STATUSES = ["NS", "OP", "H", "D"] as const
   // Completed and Cancel have no column, but they still feed the list view and the
-  // archive dialog. Fetching only the board statuses made those rows vanish entirely.
+  // archive dialog. Initial batch sized for fast paint; pages further via lazy load.
   const OFF_BOARD_STATUSES = ["C", "CC"] as const
-  // No column pages these, so take them in one go.
-  const OFF_BOARD_PAGE_SIZE = 500
-  // Per column, not across the board: a single global window made a column show only
-  // the rows of that status that happened to fall inside it.
-  // Sized so the list view — which has no lazy loading of its own — is not silently
-  // truncated; the board still pages beyond this as the user scrolls a column.
-  const COLUMN_PAGE_SIZE = 100
+  const OFF_BOARD_PAGE_SIZE = 30
+  // Per column initial window: sized for fast first paint while the board lazy-pages
+  // on scroll via IntersectionObserver.
+  const COLUMN_PAGE_SIZE = 25
 
   const allUsers = await UserRepository.findAll()
   const currentUser = allUsers.find(u => u.user_id === userId)

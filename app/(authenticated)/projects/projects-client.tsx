@@ -351,6 +351,7 @@ export function ProjectsClient({
 
   const [pinnedIds, setPinnedIds] = useState<string[]>([])
   const [columnOrders, setColumnOrders] = useState<Record<string, string[]>>({})
+  const [visibleListCount, setVisibleListCount] = useState<number>(30)
 
   useEffect(() => {
     const pinned = localStorage.getItem("projects-pinned")
@@ -954,7 +955,7 @@ export function ProjectsClient({
         ) : (
           density === "compact" ? (
             <div className="flex flex-col border rounded-xl divide-y divide-border/55 bg-card overflow-hidden">
-              {localProjects.map((project) => {
+              {localProjects.slice(0, visibleListCount).map((project) => {
                 const isMember = myProjectIdsSet.has(project.project_id) || project.created_by === currentUserId || isSuperUser
                 return (
                   <div 
@@ -1051,7 +1052,7 @@ export function ProjectsClient({
             </div>
           ) : (
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {localProjects.map((project) => {
+              {localProjects.slice(0, visibleListCount).map((project) => {
                 const isMember = myProjectIdsSet.has(project.project_id) || project.created_by === currentUserId || isSuperUser
                 return (
                   <Card 
@@ -1137,6 +1138,19 @@ export function ProjectsClient({
         )
       )}
 
+      {layout !== "kanban" && visibleListCount < localProjects.length && (
+        <div className="flex justify-center pt-2 pb-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setVisibleListCount((prev) => prev + 30)}
+            className="text-xs"
+          >
+            Show More ({localProjects.length - visibleListCount} remaining)
+          </Button>
+        </div>
+      )}
+
       {/* Complete & Cancel Folder Dialog */}
       <Dialog open={showArchive} onOpenChange={setShowArchive}>
         <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
@@ -1202,6 +1216,26 @@ export function ProjectsClient({
                     </CardContent>
                   </Card>
                 ))}
+
+                {((columnTotals["C"] ?? 0) > loadedInColumn("C") || (columnTotals["CC"] ?? 0) > loadedInColumn("CC")) && (
+                  <div className="flex justify-center pt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs w-full"
+                      disabled={loadingColumn === "C" || loadingColumn === "CC"}
+                      onClick={async () => {
+                        if ((columnTotals["C"] ?? 0) > loadedInColumn("C")) await loadMoreColumn("C")
+                        if ((columnTotals["CC"] ?? 0) > loadedInColumn("CC")) await loadMoreColumn("CC")
+                      }}
+                    >
+                      {loadingColumn === "C" || loadingColumn === "CC" ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin mr-2" />
+                      ) : null}
+                      Load More Completed &amp; Cancelled Projects
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
           </div>

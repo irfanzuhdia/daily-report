@@ -9,6 +9,7 @@ import {
   ProjectTeamRepository,
 } from "@/lib/repositories"
 import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
+import { resolveServerDateRange } from "@/lib/date-range-preference.server"
 import { TasksClient } from "./tasks-client"
 
 export default async function TasksPage({
@@ -26,6 +27,7 @@ export default async function TasksPage({
     team_filter?: string
     start_date?: string
     end_date?: string
+    date_range?: string
   }>
 }) {
   const session = await getSession()
@@ -34,6 +36,7 @@ export default async function TasksPage({
   const viewMode = await getViewModeFromCookies()
   const userId = session.user_id
   const params = await searchParams
+  const { startDate: resolvedStart, endDate: resolvedEnd } = await resolveServerDateRange(params, "tasks")
 
   // Kanban statuses, kept in sync with the columns rendered by TasksClient.
   const BOARD_STATUSES = ["NS", "OP", "H", "D"] as const
@@ -69,12 +72,18 @@ export default async function TasksPage({
     ? allStatuses.filter((s) => requestedStatuses.includes(s))
     : allStatuses
 
+  const effectiveParams = {
+    ...params,
+    start_date: resolvedStart,
+    end_date: resolvedEnd,
+  }
+
   const columnResults = await Promise.all(
     statusesToLoad.map(async (status) => {
       const onBoard = (BOARD_STATUSES as readonly string[]).includes(status)
       const { data, total } = await TaskRepository.findPaginated(
         userId,
-        { ...params, status, viewMode: effectiveViewMode },
+        { ...effectiveParams, status, viewMode: effectiveViewMode },
         onBoard ? COLUMN_PAGE_SIZE : OFF_BOARD_PAGE_SIZE,
         0
       )
@@ -114,8 +123,8 @@ export default async function TasksPage({
       currentSite={params.site_filter}
       currentDiv={params.div_filter}
       currentTeam={params.team_filter}
-      currentStartDate={params.start_date}
-      currentEndDate={params.end_date}
+      currentStartDate={resolvedStart}
+      currentEndDate={resolvedEnd}
       columnData={columnData}
       columnPageSize={COLUMN_PAGE_SIZE}
     />

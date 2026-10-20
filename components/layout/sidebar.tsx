@@ -2,7 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
-import { usePathname } from "next/navigation"
+import { usePathname, useRouter } from "next/navigation"
 import {
   LayoutDashboard,
   FolderKanban,
@@ -27,6 +27,7 @@ import {
   Check,
   Download,
   Smartphone,
+  Calendar,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
@@ -41,6 +42,15 @@ import { useViewDensity } from "@/lib/view-density"
 import { useTheme } from "next-themes"
 import { MDMLogo } from "@/components/ui/mdm-logo"
 import { usePushNotifications } from "@/components/pwa/pwa-install-banner"
+import {
+  DateRangePreset,
+  DATE_RANGE_PRESET_LABELS,
+  getStoredGlobalPreference,
+  getStoredPagePreference,
+  setStoredDateRangePreference,
+  AppPageName,
+} from "@/lib/date-range-preference"
+import { revalidatePathsAndTags } from "@/app/actions"
 
 export function Sidebar({
   userName,
@@ -98,6 +108,46 @@ export function Sidebar({
   const { density, setDensity } = useViewDensity()
   const [mounted, setMounted] = React.useState(false)
   const { resolvedTheme, setTheme } = useTheme()
+  const router = useRouter()
+
+  const [globalDateRange, setGlobalDateRange] = React.useState<DateRangePreset>("all")
+  const [projectsDateRange, setProjectsDateRange] = React.useState<DateRangePreset | "use_global">("use_global")
+  const [tasksDateRange, setTasksDateRange] = React.useState<DateRangePreset | "use_global">("use_global")
+  const [reportsDateRange, setReportsDateRange] = React.useState<DateRangePreset | "use_global">("use_global")
+  const [showPerPageSettings, setShowPerPageSettings] = React.useState(false)
+
+  React.useEffect(() => {
+    const loadDatePrefs = () => {
+      setGlobalDateRange(getStoredGlobalPreference())
+      setProjectsDateRange(getStoredPagePreference("projects"))
+      setTasksDateRange(getStoredPagePreference("tasks"))
+      setReportsDateRange(getStoredPagePreference("reports"))
+    }
+    loadDatePrefs()
+    window.addEventListener("dr_date_range_preference_changed", loadDatePrefs)
+    return () => window.removeEventListener("dr_date_range_preference_changed", loadDatePrefs)
+  }, [])
+
+  const handleGlobalDateRangeChange = async (preset: DateRangePreset) => {
+    setGlobalDateRange(preset)
+    setStoredDateRangePreference(preset)
+    try {
+      await revalidatePathsAndTags(['/projects', '/tasks', '/reports'])
+    } catch {}
+    router.refresh()
+  }
+
+  const handlePageDateRangeChange = async (page: AppPageName, preset: DateRangePreset | "use_global") => {
+    if (page === "projects") setProjectsDateRange(preset)
+    if (page === "tasks") setTasksDateRange(preset)
+    if (page === "reports") setReportsDateRange(preset)
+
+    setStoredDateRangePreference(preset, page)
+    try {
+      await revalidatePathsAndTags([`/${page}`])
+    } catch {}
+    router.refresh()
+  }
 
   React.useEffect(() => {
     setMounted(true)
@@ -409,7 +459,7 @@ export function Sidebar({
 
       {/* Settings / Preferences Dialog */}
       <Dialog open={settingsOpen} onOpenChange={setSettingsOpen}>
-        <DialogContent className="sm:max-w-[360px]">
+        <DialogContent className="sm:max-w-[420px]">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <Settings className="h-4 w-4 text-primary" />
@@ -484,6 +534,107 @@ export function Sidebar({
                 >
                   Compact
                 </button>
+              </div>
+            </div>
+
+            {/* Default Date Range Setting */}
+            <div className="space-y-2.5 border-t pt-3">
+              <div className="space-y-0.5">
+                <p className="text-xs font-medium flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-primary" />
+                  Default Date Range
+                </p>
+                <p className="text-[10px] text-muted-foreground">
+                  Default filter applied when opening Project, Task, and Daily Report
+                </p>
+              </div>
+
+              {/* Global Preset Selector */}
+              <div className="space-y-1">
+                <div className="grid grid-cols-3 gap-1">
+                  {(["all", "today", "thisWeek", "thisMonth", "last30Days"] as DateRangePreset[]).map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => handleGlobalDateRangeChange(preset)}
+                      className={cn(
+                        "rounded-lg px-2 py-1 text-[10px] font-medium transition-colors border text-center truncate",
+                        globalDateRange === preset
+                          ? "bg-primary text-primary-foreground border-primary shadow-xs font-semibold"
+                          : "bg-muted/30 border-border text-muted-foreground hover:text-foreground hover:bg-muted/60"
+                      )}
+                    >
+                      {DATE_RANGE_PRESET_LABELS[preset]}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Toggle Page-specific overrides */}
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={() => setShowPerPageSettings(!showPerPageSettings)}
+                  className="text-[11px] font-medium text-primary hover:underline flex items-center gap-1 cursor-pointer"
+                >
+                  <ChevronDown className={cn("h-3 w-3 transition-transform", showPerPageSettings ? "rotate-180" : "")} />
+                  {showPerPageSettings ? "Hide page-specific settings" : "Customize per page (optional)"}
+                </button>
+
+                {showPerPageSettings && (
+                  <div className="mt-2 space-y-2 rounded-lg bg-muted/20 border border-border/50 p-2.5">
+                    {/* Projects */}
+                    <div className="flex items-center justify-between text-[11px] gap-2">
+                      <span className="font-medium text-foreground truncate">Projects</span>
+                      <select
+                        value={projectsDateRange}
+                        onChange={(e) => handlePageDateRangeChange("projects", e.target.value as any)}
+                        className="h-7 text-[10px] rounded-md border border-border bg-background px-1.5 py-0.5 text-foreground focus:outline-none"
+                      >
+                        <option value="use_global">Global ({DATE_RANGE_PRESET_LABELS[globalDateRange]})</option>
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="thisWeek">This Week</option>
+                        <option value="thisMonth">This Month</option>
+                        <option value="last30Days">Last 30 Days</option>
+                      </select>
+                    </div>
+
+                    {/* Tasks */}
+                    <div className="flex items-center justify-between text-[11px] gap-2">
+                      <span className="font-medium text-foreground truncate">Tasks</span>
+                      <select
+                        value={tasksDateRange}
+                        onChange={(e) => handlePageDateRangeChange("tasks", e.target.value as any)}
+                        className="h-7 text-[10px] rounded-md border border-border bg-background px-1.5 py-0.5 text-foreground focus:outline-none"
+                      >
+                        <option value="use_global">Global ({DATE_RANGE_PRESET_LABELS[globalDateRange]})</option>
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="thisWeek">This Week</option>
+                        <option value="thisMonth">This Month</option>
+                        <option value="last30Days">Last 30 Days</option>
+                      </select>
+                    </div>
+
+                    {/* Daily Reports */}
+                    <div className="flex items-center justify-between text-[11px] gap-2">
+                      <span className="font-medium text-foreground truncate">Daily Reports</span>
+                      <select
+                        value={reportsDateRange}
+                        onChange={(e) => handlePageDateRangeChange("reports", e.target.value as any)}
+                        className="h-7 text-[10px] rounded-md border border-border bg-background px-1.5 py-0.5 text-foreground focus:outline-none"
+                      >
+                        <option value="use_global">Global ({DATE_RANGE_PRESET_LABELS[globalDateRange]})</option>
+                        <option value="all">All Time</option>
+                        <option value="today">Today</option>
+                        <option value="thisWeek">This Week</option>
+                        <option value="thisMonth">This Month</option>
+                        <option value="last30Days">Last 30 Days</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

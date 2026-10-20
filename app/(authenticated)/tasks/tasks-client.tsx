@@ -356,8 +356,14 @@ export function TasksClient({
     }
     if (startDate) params.set("start_date", startDate)
     if (endDate) params.set("end_date", endDate)
+    const currentParams = new URLSearchParams(window.location.search)
+    if (!startDate && !endDate && (currentParams.get("date_range") === "all" || currentStartDate || currentEndDate)) {
+      params.set("date_range", "all")
+    }
     const query = params.toString()
-    router.push(`/tasks${query ? "?" + query : ""}`)
+    if (currentParams.toString() !== query) {
+      router.push(`/tasks${query ? "?" + query : ""}`)
+    }
   }, [debouncedSearch, statusFilter, projectFilter, createdByFilter, memberFilter, startDate, endDate, viewMode, router, dept, site, division, team])
 
   const handleDelete = async () => {
@@ -864,6 +870,7 @@ export function TasksClient({
             <FilterDateRange
               startDate={startDate}
               endDate={endDate}
+              pageName="tasks"
               onDateChange={(s, e) => {
                 setStartDate(s)
                 setEndDate(e)

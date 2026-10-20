@@ -1,9 +1,19 @@
 import * as React from "react"
 import { createPortal } from "react-dom"
-import { Search, ChevronDown, Check, Calendar, X } from "lucide-react"
+import { Search, ChevronDown, Check, Calendar, X, Star } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { SelectTrigger } from "@/components/ui/select"
 import { cn } from "@/lib/utils"
+import {
+  AppPageName,
+  DateRangePreset,
+  DATE_RANGE_PRESET_LABELS,
+  getDateRangeFromPreset,
+  detectPresetFromRange,
+  getEffectivePreference,
+  setStoredDateRangePreference,
+} from "@/lib/date-range-preference"
+import { useToast } from "@/components/ui/toast"
 
 export function FilterContainer({ children, className }: { children: React.ReactNode, className?: string }) {
   return (
@@ -312,6 +322,7 @@ export interface FilterDateRangeProps {
   className?: string;
   placeholder?: string;
   disabled?: boolean;
+  pageName?: AppPageName;
 }
 
 export function FilterDateRange({
@@ -321,12 +332,15 @@ export function FilterDateRange({
   className,
   placeholder = "Date range",
   disabled = false,
+  pageName,
 }: FilterDateRangeProps) {
+  const { toast } = useToast();
   const [isOpen, setIsOpen] = React.useState(false);
   const [draftStart, setDraftStart] = React.useState(startDate);
   const [draftEnd, setDraftEnd] = React.useState(endDate);
   const [dateError, setDateError] = React.useState<string | null>(null);
   const [dropdownPosition, setDropdownPosition] = React.useState<{ top: number; left: number; width: number } | null>(null);
+  const [effectiveDefault, setEffectiveDefault] = React.useState<DateRangePreset>("all");
   const buttonRef = React.useRef<HTMLButtonElement>(null);
   const dropdownRef = React.useRef<HTMLDivElement>(null);
   const mounted = React.useSyncExternalStore(
@@ -335,11 +349,20 @@ export function FilterDateRange({
     () => false
   );
 
+  React.useEffect(() => {
+    setEffectiveDefault(getEffectivePreference(pageName));
+    const handlePrefChange = () => {
+      setEffectiveDefault(getEffectivePreference(pageName));
+    };
+    window.addEventListener("dr_date_range_preference_changed", handlePrefChange);
+    return () => window.removeEventListener("dr_date_range_preference_changed", handlePrefChange);
+  }, [pageName]);
+
   const updatePosition = React.useCallback(() => {
     if (buttonRef.current) {
       const rect = buttonRef.current.getBoundingClientRect();
       const viewportWidth = window.innerWidth;
-      const minW = Math.max(rect.width, 280);
+      const minW = Math.max(rect.width, 290);
       let left = rect.left;
       if (left + minW > viewportWidth - 16) {
         left = Math.max(16, viewportWidth - minW - 16);
@@ -418,41 +441,25 @@ export function FilterDateRange({
   };
 
   const handlePreset = (type: "today" | "thisWeek" | "thisMonth" | "last30Days") => {
-    const now = new Date();
-    const toYMD = (d: Date) => {
-      const y = d.getFullYear();
-      const m = String(d.getMonth() + 1).padStart(2, "0");
-      const day = String(d.getDate()).padStart(2, "0");
-      return `${y}-${m}-${day}`;
-    };
-
-    let start = "";
-    let end = toYMD(now);
-
-    if (type === "today") {
-      start = end;
-    } else if (type === "thisWeek") {
-      const dayOfWeek = now.getDay() || 7; // Monday = 1
-      const mon = new Date(now);
-      mon.setDate(now.getDate() - dayOfWeek + 1);
-      const sun = new Date(mon);
-      sun.setDate(mon.getDate() + 6);
-      start = toYMD(mon);
-      end = toYMD(sun);
-    } else if (type === "thisMonth") {
-      const first = new Date(now.getFullYear(), now.getMonth(), 1);
-      const last = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-      start = toYMD(first);
-      end = toYMD(last);
-    } else if (type === "last30Days") {
-      const past = new Date(now);
-      past.setDate(now.getDate() - 29);
-      start = toYMD(past);
-    }
-
-    setDraftStart(start);
-    setDraftEnd(end);
+    const range = getDateRangeFromPreset(type);
+    setDraftStart(range.startDate);
+    setDraftEnd(range.endDate);
     setDateError(null);
+  };
+
+  const currentDetected = detectPresetFromRange(draftStart, draftEnd) || (draftStart || draftEnd ? null : "all");
+  const isCurrentlyDefault = currentDetected !== null && currentDetected === effectiveDefault;
+
+  const handleSetCurrentAsDefault = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const targetPreset: DateRangePreset = currentDetected || (draftStart || draftEnd ? "today" : "all");
+    setStoredDateRangePreference(targetPreset, pageName);
+    setEffectiveDefault(targetPreset);
+    toast({
+      variant: "success",
+      title: "Default Date Range Saved",
+      description: `Default for ${pageName ? pageName.charAt(0).toUpperCase() + pageName.slice(1) : "this page"} is now ${DATE_RANGE_PRESET_LABELS[targetPreset]}.`,
+    });
   };
 
   const hasSelections = Boolean(startDate || endDate);
@@ -465,6 +472,8 @@ export function FilterDateRange({
     if (endDate) return `Until ${endDate}`;
     return placeholder;
   }, [startDate, endDate, placeholder]);
+
+  const activePreset = detectPresetFromRange(draftStart, draftEnd);
 
   return (
     <div className="relative shrink-0">
@@ -484,7 +493,12 @@ export function FilterDateRange({
         <span className="flex items-center gap-2 truncate text-muted-foreground">
           <Calendar className="h-3.5 w-3.5 shrink-0 text-foreground/70" />
           {hasSelections ? (
-            <span className="truncate text-foreground font-medium">{triggerLabel}</span>
+            <span className="truncate text-foreground font-medium flex items-center gap-1">
+              {triggerLabel}
+              {detectPresetFromRange(startDate, endDate) === effectiveDefault && effectiveDefault !== "all" && (
+                <span title="Matching your default filter" className="text-amber-500 font-bold leading-none">•</span>
+              )}
+            </span>
           ) : (
             <span className="truncate">{placeholder}</span>
           )}
@@ -582,34 +596,82 @@ export function FilterDateRange({
             <button
               type="button"
               onClick={() => handlePreset("today")}
-              className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              className={cn(
+                "text-[10px] px-2 py-0.5 rounded-md transition-colors cursor-pointer",
+                activePreset === "today"
+                  ? "bg-primary text-primary-foreground font-medium"
+                  : "bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground"
+              )}
             >
               Today
             </button>
             <button
               type="button"
               onClick={() => handlePreset("thisWeek")}
-              className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              className={cn(
+                "text-[10px] px-2 py-0.5 rounded-md transition-colors cursor-pointer",
+                activePreset === "thisWeek"
+                  ? "bg-primary text-primary-foreground font-medium"
+                  : "bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground"
+              )}
             >
               This Week
             </button>
             <button
               type="button"
               onClick={() => handlePreset("thisMonth")}
-              className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              className={cn(
+                "text-[10px] px-2 py-0.5 rounded-md transition-colors cursor-pointer",
+                activePreset === "thisMonth"
+                  ? "bg-primary text-primary-foreground font-medium"
+                  : "bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground"
+              )}
             >
               This Month
             </button>
             <button
               type="button"
               onClick={() => handlePreset("last30Days")}
-              className="text-[10px] px-2 py-0.5 rounded-md bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+              className={cn(
+                "text-[10px] px-2 py-0.5 rounded-md transition-colors cursor-pointer",
+                activePreset === "last30Days"
+                  ? "bg-primary text-primary-foreground font-medium"
+                  : "bg-muted/60 hover:bg-muted text-muted-foreground hover:text-foreground"
+              )}
             >
               Last 30 Days
             </button>
           </div>
 
-          <div className="flex items-center justify-end gap-2 pt-1 border-t border-border/40">
+          {/* Quick Default Action */}
+          <div className="flex items-center justify-between pt-2 border-t border-border/40 text-[11px]">
+            <div className="flex items-center gap-1.5 text-muted-foreground min-w-0 pr-1">
+              <Star
+                className={cn(
+                  "h-3.5 w-3.5 shrink-0 transition-colors",
+                  isCurrentlyDefault ? "text-amber-500 fill-amber-500" : "text-muted-foreground/60"
+                )}
+              />
+              <span className="truncate">
+                Default: <span className="font-semibold text-foreground">{DATE_RANGE_PRESET_LABELS[effectiveDefault]}</span>
+              </span>
+            </div>
+            <button
+              type="button"
+              onClick={handleSetCurrentAsDefault}
+              title="Save current date filter as your default"
+              className={cn(
+                "shrink-0 text-[10px] font-medium px-2 py-0.5 rounded transition-colors cursor-pointer",
+                isCurrentlyDefault
+                  ? "bg-muted text-muted-foreground cursor-default"
+                  : "bg-primary/10 text-primary hover:bg-primary/20"
+              )}
+            >
+              {isCurrentlyDefault ? "Saved as Default" : "Set as Default"}
+            </button>
+          </div>
+
+          <div className="flex items-center justify-end gap-2 pt-2 border-t border-border/40">
             <button
               type="button"
               onClick={close}

@@ -352,8 +352,10 @@ export function ReportsClient({
     if (teamStr && teamStr !== defaultTeam) params.set("team_filter", teamStr)
     if (startDate) params.set("start_date", startDate)
     if (endDate) params.set("end_date", endDate)
-    
     const currentParams = new URLSearchParams(window.location.search)
+    if (!startDate && !endDate && (currentParams.get("date_range") === "all" || currentStartDate || currentEndDate)) {
+      params.set("date_range", "all")
+    }
     currentParams.delete("page") // Ignore page for comparison
     const newParamsStr = params.toString()
     
@@ -824,6 +826,7 @@ export function ReportsClient({
             <FilterDateRange
               startDate={startDate}
               endDate={endDate}
+              pageName="reports"
               onDateChange={(s, e) => {
                 setStartDate(s)
                 setEndDate(e)

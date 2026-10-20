@@ -366,8 +366,14 @@ export function ProjectsClient({
     }
     if (startDate) params.set("start_date", startDate)
     if (endDate) params.set("end_date", endDate)
+    const currentParams = new URLSearchParams(window.location.search)
+    if (!startDate && !endDate && (currentParams.get("date_range") === "all" || currentStartDate || currentEndDate)) {
+      params.set("date_range", "all")
+    }
     const query = params.toString()
-    router.push(`/projects${query ? "?" + query : ""}`)
+    if (currentParams.toString() !== query) {
+      router.push(`/projects${query ? "?" + query : ""}`)
+    }
   }, [debouncedSearch, statusFilter, createdByFilter, memberFilter, startDate, endDate, viewMode, router, dept, site, division, team])
 
   const handleDelete = async () => {
@@ -863,6 +869,7 @@ export function ProjectsClient({
         <FilterDateRange
           startDate={startDate}
           endDate={endDate}
+          pageName="projects"
           onDateChange={(s, e) => {
             setStartDate(s)
             setEndDate(e)

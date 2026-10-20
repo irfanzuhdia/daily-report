@@ -8,6 +8,7 @@ import {
   TaskTeamRepository,
 } from "@/lib/repositories"
 import { getViewModeFromCookies } from "@/lib/get-view-mode.server"
+import { resolveServerDateRange } from "@/lib/date-range-preference.server"
 import { ReportsClient } from "./reports-client"
 
 export default async function ReportsPage({
@@ -25,6 +26,7 @@ export default async function ReportsPage({
     team_filter?: string
     start_date?: string
     end_date?: string
+    date_range?: string
   }>
 }) {
   const session = await getSession()
@@ -33,6 +35,7 @@ export default async function ReportsPage({
   const viewMode = await getViewModeFromCookies()
   const userId = session.user_id
   const params = await searchParams
+  const { startDate: resolvedStart, endDate: resolvedEnd } = await resolveServerDateRange(params, "reports")
 
   // Kanban columns group reports by their parent task's status.
   const BOARD_STATUSES = ["NS", "OP", "H", "D"] as const
@@ -59,8 +62,8 @@ export default async function ReportsPage({
     site: params.site_filter,
     div: params.div_filter,
     team: params.team_filter,
-    startDate: params.start_date,
-    endDate: params.end_date,
+    startDate: resolvedStart,
+    endDate: resolvedEnd,
     viewMode: effectiveViewMode,
   }
 
@@ -144,8 +147,8 @@ export default async function ReportsPage({
       currentSite={params.site_filter}
       currentDiv={params.div_filter}
       currentTeam={params.team_filter}
-      currentStartDate={params.start_date}
-      currentEndDate={params.end_date}
+      currentStartDate={resolvedStart}
+      currentEndDate={resolvedEnd}
       columnData={columnData}
       columnPageSize={COLUMN_PAGE_SIZE}
     />
